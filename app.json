@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MeasureApp",
-    "slug": "MeasureApp",
+    "name": "Presa Misure",
+    "slug": "presa-misure",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,7 +21,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.valen.presamisure"
     },
     "web": {
       "favicon": "./assets/favicon.png"

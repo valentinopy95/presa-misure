@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Build artifacts
+dist_android/
+android/app/src/main/assets/index.android.bundle
