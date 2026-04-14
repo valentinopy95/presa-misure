@@ -438,7 +438,7 @@ function SlidingIndicator({ leafCount, openingSide, progress }: AnimProps) {
 }
 
 // ─── Default style-based indicator (used when openingSide is null) ────────────
-function DefaultIndicator({ style, woodId }: { style: OpeningStyle; woodId: string }) {
+function DefaultIndicator({ style, woodId, leafCount = 1 }: { style: OpeningStyle; woodId: string; leafCount?: number }) {
   const c = C_IND;
   const da = '5,3';
   const sw = 1.6;
@@ -478,15 +478,28 @@ function DefaultIndicator({ style, woodId }: { style: OpeningStyle; woodId: stri
         <Rect x={CX-7} y={CY-10} width={5} height={20} rx={2.5} fill={c}/>
       </G>;
 
-    case 'window_tilt_turn':
-      // X pattern = opens both ways; handle at bottom center (default tilt position)
+    case 'window_tilt_turn': {
+      // X pattern = opens both ways; handle at bottom center per leaf
+      const n = Math.max(1, leafCount);
+      const sashW = GW / n;
       return <G>
-        <Line x1={GX+6} y1={GY+6} x2={GX2-6} y2={GY2-6} stroke={c} strokeWidth={1.4}/>
-        <Line x1={GX2-6} y1={GY+6} x2={GX+6} y2={GY2-6} stroke={c} strokeWidth={1.4}/>
-        <Line x1={GX+4} y1={GY+8} x2={GX+4} y2={GY2-8} stroke={c} strokeWidth={3} strokeLinecap="round"/>
-        <Line x1={GX+8} y1={GY2-4} x2={GX2-8} y2={GY2-4} stroke={c} strokeWidth={3} strokeLinecap="round"/>
-        <HandleSymbol hx={CX} hy={GY2-20} leverRight={true} progress={1}/>
+        {Array.from({length: n}).map((_, i) => {
+          const sx  = GX + i * sashW;
+          const sx2 = sx + sashW;
+          const scx = (sx + sx2) / 2;
+          const hingeX = i === 0 ? sx + 4 : sx2 - 4;
+          return <G key={i}>
+            <Line x1={sx+4}  y1={GY+6}   x2={sx2-4} y2={GY2-6} stroke={c} strokeWidth={1.4}/>
+            <Line x1={sx2-4} y1={GY+6}   x2={sx+4}  y2={GY2-6} stroke={c} strokeWidth={1.4}/>
+            <Line x1={hingeX} y1={GY+8}  x2={hingeX} y2={GY2-8}
+                  stroke={c} strokeWidth={3} strokeLinecap="round"/>
+            <Line x1={sx+6}  y1={GY2-4}  x2={sx2-6} y2={GY2-4}
+                  stroke={c} strokeWidth={3} strokeLinecap="round"/>
+            <HandleSymbol hx={scx} hy={GY2-20} leverRight={i % 2 === 0} progress={1}/>
+          </G>;
+        })}
       </G>;
+    }
 
     case 'door_single':
       return <G>
@@ -496,50 +509,40 @@ function DefaultIndicator({ style, woodId }: { style: OpeningStyle; woodId: stri
       </G>;
 
     case 'door_entrance': {
-      // Portoncino: vetro superiore con sbarre decorative + 2 pannelli inferiori + serratura + 3 cerniere
-      const divY    = GY + GH * 0.40;        // traverso orizzontale
-      const pp      = 8;                      // padding pannello
-      const glassH  = divY - GY - ST * 2;
-      // pannello inferiore
-      const panY    = divY + ST;
-      const panH    = GY2 - ST - panY;
-      // due pannelli affiancati
-      const halfW   = (GW - ST * 2 - pp * 3) / 2;
-      const panL_X  = GX + ST + pp;
-      const panR_X  = GX + ST + pp * 2 + halfW;
-      const panP_Y  = panY + pp;
-      const panP_H  = panH - pp * 2;
-      // serratura: appena sopra il centro del pannello inferiore
-      const lockY   = panY + panH * 0.35;
-      // 3 barre verticali decorative nel vetro superiore
-      const barW = (GW - ST * 2) / 4;
+      // Portoncino: anta cieca, 4 pannelli decorativi (2×2), 3 cerniere, maniglia+serratura
+      const iW   = GW - ST * 2;  // inner width
+      const iH   = GH - ST * 2;  // inner height
+      const iX   = GX + ST;      // inner start x
+      const iY   = GY + ST;      // inner start y
+      const pp   = 10;           // panel padding from inner edge
+      const gap  = 8;            // gap between panels
+      const colW = (iW - pp * 2 - gap) / 2;
+      const row1H = Math.round(iH * 0.35);  // upper panels (shorter)
+      const row2H = iH - pp * 2 - gap - row1H; // lower panels (taller)
+      const col1X = iX + pp;
+      const col2X = iX + pp + colW + gap;
+      const row1Y = iY + pp;
+      const row2Y = iY + pp + row1H + gap;
+      const lockY = row2Y + row2H * 0.4;
       return <G>
-        {/* Anta solida: riempimento pannello */}
-        <Rect x={GX} y={GY} width={GW} height={GH}
-              fill={C_FRAME_FILL} stroke={C_FRAME} strokeWidth={0}/>
-        {/* Vetro superiore */}
-        <Rect x={GX+ST} y={GY+ST} width={GW-ST*2} height={glassH}
-              fill="url(#glass_grad)" stroke="#7AAFC8" strokeWidth={0.8}/>
-        {/* Montanti verticali nel vetro (3 divisori) */}
-        {[1,2,3].map(i => (
-          <Rect key={i} x={GX+ST+barW*i-1} y={GY+ST} width={2.5} height={glassH}
-                fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={0.5}/>
-        ))}
-        {/* Traverso orizzontale */}
-        <Rect x={GX} y={divY} width={GW} height={ST}
-              fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={1.5}/>
-        {/* Pannello inferiore sfondo */}
-        <Rect x={GX+ST} y={panY} width={GW-ST*2} height={panH}
-              fill={C_FRAME_FILL} stroke={C_FRAME} strokeWidth={0.8}/>
-        {/* Pannello sinistro decorativo */}
-        <Rect x={panL_X} y={panP_Y} width={halfW} height={panP_H}
-              fill="none" stroke={C_FRAME} strokeWidth={1.8} rx={2}/>
-        {/* Pannello destro decorativo */}
-        <Rect x={panR_X} y={panP_Y} width={halfW} height={panP_H}
-              fill="none" stroke={C_FRAME} strokeWidth={1.8} rx={2}/>
-        {/* 3 cerniere a sinistra */}
+        {/* Anta piena */}
+        <Rect x={GX} y={GY} width={GW} height={GH} fill={C_FRAME_FILL}/>
+        {/* 4 pannelli incassati */}
+        {/* Top-left */}
+        <Rect x={col1X} y={row1Y} width={colW} height={row1H}
+              fill="#E0E4E8" stroke={C_FRAME} strokeWidth={1.5} rx={2}/>
+        {/* Top-right */}
+        <Rect x={col2X} y={row1Y} width={colW} height={row1H}
+              fill="#E0E4E8" stroke={C_FRAME} strokeWidth={1.5} rx={2}/>
+        {/* Bottom-left */}
+        <Rect x={col1X} y={row2Y} width={colW} height={row2H}
+              fill="#E0E4E8" stroke={C_FRAME} strokeWidth={1.5} rx={2}/>
+        {/* Bottom-right */}
+        <Rect x={col2X} y={row2Y} width={colW} height={row2H}
+              fill="#E0E4E8" stroke={C_FRAME} strokeWidth={1.5} rx={2}/>
+        {/* 3 cerniere sinistra */}
         <HingeMarks x={GX+4} color={c}/>
-        {/* Maniglia leva destra */}
+        {/* Maniglia */}
         <HandleSymbol hx={GX2-12} leverRight={false} progress={1}/>
         {/* Cilindro serratura */}
         <Rect x={GX2-16} y={lockY-5} width={8} height={10}
@@ -700,46 +703,46 @@ interface DimLinesProps {
   luceW: number | null; luceH: number | null;
   taglioW: number | null; taglioH: number | null;
   boxHeight?: number | null;
+  dimMode?: 'taglio' | 'luce';
 }
 
-function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight }: DimLinesProps) {
-  const wLbl  = luceW   != null ? `Ll ${luceW} mm`   : 'Ll — mm';
-  const wTLbl = taglioW != null ? `Lt ${taglioW} mm` : 'Lt — mm';
-  const hLbl  = luceH   != null ? `Hl ${luceH} mm`   : 'Hl — mm';
-  const hTLbl = taglioH != null ? `Ht ${taglioH} mm` : 'Ht — mm';
+function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight, dimMode = 'taglio' }: DimLinesProps) {
+  const showTaglio = dimMode === 'taglio';
+  const wVal  = showTaglio ? taglioW : luceW;
+  const hVal  = showTaglio ? taglioH : luceH;
+  const wPfx  = showTaglio ? 'Lt' : 'Ll';
+  const hPfx  = showTaglio ? 'Ht' : 'Hl';
+  const wLbl  = wVal != null ? `${wPfx} ${wVal} mm` : `${wPfx} — mm`;
+  const hLbl  = hVal != null ? `${hPfx} ${hVal} mm` : `${hPfx} — mm`;
+  const dimY  = showTaglio ? DIM_TAGLIO_Y : DIM_LUCE_Y;
+  const dimX  = showTaglio ? DIM_TAGLIO_X : DIM_LUCE_X;
+  const arrowSz = showTaglio ? 3.5 : 5;
+  const sw    = showTaglio ? 0.9 : 1.4;
+  const fs    = showTaglio ? 8 : 9;
+  const fw    = showTaglio ? '600' : '700';
+  const c     = showTaglio ? C_DIM_TAG : C_DIM_LUCE;
 
   return <G>
-    <Line x1={FX} y1={FY+FH} x2={FX} y2={DIM_TAGLIO_Y+6} stroke={C_DIM_LUCE} strokeWidth={0.8}/>
-    <Line x1={FX+FW} y1={FY+FH} x2={FX+FW} y2={DIM_TAGLIO_Y+6} stroke={C_DIM_LUCE} strokeWidth={0.8}/>
-    <Line x1={FX} y1={FY} x2={DIM_TAGLIO_X-6} y2={FY} stroke={C_DIM_LUCE} strokeWidth={0.8}/>
-    <Line x1={FX} y1={FY+FH} x2={DIM_TAGLIO_X-6} y2={FY+FH} stroke={C_DIM_LUCE} strokeWidth={0.8}/>
+    {/* Leader lines from frame corners to dim line */}
+    <Line x1={FX}    y1={FY+FH} x2={FX}    y2={dimY+6} stroke={c} strokeWidth={0.8}/>
+    <Line x1={FX+FW} y1={FY+FH} x2={FX+FW} y2={dimY+6} stroke={c} strokeWidth={0.8}/>
+    <Line x1={FX}    y1={FY}    x2={dimX-6} y2={FY}    stroke={c} strokeWidth={0.8}/>
+    <Line x1={FX}    y1={FY+FH} x2={dimX-6} y2={FY+FH} stroke={c} strokeWidth={0.8}/>
 
-    <Line x1={FX} y1={DIM_LUCE_Y} x2={FX+FW} y2={DIM_LUCE_Y} stroke={C_DIM_LUCE} strokeWidth={1.4}/>
-    <Path d={arrow(FX, DIM_LUCE_Y, 0)} fill={C_DIM_LUCE}/>
-    <Path d={arrow(FX+FW, DIM_LUCE_Y, Math.PI)} fill={C_DIM_LUCE}/>
-    <G transform={`translate(${FX+FW/2}, ${DIM_LUCE_Y-4})`}>
-      <Text textAnchor="middle" fontSize={9} fontWeight="700" fill={C_DIM_LUCE}>{wLbl}</Text>
+    {/* Horizontal dim line — width */}
+    <Line x1={FX} y1={dimY} x2={FX+FW} y2={dimY} stroke={c} strokeWidth={sw}/>
+    <Path d={arrow(FX,    dimY, 0,         arrowSz)} fill={c}/>
+    <Path d={arrow(FX+FW, dimY, Math.PI,   arrowSz)} fill={c}/>
+    <G transform={`translate(${FX+FW/2}, ${dimY-4})`}>
+      <Text textAnchor="middle" fontSize={fs} fontWeight={fw} fill={c}>{wLbl}</Text>
     </G>
 
-    <Line x1={FX} y1={DIM_TAGLIO_Y} x2={FX+FW} y2={DIM_TAGLIO_Y} stroke={C_DIM_TAG} strokeWidth={0.9}/>
-    <Path d={arrow(FX, DIM_TAGLIO_Y, 0, 3.5)} fill={C_DIM_TAG}/>
-    <Path d={arrow(FX+FW, DIM_TAGLIO_Y, Math.PI, 3.5)} fill={C_DIM_TAG}/>
-    <G transform={`translate(${FX+FW/2}, ${DIM_TAGLIO_Y-4})`}>
-      <Text textAnchor="middle" fontSize={8} fontWeight="600" fill={C_DIM_TAG}>{wTLbl}</Text>
-    </G>
-
-    <Line x1={DIM_LUCE_X} y1={FY} x2={DIM_LUCE_X} y2={FY+FH} stroke={C_DIM_LUCE} strokeWidth={1.4}/>
-    <Path d={arrow(DIM_LUCE_X, FY, Math.PI/2)} fill={C_DIM_LUCE}/>
-    <Path d={arrow(DIM_LUCE_X, FY+FH, -Math.PI/2)} fill={C_DIM_LUCE}/>
-    <G transform={`translate(${DIM_LUCE_X}, ${FY+FH/2}) rotate(-90)`}>
-      <Text textAnchor="middle" fontSize={9} fontWeight="700" fill={C_DIM_LUCE}>{hLbl}</Text>
-    </G>
-
-    <Line x1={DIM_TAGLIO_X} y1={FY} x2={DIM_TAGLIO_X} y2={FY+FH} stroke={C_DIM_TAG} strokeWidth={0.9}/>
-    <Path d={arrow(DIM_TAGLIO_X, FY, Math.PI/2, 3.5)} fill={C_DIM_TAG}/>
-    <Path d={arrow(DIM_TAGLIO_X, FY+FH, -Math.PI/2, 3.5)} fill={C_DIM_TAG}/>
-    <G transform={`translate(${DIM_TAGLIO_X}, ${FY+FH/2}) rotate(-90)`}>
-      <Text textAnchor="middle" fontSize={8} fontWeight="600" fill={C_DIM_TAG}>{hTLbl}</Text>
+    {/* Vertical dim line — height */}
+    <Line x1={dimX} y1={FY} x2={dimX} y2={FY+FH} stroke={c} strokeWidth={sw}/>
+    <Path d={arrow(dimX, FY,    Math.PI/2,  arrowSz)} fill={c}/>
+    <Path d={arrow(dimX, FY+FH, -Math.PI/2, arrowSz)} fill={c}/>
+    <G transform={`translate(${dimX}, ${FY+FH/2}) rotate(-90)`}>
+      <Text textAnchor="middle" fontSize={fs} fontWeight={fw} fill={c}>{hLbl}</Text>
     </G>
 
     {/* Cassonetto height annotation */}
@@ -774,6 +777,7 @@ interface LiveDrawingProps {
   previewMode?: boolean;
   previewSize?: number;
   displayWidth?: number;
+  dimMode?: 'taglio' | 'luce';
 }
 
 export default function LiveDrawing({
@@ -789,6 +793,7 @@ export default function LiveDrawing({
   previewMode = false,
   previewSize = 80,
   displayWidth,
+  dimMode = 'taglio',
 }: LiveDrawingProps) {
   const tW = toleranceW ?? tolerance;
   const tH = toleranceH ?? tolerance;
@@ -893,7 +898,7 @@ export default function LiveDrawing({
         );
       }
     } else {
-      indicatorLayer = <DefaultIndicator style={style} woodId={woodId}/>;
+      indicatorLayer = <DefaultIndicator style={style} woodId={woodId} leafCount={resolvedLeaf}/>;
     }
   }
 
@@ -924,6 +929,7 @@ export default function LiveDrawing({
         luceW={width} luceH={height}
         taglioW={taglioW} taglioH={taglioH}
         boxHeight={isMonoblocco ? boxHeight : undefined}
+        dimMode={dimMode}
       />
     </Svg>
   );

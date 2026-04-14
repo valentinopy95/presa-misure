@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { v4 as uuidv4 } from 'uuid';
 import { Opening, Photo, RootStackParamList, OpeningStyle, OpeningSide } from '../types';
 import { getProject, saveOpening } from '../storage/database';
-import { getToleranceW, getToleranceH } from '../storage/settings';
+import { getToleranceW, getToleranceH, getDimMode } from '../storage/settings';
 import { LiveDrawing } from '../components/drawings';
 import StyleLabel from '../components/StyleLabel';
 
@@ -71,12 +71,14 @@ export default function MeasurementScreen() {
   const [opening, setOpening] = useState<Opening>(emptyOpening());
   const [toleranceW, setToleranceW] = useState<number>(10);
   const [toleranceH, setToleranceH] = useState<number>(10);
+  const [dimMode, setDimMode] = useState<'taglio' | 'luce'>('taglio');
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
   useEffect(() => {
     getToleranceW().then(setToleranceW);
     getToleranceH().then(setToleranceH);
+    getDimMode().then(setDimMode);
     if (openingId) {
       getProject(projectId).then(p => {
         const existing = p?.openings.find(o => o.id === openingId);
@@ -89,6 +91,7 @@ export default function MeasurementScreen() {
     const unsub = navigation.addListener('focus', () => {
       getToleranceW().then(setToleranceW);
       getToleranceH().then(setToleranceH);
+      getDimMode().then(setDimMode);
       if (openingId) {
         getProject(projectId).then(p => {
           const existing = p?.openings.find(o => o.id === openingId);
@@ -175,6 +178,7 @@ export default function MeasurementScreen() {
           leafCount={opening.leafCount}
           openingSide={opening.openingSide}
           displayWidth={DRAWING_W - 16}
+          dimMode={dimMode}
         />
         {!opening.style && (
           <Text style={styles.drawingPlaceholder}>

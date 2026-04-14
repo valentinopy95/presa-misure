@@ -5,6 +5,7 @@ export const KEYS = {
   TOLERANCE_W:     '@measure_tolerance_w',
   TOLERANCE_H:     '@measure_tolerance_h',
   RIATTESTATTURA:  '@measure_riattestattura',
+  DIM_MODE:        '@measure_dim_mode',
 } as const;
 
 export const DEFAULT_TOLERANCE_W = 10;
@@ -42,6 +43,15 @@ export async function getRiattestattura(): Promise<number> {
 
 export async function setRiattestattura(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.RIATTESTATTURA, String(mm));
+}
+
+export async function getDimMode(): Promise<'taglio' | 'luce'> {
+  const raw = await AsyncStorage.getItem(KEYS.DIM_MODE);
+  return raw === 'luce' ? 'luce' : 'taglio';
+}
+
+export async function setDimMode(mode: 'taglio' | 'luce'): Promise<void> {
+  await AsyncStorage.setItem(KEYS.DIM_MODE, mode);
 }
 
 // Kept for backward compat — reads toleranceW

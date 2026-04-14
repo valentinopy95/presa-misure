@@ -8,6 +8,7 @@ import {
   getToleranceW, setToleranceW,
   getToleranceH, setToleranceH,
   getRiattestattura, setRiattestattura,
+  getDimMode, setDimMode,
 } from '../storage/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole } from '../types';
@@ -38,6 +39,7 @@ export default function SettingsScreen() {
   const [tolWText, setTolWText] = useState<string>(String(DEFAULT_TOLERANCE_W));
   const [tolHText, setTolHText] = useState<string>(String(DEFAULT_TOLERANCE_H));
   const [riattText, setRiattText] = useState<string>(String(DEFAULT_RIATTESTATTURA));
+  const [dimMode, setDimModeState] = useState<'taglio' | 'luce'>('taglio');
 
   useEffect(() => {
     AsyncStorage.getItem(KEYS.ROLE).then(v => {
@@ -46,6 +48,7 @@ export default function SettingsScreen() {
     getToleranceW().then(t => setTolWText(String(t)));
     getToleranceH().then(t => setTolHText(String(t)));
     getRiattestattura().then(r => setRiattText(String(r)));
+    getDimMode().then(setDimModeState);
   }, []);
 
   const selectRole = async (r: UserRole) => {
@@ -173,6 +176,25 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* ── Visualizzazione misure ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Misura visualizzata nel disegno</Text>
+      <Text style={styles.sectionSub}>
+        Scegli se mostrare la misura luce o taglio nelle frecce del disegno
+      </Text>
+      <View style={styles.toggleRow}>
+        {(['taglio', 'luce'] as const).map(mode => (
+          <TouchableOpacity
+            key={mode}
+            style={[styles.toggleBtn, dimMode === mode && styles.toggleBtnActive]}
+            onPress={() => { setDimModeState(mode); setDimMode(mode); }}
+          >
+            <Text style={[styles.toggleBtnText, dimMode === mode && styles.toggleBtnTextActive]}>
+              {mode === 'taglio' ? 'Taglio (Lt / Ht)' : 'Luce (Ll / Hl)'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {/* ── Ruolo ── */}
       <Text style={[styles.sectionTitle, { marginTop: 28 }]}>Ruolo utente</Text>
       <Text style={styles.sectionSub}>
@@ -238,4 +260,14 @@ const styles = StyleSheet.create({
   roleDesc: { fontSize: 12, color: '#888', marginTop: 2 },
   check: { fontSize: 20, color: '#1565C0', fontWeight: '700' },
   version: { textAlign: 'center', color: '#CCC', fontSize: 13, marginTop: 40 },
+
+  toggleRow: { flexDirection: 'row', gap: 10 },
+  toggleBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12,
+    backgroundColor: '#fff', alignItems: 'center',
+    borderWidth: 2, borderColor: 'transparent', elevation: 1,
+  },
+  toggleBtnActive: { borderColor: '#1565C0', backgroundColor: '#E3F2FD' },
+  toggleBtnText: { fontSize: 13, fontWeight: '600', color: '#666' },
+  toggleBtnTextActive: { color: '#1565C0' },
 });
