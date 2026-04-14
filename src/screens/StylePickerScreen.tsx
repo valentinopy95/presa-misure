@@ -19,23 +19,20 @@ interface StyleOption {
 
 const STYLES: StyleOption[] = [
   // Finestre
-  { value: 'window_single',         label: 'Singola',          category: 'Finestre'    },
-  { value: 'window_double',         label: 'Doppia',           category: 'Finestre'    },
-  { value: 'window_sliding',        label: 'Scorrevole',       category: 'Finestre'    },
-  { value: 'window_tilt_turn',      label: 'Vasistas',         category: 'Finestre'    },
+  { value: 'window_single',    label: 'Battente',       category: 'Finestre'    },
+  { value: 'window_sliding',   label: 'Scorrevole',     category: 'Finestre'    },
+  { value: 'window_tilt_turn', label: 'Vasistas',       category: 'Finestre'    },
   // Porte
-  { value: 'door_single',           label: 'Singola',          category: 'Porte'       },
-  { value: 'door_double',           label: 'Doppia',           category: 'Porte'       },
-  { value: 'door_sliding',          label: 'Scorrevole',       category: 'Porte'       },
-  { value: 'door_french',           label: 'Porta finestra',   category: 'Porte'       },
-  { value: 'door_bifold',           label: 'A libro',          category: 'Porte'       },
+  { value: 'door_entrance',    label: 'Portoncino',     category: 'Porte'       },
+  { value: 'door_sliding',     label: 'Scorrevole',     category: 'Porte'       },
+  { value: 'door_french',      label: 'Porta finestra', category: 'Porte'       },
   // Persiane
-  { value: 'shutter_single',        label: 'Singola',          category: 'Persiane'    },
-  { value: 'shutter_double',        label: 'Doppia',           category: 'Persiane'    },
+  { value: 'shutter_single',   label: 'Singola',        category: 'Persiane'    },
+  { value: 'shutter_double',   label: 'Doppia',         category: 'Persiane'    },
   // Monoblocchi
-  { value: 'roller_blind',          label: 'Con tapparella',   category: 'Monoblocchi' },
-  // Controtelaio (tipo unico a U, senza lato inferiore)
-  { value: 'subframe_window',       label: 'Controtelaio',     category: 'Controtelai' },
+  { value: 'roller_blind',     label: 'Con tapparella', category: 'Monoblocchi' },
+  // Controtelaio
+  { value: 'subframe_window',  label: 'Controtelaio',   category: 'Controtelai' },
 ];
 
 const CATEGORIES: Category[] = ['Finestre', 'Porte', 'Persiane', 'Monoblocchi', 'Controtelai'];

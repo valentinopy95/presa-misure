@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList, Project } from '../types';
 import { getProject } from '../storage/database';
@@ -13,9 +11,8 @@ type Route = RouteProp<RootStackParamList, 'Materials'>;
 export default function MaterialsScreen() {
   const route = useRoute<Route>();
   const { projectId } = route.params;
-
-  const [project, setProject]   = useState<Project | null>(null);
-  const [result, setResult]     = useState<MaterialsResult | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
+  const [result,  setResult]  = useState<MaterialsResult | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -27,61 +24,59 @@ export default function MaterialsScreen() {
   }, [projectId]);
 
   if (!project || !result) {
-    return (
-      <View style={s.loading}>
-        <ActivityIndicator color="#1565C0" size="large" />
-      </View>
-    );
+    return <View style={s.loading}><ActivityIndicator color="#1565C0" size="large"/></View>;
   }
 
-  const validOpenings = project.openings.filter(
+  const validCount = project.openings.filter(
     o => o.style && o.width && o.height &&
          o.style !== 'roller_blind' && o.style !== 'subframe_window',
-  );
+  ).length;
+
+  const totalBars = result.totalBars45 + result.totalBars90;
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
-      {/* ── Header progetto ── */}
+      {/* Header */}
       <View style={s.header}>
         <Text style={s.projectName}>{project.name}</Text>
         {!!project.clientName && <Text style={s.projectSub}>{project.clientName}</Text>}
-        <Text style={s.projectSub}>{validOpenings.length} aperture elaborate</Text>
+        <Text style={s.projectSub}>{validCount} aperture elaborate</Text>
       </View>
 
-      {/* ── Riepilogo barre ── */}
+      {/* Riepilogo barre */}
       <View style={s.summaryRow}>
-        <SummaryBox label="Barre 45°" value={result.totalBars45} color="#1565C0" />
-        <SummaryBox label="Barre 90°" value={result.totalBars90} color="#2E7D32" />
-        <SummaryBox label="Totale barre" value={result.totalBars45 + result.totalBars90} color="#37474F" />
+        <SummaryBox label="Barre 45°" value={result.totalBars45} color="#1565C0"/>
+        <SummaryBox label="Barre 90°" value={result.totalBars90} color="#2E7D32"/>
+        <SummaryBox label="Totale"    value={totalBars}          color="#37474F"/>
       </View>
 
-      {/* ── Taglio a 45° ── */}
+      {/* Sezione 45° */}
       {result.profiles45.length > 0 && (
         <>
-          <SectionHeader label="Taglio a 45°" color="#1565C0" />
-          <ProfileTable rows={result.profiles45} />
+          <SectionHeader label="Taglio a 45°" color="#1565C0"/>
+          <ProfileTable rows={result.profiles45}/>
         </>
       )}
 
-      {/* ── Taglio a 90° ── */}
+      {/* Sezione 90° */}
       {result.profiles90.length > 0 && (
         <>
-          <SectionHeader label="Taglio a 90°" color="#2E7D32" />
-          <ProfileTable rows={result.profiles90} />
+          <SectionHeader label="Taglio a 90°" color="#2E7D32"/>
+          <ProfileTable rows={result.profiles90}/>
         </>
       )}
 
-      {validOpenings.length === 0 && (
+      {validCount === 0 && (
         <View style={s.empty}>
           <Text style={s.emptyText}>
             Nessuna apertura con misure complete.{'\n'}
-            Compila larghezza e altezza per ogni apertura.
+            Inserisci larghezza e altezza per ogni apertura.
           </Text>
         </View>
       )}
 
-      <View style={{ height: 40 }} />
+      <View style={{ height: 40 }}/>
     </ScrollView>
   );
 }
@@ -108,20 +103,20 @@ function SectionHeader({ label, color }: { label: string; color: string }) {
 function ProfileTable({ rows }: { rows: ProfileResult[] }) {
   return (
     <View style={tbl.card}>
-      {/* Header */}
-      <View style={[tbl.row, tbl.headRow]}>
-        <Text style={[tbl.cell, tbl.headCell, { flex: 3 }]}>Profilo</Text>
-        <Text style={[tbl.cell, tbl.headCell, { flex: 1, textAlign: 'right' }]}>Pz</Text>
-        <Text style={[tbl.cell, tbl.headCell, { flex: 2, textAlign: 'right' }]}>ml</Text>
-        <Text style={[tbl.cell, tbl.headCell, { flex: 2, textAlign: 'right' }]}>Barre</Text>
-      </View>
-      {/* Rows */}
       {rows.map((r, i) => (
         <View key={r.label} style={[tbl.row, i % 2 === 1 && tbl.rowAlt]}>
-          <Text style={[tbl.cell, tbl.labelCell, { flex: 3 }]}>{r.label}</Text>
-          <Text style={[tbl.cell, tbl.dataCell,  { flex: 1, textAlign: 'right' }]}>{r.pieces}</Text>
-          <Text style={[tbl.cell, tbl.dataCell,  { flex: 2, textAlign: 'right' }]}>{r.totalMl.toFixed(1)}</Text>
-          <Text style={[tbl.cell, tbl.barsCell,  { flex: 2, textAlign: 'right' }]}>{r.bars}</Text>
+          {/* Nome profilo + sfrido */}
+          <View style={{ flex: 1 }}>
+            <Text style={tbl.labelCell}>{r.label}</Text>
+            <Text style={tbl.sfridoCell}>
+              sfrido {r.sfridoMl.toFixed(1)} ml ({r.sfridoPct}%)
+            </Text>
+          </View>
+          {/* Barre */}
+          <View style={tbl.barsWrap}>
+            <Text style={tbl.barsNum}>{r.bars}</Text>
+            <Text style={tbl.barsLabel}>barre</Text>
+          </View>
         </View>
       ))}
     </View>
@@ -148,8 +143,7 @@ const s = StyleSheet.create({
 const sum = StyleSheet.create({
   box: {
     flex: 1, backgroundColor: '#fff', borderRadius: 12,
-    padding: 14, alignItems: 'center',
-    borderTopWidth: 3,
+    padding: 12, alignItems: 'center', borderTopWidth: 3,
     elevation: 1,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
   },
@@ -158,10 +152,7 @@ const sum = StyleSheet.create({
 });
 
 const sec = StyleSheet.create({
-  wrap: {
-    borderLeftWidth: 4, paddingLeft: 10,
-    marginBottom: 10, marginTop: 6,
-  },
+  wrap: { borderLeftWidth: 4, paddingLeft: 10, marginBottom: 10, marginTop: 6 },
   text: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
 });
 
@@ -171,12 +162,12 @@ const tbl = StyleSheet.create({
     borderWidth: 1, borderColor: '#E0E8F0',
     overflow: 'hidden', marginBottom: 16,
   },
-  row:     { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10 },
-  rowAlt:  { backgroundColor: '#F7FAFF' },
-  headRow: { backgroundColor: '#EEF4FF', borderBottomWidth: 1, borderBottomColor: '#D0DEFA' },
-  cell:    { fontSize: 13 },
-  headCell:  { fontWeight: '700', color: '#445', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
-  labelCell: { fontWeight: '600', color: '#333' },
-  dataCell:  { color: '#666' },
-  barsCell:  { fontWeight: '800', color: '#1565C0', fontSize: 14 },
+  row:       { flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center' },
+  rowAlt:    { backgroundColor: '#F7FAFF' },
+  right:     { textAlign: 'right' },
+  labelCell: { fontWeight: '700', color: '#222', fontSize: 14 },
+  sfridoCell:{ color: '#B94A00', fontSize: 11, marginTop: 2 },
+  barsWrap:  { alignItems: 'center', minWidth: 64 },
+  barsNum:   { fontSize: 32, fontWeight: '900', color: '#1565C0', lineHeight: 36 },
+  barsLabel: { fontSize: 10, color: '#7090C0', fontWeight: '600', textTransform: 'uppercase' },
 });

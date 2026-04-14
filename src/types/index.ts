@@ -12,6 +12,7 @@ export type OpeningStyle =
   | 'door_sliding'
   | 'door_french'
   | 'door_bifold'
+  | 'door_entrance'
   // Persiane
   | 'shutter_single'
   | 'shutter_double'

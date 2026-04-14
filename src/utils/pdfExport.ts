@@ -1,417 +1,448 @@
 import { Project, Opening, OpeningStyle } from '../types';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-// ViewBox 160x180
+// ─── ViewBox constants ────────────────────────────────────────────────────────
 const FX = 20, FY = 14, FW = 120, FH = 140, FT = 12;
 const GX = FX + FT, GY = FY + FT;
 const GW = FW - FT * 2, GH = FH - FT * 2;
 const GX2 = GX + GW, GY2 = GY + GH;
 const CX = GX + GW / 2, CY = GY + GH / 2;
 
-// ─── Patterns ────────────────────────────────────────────────────────────────
-const HATCH_PAT = `<defs>
-  <pattern id="hp" x="0" y="0" width="6" height="6" patternUnits="userSpaceOnUse">
-    <path d="M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2" stroke="#1a3a5c" stroke-width="0.7"/>
-  </pattern>
+// ─── Patterns ─────────────────────────────────────────────────────────────────
+const DEFS = `<defs>
   <pattern id="wp" x="0" y="0" width="8" height="8" patternUnits="userSpaceOnUse">
     <rect width="8" height="8" fill="#d4b483"/>
     <line x1="0" y1="2" x2="8" y2="2" stroke="#b8903c" stroke-width="0.6" opacity="0.5"/>
     <line x1="0" y1="5" x2="8" y2="5" stroke="#b8903c" stroke-width="0.4" opacity="0.35"/>
   </pattern>
-  <pattern id="sp" x="0" y="0" width="6" height="6" patternUnits="userSpaceOnUse">
-    <path d="M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2" stroke="#5a7a3a" stroke-width="0.7"/>
-  </pattern>
+  <linearGradient id="glassGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%"  stop-color="#cce4f7" stop-opacity="0.6"/>
+    <stop offset="100%" stop-color="#eaf4fc" stop-opacity="0.3"/>
+  </linearGradient>
 </defs>`;
 
-// Frame cross-section: solid fill (no wall hatch)
+// Frame: solid aluminium-grey cross-section
 const FRAME = `
-  <rect x="${FX}" y="${FY}" width="${FW}" height="${FH}" fill="#dde4ec" stroke="#1a3a5c" stroke-width="2"/>
-  <rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="white"/>
-  <rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="rgba(176,213,232,0.38)" stroke="#1a3a5c" stroke-width="0.8"/>
-  <line x1="${GX+GW*0.25}" y1="${GY}" x2="${GX+GW*0.45}" y2="${GY2}" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>`;
+  <rect x="${FX}" y="${FY}" width="${FW}" height="${FH}" fill="#c8d4df" stroke="#4a6070" stroke-width="2"/>
+  <rect x="${FX+2}" y="${FY+2}" width="${FW-4}" height="${FH-4}" fill="none" stroke="#8aa4b4" stroke-width="0.6"/>
+  <rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="url(#glassGrad)" stroke="#4a6070" stroke-width="1"/>
+  <rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="white" opacity="0.5"/>
+  <line x1="${GX + GW*0.18}" y1="${GY+2}" x2="${GX + GW*0.36}" y2="${GY2-2}" stroke="rgba(255,255,255,0.55)" stroke-width="2.5"/>
+  <line x1="${GX + GW*0.26}" y1="${GY+2}" x2="${GX + GW*0.44}" y2="${GY2-2}" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>`;
 
-// ─── Style-specific indicators ────────────────────────────────────────────────
+// ─── Style indicators ─────────────────────────────────────────────────────────
 function indicator(style: OpeningStyle, boxHeight: number | null): string {
-  const col = '#1565C0';
+  const col = '#1a5296';
   const da = 'stroke-dasharray="5,3"';
+  const arcFill = 'fill="rgba(26,82,150,0.08)"';
 
   switch (style) {
     case 'window_single':
       return `
-        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5"/>
-        <path d="M ${GX+3} ${GY} Q ${GX2-3} ${GY} ${GX2-3} ${GY2}" fill="none" stroke="${col}" stroke-width="1.5" ${da}/>`;
+        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M ${GX+3} ${GY} Q ${GX2-3} ${GY} ${GX2-3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
+        <line x1="${GX2-14}" y1="${CY-4}" x2="${GX2-14}" y2="${CY+4}" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`;
 
     case 'window_double':
       return `
         <line x1="${CX}" y1="${GY}" x2="${CX}" y2="${GY2}" stroke="${col}" stroke-width="1.5"/>
-        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5"/>
-        <path d="M ${GX+3} ${GY} Q ${CX-3} ${GY} ${CX-3} ${GY2}" fill="none" stroke="${col}" stroke-width="1.5" ${da}/>
-        <line x1="${GX2-3}" y1="${GY}" x2="${GX2-3}" y2="${GY2}" stroke="${col}" stroke-width="2.5"/>
-        <path d="M ${GX2-3} ${GY} Q ${CX+3} ${GY} ${CX+3} ${GY2}" fill="none" stroke="${col}" stroke-width="1.5" ${da}/>`;
+        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M ${GX+3} ${GY} Q ${CX-3} ${GY} ${CX-3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
+        <line x1="${GX2-3}" y1="${GY}" x2="${GX2-3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M ${GX2-3} ${GY} Q ${CX+3} ${GY} ${CX+3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>`;
 
     case 'window_sliding':
       return `
-        <line x1="${GX}" y1="${GY+8}" x2="${GX2}" y2="${GY+8}" stroke="${col}" stroke-width="1"/>
-        <line x1="${GX}" y1="${GY2-8}" x2="${GX2}" y2="${GY2-8}" stroke="${col}" stroke-width="1"/>
-        <rect x="${GX}" y="${GY+8}" width="${GW/2+6}" height="${GH-16}" fill="rgba(176,213,232,0.2)" stroke="${col}" stroke-width="1"/>
-        <rect x="${CX-6}" y="${GY+8}" width="${GW/2+6}" height="${GH-16}" fill="rgba(255,255,255,0.1)" stroke="${col}" stroke-width="2"/>
-        <line x1="${CX+6}" y1="${CY}" x2="${GX2-12}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>`;
+        <rect x="${GX}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(26,82,150,0.06)" stroke="${col}" stroke-width="1"/>
+        <rect x="${CX-6}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(255,255,255,0.15)" stroke="${col}" stroke-width="2"/>
+        <line x1="${CX+4}" y1="${CY}" x2="${GX2-14}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>
+        <polygon points="${GX2-14},${CY-5} ${GX2-8},${CY} ${GX2-14},${CY+5}" fill="${col}"/>`;
 
     case 'window_tilt_turn':
       return `
-        <line x1="${GX}" y1="${GY}" x2="${GX2}" y2="${GY2}" stroke="${col}" stroke-width="1.5"/>
-        <line x1="${GX2}" y1="${GY}" x2="${GX}" y2="${GY2}" stroke="${col}" stroke-width="1.5"/>
-        <line x1="${GX+4}" y1="${CY-10}" x2="${GX+4}" y2="${CY+10}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="${GX+4}" y1="${GY+4}" x2="${CX}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>
+        <line x1="${GX2-4}" y1="${GY+4}" x2="${CX}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>
+        <line x1="${CX}" y1="${GY2-4}" x2="${CX}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>
+        <line x1="${GX+4}" y1="${GY}" x2="${GX+4}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
         <line x1="${CX-10}" y1="${GY2-4}" x2="${CX+10}" y2="${GY2-4}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>`;
 
     case 'door_single':
       return `
-        <line x1="${GX}" y1="${GY2}" x2="${GX2}" y2="${GY2}" stroke="${col}" stroke-width="1.5" ${da}/>
         <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="3" stroke-linecap="round"/>
-        <line x1="${GX+3}" y1="${GY}" x2="${GX2-3}" y2="${GY}" stroke="${col}" stroke-width="2"/>
-        <path d="M ${GX+3} ${GY2} A ${GH*0.82} ${GH*0.82} 0 0 1 ${Math.min(GX2-3, GX+3+GH*0.82)} ${GY2}" fill="rgba(176,213,232,0.15)" stroke="${col}" stroke-width="1.5" ${da}/>
-        <rect x="${GX2-10}" y="${CY-6}" width="4" height="12" rx="2" fill="${col}"/>`;
+        <path d="M ${GX+3} ${GY2} A ${GH*0.85} ${GH*0.85} 0 0 1 ${Math.min(GX2-3, GX+3+GH*0.85)} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
+        <rect x="${GX2-12}" y="${CY-8}" width="5" height="16" rx="2.5" fill="${col}"/>`;
 
     case 'door_double':
       return `
-        <line x1="${GX}" y1="${GY2}" x2="${GX2}" y2="${GY2}" stroke="${col}" stroke-width="1.5" ${da}/>
-        <rect x="${CX-1}" y="${FY}" width="${FT+2}" height="${FH}" fill="#dce9f5"/>
+        <line x1="${CX}" y1="${FY}" x2="${CX}" y2="${FY+FH}" stroke="#aabccc" stroke-width="${FT+2}"/>
         <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <line x1="${GX+3}" y1="${GY}" x2="${CX}" y2="${GY}" stroke="${col}" stroke-width="2"/>
-        <path d="M ${GX+3} ${GY2} A ${GH*0.82} ${GH*0.82} 0 0 1 ${Math.min(CX, GX+3+GH*0.82)} ${GY2}" fill="rgba(176,213,232,0.15)" stroke="${col}" stroke-width="1.5" ${da}/>
+        <path d="M ${GX+3} ${GY2} A ${GH*0.82} ${GH*0.82} 0 0 1 ${Math.min(CX-2, GX+3+GH*0.82)} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
         <line x1="${GX2-3}" y1="${GY}" x2="${GX2-3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <line x1="${CX}" y1="${GY}" x2="${GX2-3}" y2="${GY}" stroke="${col}" stroke-width="2"/>
-        <path d="M ${GX2-3} ${GY2} A ${GH*0.82} ${GH*0.82} 0 0 0 ${Math.max(CX, GX2-3-GH*0.82)} ${GY2}" fill="rgba(176,213,232,0.15)" stroke="${col}" stroke-width="1.5" ${da}/>`;
+        <path d="M ${GX2-3} ${GY2} A ${GH*0.82} ${GH*0.82} 0 0 0 ${Math.max(CX+2, GX2-3-GH*0.82)} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>`;
 
     case 'door_sliding':
       return `
-        <line x1="${GX}" y1="${GY+8}" x2="${GX2}" y2="${GY+8}" stroke="${col}" stroke-width="1"/>
-        <rect x="${GX}" y="${GY+8}" width="${GW/2+6}" height="${GH-10}" fill="rgba(176,213,232,0.2)" stroke="${col}" stroke-width="1"/>
-        <rect x="${CX-6}" y="${GY+8}" width="${GW/2+6}" height="${GH-10}" fill="rgba(255,255,255,0.1)" stroke="${col}" stroke-width="2"/>
-        <rect x="${CX-2}" y="${CY-7}" width="3" height="14" rx="1.5" fill="${col}"/>`;
+        <rect x="${GX}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(26,82,150,0.06)" stroke="${col}" stroke-width="1"/>
+        <rect x="${CX-6}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(255,255,255,0.15)" stroke="${col}" stroke-width="2"/>
+        <rect x="${CX-3}" y="${CY-8}" width="4" height="16" rx="2" fill="${col}"/>`;
 
     case 'door_french':
       return `
-        <line x1="${GX}" y1="${GY2}" x2="${GX2}" y2="${GY2}" stroke="${col}" stroke-width="1.5" ${da}/>
-        <rect x="${CX-1}" y="${FY}" width="${FT+2}" height="${FH}" fill="#dce9f5"/>
+        <line x1="${CX}" y1="${FY}" x2="${CX}" y2="${FY+FH}" stroke="#aabccc" stroke-width="${FT+2}"/>
         <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX+3} ${GY} A ${GW/2-6} ${GW/2-6} 0 0 0 ${GX+3} ${GY2}" fill="rgba(176,213,232,0.15)" stroke="${col}" stroke-width="1.5" ${da}/>
+        <path d="M ${GX+3} ${GY} A ${GW/2-6} ${GW/2-6} 0 0 0 ${GX+3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
         <line x1="${GX2-3}" y1="${GY}" x2="${GX2-3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX2-3} ${GY} A ${GW/2-6} ${GW/2-6} 0 0 1 ${GX2-3} ${GY2}" fill="rgba(176,213,232,0.15)" stroke="${col}" stroke-width="1.5" ${da}/>`;
+        <path d="M ${GX2-3} ${GY} A ${GW/2-6} ${GW/2-6} 0 0 1 ${GX2-3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>`;
 
     case 'door_bifold': {
-      const pL = GX + GW * 0.25, pR = GX + GW * 0.75, pY = GY + 12, arcR = GW / 2 - 6;
+      const pL = GX + GW * 0.25, pR = GX + GW * 0.75, pY = GY + 16;
+      const arcR = GW / 2 - 6;
       return `
-        <line x1="${GX}" y1="${GY2}" x2="${GX2}" y2="${GY2}" stroke="${col}" stroke-width="1.5" ${da}/>
         <line x1="${GX+4}" y1="${GY2-4}" x2="${pL}" y2="${pY}" stroke="${col}" stroke-width="2"/>
         <line x1="${pL}" y1="${pY}" x2="${CX-4}" y2="${GY2-4}" stroke="${col}" stroke-width="2"/>
         <line x1="${CX+4}" y1="${GY2-4}" x2="${pR}" y2="${pY}" stroke="${col}" stroke-width="2"/>
         <line x1="${pR}" y1="${pY}" x2="${GX2-4}" y2="${GY2-4}" stroke="${col}" stroke-width="2"/>
-        <path d="M ${GX+4} ${GY2-4} A ${arcR} ${arcR} 0 0 0 ${CX} ${GY2-4}" fill="rgba(176,213,232,0.15)" stroke="${col}" stroke-width="1.5" ${da}/>
-        <path d="M ${CX} ${GY2-4} A ${arcR} ${arcR} 0 0 0 ${GX2-4} ${GY2-4}" fill="rgba(176,213,232,0.15)" stroke="${col}" stroke-width="1.5" ${da}/>`;
+        <path d="M ${GX+4} ${GY2-4} A ${arcR} ${arcR} 0 0 0 ${CX} ${GY2-4}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
+        <path d="M ${CX} ${GY2-4} A ${arcR} ${arcR} 0 0 0 ${GX2-4} ${GY2-4}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>`;
     }
 
     case 'shutter_single': {
-      const slats = 6;
-      const slH = GH / slats;
-      let s = `<rect x="${FX}" y="${FY}" width="${FW}" height="${FH}" fill="#5a7a3acc" stroke="#5a7a3a" stroke-width="2"/>
-        <rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="rgba(90,122,58,0.12)" stroke="#5a7a3a" stroke-width="0.8"/>`;
+      const slats = 7, slH = FH / slats;
+      let s = `<rect x="${FX}" y="${FY}" width="${FW}" height="${FH}" fill="#5a7a3a" stroke="#3a5a22" stroke-width="2"/>`;
       for (let i = 1; i < slats; i++) {
-        s += `<line x1="${GX}" y1="${GY + i * slH}" x2="${GX2}" y2="${GY + i * slH}" stroke="#5a7a3a" stroke-width="0.8" opacity="0.6"/>`;
+        s += `<line x1="${FX+1}" y1="${FY + i * slH}" x2="${FX+FW-1}" y2="${FY + i * slH}" stroke="#3a5a22" stroke-width="0.8" opacity="0.7"/>`;
+        s += `<line x1="${FX+1}" y1="${FY + i * slH + slH*0.45}" x2="${FX+FW-1}" y2="${FY + i * slH + slH*0.45}" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>`;
       }
-      // Hinge dots
-      [0.25, 0.5, 0.75].forEach(p => {
-        s += `<circle cx="${GX+5}" cy="${GY + GH*p}" r="3" fill="#3a5a2a"/>`;
+      [0.2, 0.5, 0.8].forEach(p => {
+        s += `<circle cx="${FX+6}" cy="${FY + FH*p}" r="3.5" fill="#2a4a18" stroke="#1a3a0a" stroke-width="0.5"/>`;
       });
-      // Outward arc
-      s += `<path d="M ${GX+3} ${GY} Q ${GX-GW*0.4} ${CY} ${GX+3} ${GY2}" fill="rgba(90,122,58,0.1)" stroke="#5a7a3a" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+      s += `<path d="M ${FX+4} ${FY} Q ${FX-FW*0.38} ${FY+FH/2} ${FX+4} ${FY+FH}" fill="rgba(90,122,58,0.12)" stroke="#3a5a22" stroke-width="1.5" stroke-dasharray="5,3"/>`;
       return s;
     }
 
     case 'shutter_double': {
-      const slats = 6;
-      const slH = GH / slats;
-      let s = `<rect x="${FX}" y="${FY}" width="${FW}" height="${FH}" fill="#5a7a3acc" stroke="#5a7a3a" stroke-width="2"/>
-        <rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="rgba(90,122,58,0.12)" stroke="#5a7a3a" stroke-width="0.8"/>`;
+      const slats = 7, slH = FH / slats;
+      let s = `<rect x="${FX}" y="${FY}" width="${FW}" height="${FH}" fill="#5a7a3a" stroke="#3a5a22" stroke-width="2"/>`;
       for (let i = 1; i < slats; i++) {
-        s += `<line x1="${GX}" y1="${GY + i * slH}" x2="${GX2}" y2="${GY + i * slH}" stroke="#5a7a3a" stroke-width="0.8" opacity="0.6"/>`;
+        s += `<line x1="${FX+1}" y1="${FY + i * slH}" x2="${FX+FW-1}" y2="${FY + i * slH}" stroke="#3a5a22" stroke-width="0.8" opacity="0.7"/>`;
       }
-      s += `<line x1="${CX}" y1="${GY}" x2="${CX}" y2="${GY2}" stroke="#5a7a3a" stroke-width="1.5"/>`;
-      [0.25, 0.5, 0.75].forEach(p => {
-        s += `<circle cx="${GX+5}" cy="${GY + GH*p}" r="3" fill="#3a5a2a"/>`;
-        s += `<circle cx="${GX2-5}" cy="${GY + GH*p}" r="3" fill="#3a5a2a"/>`;
+      s += `<line x1="${FX + FW/2}" y1="${FY}" x2="${FX + FW/2}" y2="${FY+FH}" stroke="#3a5a22" stroke-width="2"/>`;
+      [0.2, 0.5, 0.8].forEach(p => {
+        s += `<circle cx="${FX+6}" cy="${FY + FH*p}" r="3.5" fill="#2a4a18"/>`;
+        s += `<circle cx="${FX+FW-6}" cy="${FY + FH*p}" r="3.5" fill="#2a4a18"/>`;
       });
-      s += `<path d="M ${GX+3} ${GY} Q ${GX-GW*0.25} ${CY} ${GX+3} ${GY2}" fill="rgba(90,122,58,0.1)" stroke="#5a7a3a" stroke-width="1.5" stroke-dasharray="5,3"/>`;
-      s += `<path d="M ${GX2-3} ${GY} Q ${GX2+GW*0.25} ${CY} ${GX2-3} ${GY2}" fill="rgba(90,122,58,0.1)" stroke="#5a7a3a" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+      s += `<path d="M ${FX+4} ${FY} Q ${FX-FW*0.2} ${FY+FH/2} ${FX+4} ${FY+FH}" fill="rgba(90,122,58,0.1)" stroke="#3a5a22" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+      s += `<path d="M ${FX+FW-4} ${FY} Q ${FX+FW+FW*0.2} ${FY+FH/2} ${FX+FW-4} ${FY+FH}" fill="rgba(90,122,58,0.1)" stroke="#3a5a22" stroke-width="1.5" stroke-dasharray="5,3"/>`;
       return s;
     }
 
     case 'roller_blind': {
       const boxH = Math.round(FH * 0.22);
       const boxY2 = FY + boxH;
-      const frameGY = boxY2 + 4;
-      const frameH = FY + FH - FT - frameGY;
-      const slats = 4;
-      const slH = frameH / slats;
-      let s = `<rect x="${FX}" y="${FY}" width="${FW}" height="${boxH}" fill="#2a2a2a" stroke="#1a1a1a" stroke-width="1.5"/>
-        <text x="${CX}" y="${FY + boxH/2 + 3.5}" text-anchor="middle" font-size="7" fill="#aaa" font-weight="700" font-family="Arial">CASS.</text>
-        <rect x="${FX}" y="${boxY2}" width="${FW}" height="${FY+FH-boxY2}" fill="url(#hp)" stroke="#1a3a5c" stroke-width="2"/>
-        <rect x="${GX}" y="${frameGY}" width="${GW}" height="${frameH}" fill="white"/>`;
+      const frameH = FY + FH - FT - boxY2 - 4;
+      const slats = 5, slH = frameH / slats;
+      let s = `
+        <rect x="${FX}" y="${FY}" width="${FW}" height="${boxH}" fill="#333" stroke="#222" stroke-width="1.5" rx="2"/>
+        <line x1="${FX+8}" y1="${FY + boxH/2}" x2="${FX+FW-8}" y2="${FY + boxH/2}" stroke="#555" stroke-width="1"/>
+        <text x="${FX + FW/2}" y="${FY + boxH/2 + 3.5}" text-anchor="middle" font-size="7" fill="#aaa" font-weight="700" font-family="Arial,sans-serif" letter-spacing="0.5">CASS.</text>
+        <rect x="${FX}" y="${boxY2}" width="${FW}" height="${FY+FH-boxY2}" fill="#c8d4df" stroke="#4a6070" stroke-width="2"/>
+        <rect x="${GX}" y="${boxY2+4}" width="${GW}" height="${frameH}" fill="white"/>`;
       for (let i = 0; i <= slats; i++) {
-        s += `<line x1="${GX}" y1="${frameGY + i * slH}" x2="${GX2}" y2="${frameGY + i * slH}" stroke="#c8a06a" stroke-width="${i===0?1.5:0.8}"/>`;
+        const lw = i === 0 ? 1.5 : 0.8;
+        s += `<line x1="${GX}" y1="${boxY2+4 + i * slH}" x2="${GX2}" y2="${boxY2+4 + i * slH}" stroke="#c8a06a" stroke-width="${lw}"/>`;
       }
-      // Guides
-      s += `<rect x="${GX}" y="${frameGY}" width="5" height="${frameH}" fill="#888" opacity="0.5"/>`;
-      s += `<rect x="${GX2-5}" y="${frameGY}" width="5" height="${frameH}" fill="#888" opacity="0.5"/>`;
+      s += `<rect x="${GX}" y="${boxY2+4}" width="5" height="${frameH}" fill="#9aacba" opacity="0.6"/>`;
+      s += `<rect x="${GX2-5}" y="${boxY2+4}" width="5" height="${frameH}" fill="#9aacba" opacity="0.6"/>`;
       if (boxHeight != null) {
-        s += `<text x="${FX + FW + 4}" y="${FY + boxH/2 + 3.5}" font-size="7" fill="#E65100" font-weight="700" font-family="Arial">${boxHeight}</text>`;
+        s += `<text x="${FX + FW/2}" y="${FY + boxH/2 + 14}" text-anchor="middle" font-size="6.5" fill="#E65100" font-weight="700" font-family="Arial,sans-serif">${boxHeight} mm</text>`;
       }
       return s;
     }
 
     case 'subframe_window': {
-      // U-shape controtelaio: top bar + left bar + right bar, no bottom
+      const bw = FT + 2;
       return `
-        <rect x="${FX}" y="${FY}" width="${FT}" height="${FH}" fill="url(#wp)" stroke="#7a5030" stroke-width="1.5"/>
-        <rect x="${FX+FW-FT}" y="${FY}" width="${FT}" height="${FH}" fill="url(#wp)" stroke="#7a5030" stroke-width="1.5"/>
-        <rect x="${FX}" y="${FY}" width="${FW}" height="${FT}" fill="url(#wp)" stroke="#7a5030" stroke-width="1.5"/>
-        <rect x="${GX}" y="${GY}" width="${GW}" height="${GH+FT+4}" fill="white"/>
-        <path d="M ${GX+4} ${FY+FH+2} L ${GX+4} ${GY+4} L ${GX2-4} ${GY+4} L ${GX2-4} ${FY+FH+2}"
+        <rect x="${FX}" y="${FY}" width="${bw}" height="${FH}" fill="url(#wp)" stroke="#7a5030" stroke-width="1.5"/>
+        <rect x="${FX+FW-bw}" y="${FY}" width="${bw}" height="${FH}" fill="url(#wp)" stroke="#7a5030" stroke-width="1.5"/>
+        <rect x="${FX}" y="${FY}" width="${FW}" height="${bw}" fill="url(#wp)" stroke="#7a5030" stroke-width="1.5"/>
+        <rect x="${GX}" y="${GY}" width="${GW}" height="${GH+bw+4}" fill="white"/>
+        <path d="M ${GX+5} ${FY+FH+4} L ${GX+5} ${GY+5} L ${GX2-5} ${GY+5} L ${GX2-5} ${FY+FH+4}"
               fill="none" stroke="#c8a06a" stroke-width="1" stroke-dasharray="4,2"/>
-        <text x="${CX}" y="${GY+GH/2+5}" text-anchor="middle" font-size="8" fill="#7a5030" font-weight="700" font-family="Arial">CONTROTELAIO</text>`;
+        <text x="${FX+FW/2}" y="${FY+bw*2+GH/2}" text-anchor="middle" font-size="8" fill="#7a5030"
+              font-weight="700" font-family="Arial,sans-serif" letter-spacing="0.5">CONTROTELAIO</text>`;
     }
 
     default:
       return `
-        <line x1="${GX+10}" y1="${CY}" x2="${GX2-10}" y2="${CY}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4,3"/>
-        <line x1="${CX}" y1="${GY+10}" x2="${CX}" y2="${GY2-10}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+        <line x1="${GX+14}" y1="${CY}" x2="${GX2-14}" y2="${CY}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <line x1="${CX}" y1="${GY+14}" x2="${CX}" y2="${GY2-14}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <text x="${CX}" y="${CY+16}" text-anchor="middle" font-size="9" fill="#aaa" font-family="Arial,sans-serif">—</text>`;
   }
 }
 
 function svgForStyle(style: OpeningStyle | null, boxHeight: number | null): string {
-  if (!style) return `<svg width="160" height="180" viewBox="0 0 160 180"></svg>`;
+  if (!style) {
+    return `<svg width="80" height="90" viewBox="0 0 160 180" xmlns="http://www.w3.org/2000/svg">
+      <rect x="20" y="14" width="120" height="140" fill="#f0f4f8" stroke="#ccc" stroke-width="2" rx="4"/>
+      <text x="80" y="90" text-anchor="middle" font-size="28" fill="#ccc" font-family="Arial">?</text>
+    </svg>`;
+  }
   const isSubframe = style.startsWith('subframe');
   const isShutter  = style.startsWith('shutter');
   const isRoller   = style === 'roller_blind';
   const content = isSubframe || isShutter || isRoller
     ? indicator(style, boxHeight)
     : `${FRAME}${indicator(style, boxHeight)}`;
-  return `<svg width="160" height="180" viewBox="0 0 160 180" xmlns="http://www.w3.org/2000/svg">
-    ${HATCH_PAT}${content}
+  return `<svg width="80" height="90" viewBox="0 0 160 180" xmlns="http://www.w3.org/2000/svg">
+    ${DEFS}${content}
   </svg>`;
 }
 
-// ─── Labels ──────────────────────────────────────────────────────────────────
+// ─── Labels ───────────────────────────────────────────────────────────────────
 const STYLE_LABELS: Record<OpeningStyle, string> = {
-  window_single:        'Finestra singola',
-  window_double:        'Finestra doppia',
-  window_sliding:       'Finestra scorrevole',
-  window_tilt_turn:     'Finestra vasistas',
-  door_single:          'Porta singola',
-  door_double:          'Porta doppia',
-  door_sliding:         'Porta scorrevole',
-  door_french:          'Porta finestra',
-  door_bifold:          'Porta a libro',
-  shutter_single:       'Persiana singola',
-  shutter_double:       'Persiana doppia',
-  roller_blind:         'Monoblocco tapparella',
-  subframe_window:      'Controtelaio',
-  custom:               'Personalizzato',
+  window_single:    'Finestra singola',
+  window_double:    'Finestra doppia',
+  window_sliding:   'Finestra scorrevole',
+  window_tilt_turn: 'Finestra vasistas',
+  door_single:      'Porta singola',
+  door_double:      'Porta doppia',
+  door_sliding:     'Porta scorrevole',
+  door_french:      'Porta finestra',
+  door_bifold:      'Porta a libro',
+  shutter_single:   'Persiana singola',
+  shutter_double:   'Persiana doppia',
+  roller_blind:     'Monoblocco tapparella',
+  subframe_window:  'Controtelaio',
+  custom:           'Personalizzato',
+};
+
+const STYLE_COLORS: Partial<Record<OpeningStyle, string>> = {
+  window_single:    '#1565C0', window_double: '#1565C0',
+  window_sliding:   '#1565C0', window_tilt_turn: '#1565C0',
+  door_single:      '#6A1B9A', door_double:   '#6A1B9A',
+  door_sliding:     '#6A1B9A', door_french:   '#6A1B9A',
+  door_bifold:      '#6A1B9A',
+  shutter_single:   '#2E7D32', shutter_double: '#2E7D32',
+  roller_blind:     '#E65100',
+  subframe_window:  '#5D4037',
+  custom:           '#455A64',
 };
 
 function dim(v: number | null) { return v != null ? `${v}` : '—'; }
 
-// ─── Card HTML ────────────────────────────────────────────────────────────────
-function openingCard(o: Opening, idx: number, toleranceW: number, toleranceH: number): string {
+function openingRow(o: Opening, globalIdx: number, groupIdx: number, toleranceW: number, toleranceH: number): string {
   const tagW = o.width  != null ? o.width  - toleranceW : null;
   const tagH = o.height != null ? o.height - toleranceH : null;
   const styleLabel = o.style ? STYLE_LABELS[o.style] : '—';
-  const isRoller = o.style === 'roller_blind';
-  return `
-    <div class="card">
-      <div class="card-header">
-        <span class="card-num">${idx + 1}</span>
-        <span class="card-name">${o.name}</span>
-      </div>
-      <div class="card-drawing">
-        ${svgForStyle(o.style, o.boxHeight ?? null)}
-      </div>
-      <div class="card-dims">
-        <div class="dim-row">
-          <span class="dim-label">Larghezza</span>
-          <div class="dim-vals">
-            <span class="luce">L ${dim(o.width)} mm</span>
-            <span class="taglio">T ${dim(tagW)} mm</span>
-          </div>
-        </div>
-        <div class="dim-row">
-          <span class="dim-label">Altezza</span>
-          <div class="dim-vals">
-            <span class="luce">L ${dim(o.height)} mm</span>
-            <span class="taglio">T ${dim(tagH)} mm</span>
-          </div>
-        </div>
-        ${isRoller ? `<div class="dim-row">
-          <span class="dim-label">Cassonetto</span>
-          <div class="dim-vals"><span class="luce">${dim(o.boxHeight ?? null)} mm</span></div>
-        </div>` : ''}
-      </div>
-      <div class="card-style">${styleLabel}</div>
-      ${o.textNote ? `<div class="card-note">${o.textNote}</div>` : ''}
-      ${o.photos.length > 0 ? `<div class="card-photos">📷 ${o.photos.length} foto</div>` : ''}
-    </div>`;
+  const isRoller   = o.style === 'roller_blind';
+  const isSubframe = o.style === 'subframe_window';
+  const bg = groupIdx % 2 === 0 ? '#ffffff' : '#fafbfc';
+
+  return `<tr style="background:${bg}; border-bottom:1px solid #e8edf0;">
+    <td style="padding:8px 10px; text-align:center; width:32px; color:#888; font-size:11px; font-weight:700; border-right:1px solid #eee;">
+      ${globalIdx + 1}
+    </td>
+    <td style="padding:6px 8px; width:86px; text-align:center; border-right:1px solid #eee;">
+      ${svgForStyle(o.style, o.boxHeight ?? null)}
+    </td>
+    <td style="padding:8px 12px; border-right:1px solid #eee;">
+      <div style="font-size:12px;font-weight:700;color:#1a2a3a;">${o.name}</div>
+      <div style="font-size:9px;color:#888;font-style:italic;margin-top:1px;">${styleLabel}</div>
+      ${o.profileSeries ? `<div style="font-size:9px;color:#1565C0;font-weight:700;margin-top:2px;">⬛ ${o.profileSeries}</div>` : ''}
+      ${o.glassType ? `<div style="font-size:9px;color:#2E7D32;margin-top:1px;">🪟 ${o.glassType}</div>` : ''}
+    </td>
+    <td style="padding:8px 12px; border-right:1px solid #eee; white-space:nowrap; text-align:center;">
+      <div style="font-size:12px;font-weight:700;color:#1a2a3a;">${dim(o.width)}</div>
+      <div style="font-size:12px;font-weight:700;color:#1a2a3a;">${dim(o.height)}</div>
+    </td>
+    <td style="padding:8px 12px; border-right:1px solid #eee; white-space:nowrap; text-align:center;">
+      ${isSubframe
+        ? `<div style="font-size:11px;color:#bbb;font-style:italic;">—</div>`
+        : `<div style="font-size:12px;font-weight:700;color:#1565C0;">${dim(tagW)}</div>
+           <div style="font-size:12px;font-weight:700;color:#1565C0;">${dim(tagH)}</div>`}
+    </td>
+    <td style="padding:8px 12px;">
+      ${isRoller && o.boxHeight != null
+        ? `<div style="font-size:10px;font-weight:700;color:#E65100;">Cass. ${o.boxHeight} mm</div>` : ''}
+      ${o.textNote
+        ? `<div style="font-size:9px;color:#555;background:#fffde7;padding:3px 6px;
+                       border-left:2px solid #FFC107;border-radius:2px;">${o.textNote}</div>` : ''}
+      ${o.photos.length > 0
+        ? `<div style="font-size:9px;color:#aaa;margin-top:2px;">📷 ${o.photos.length}</div>` : ''}
+      ${!isRoller && !o.textNote && o.photos.length === 0
+        ? `<span style="color:#ccc;font-size:10px;">—</span>` : ''}
+    </td>
+  </tr>`;
 }
 
-// ─── Main export ─────────────────────────────────────────────────────────────
+// Group openings by category, like FST groups by Marca/Serie
+type GroupDef = { label: string; color: string; filter: (o: Opening) => boolean };
+const GROUPS: GroupDef[] = [
+  { label: 'FINESTRE',    color: '#1565C0', filter: o => !!o.style?.startsWith('window') },
+  { label: 'PORTE',       color: '#6A1B9A', filter: o => !!o.style?.startsWith('door') },
+  { label: 'PERSIANE',    color: '#2E7D32', filter: o => !!o.style?.startsWith('shutter') },
+  { label: 'MONOBLOCCHI', color: '#E65100', filter: o => o.style === 'roller_blind' },
+  { label: 'CONTROTELAI', color: '#5D4037', filter: o => o.style === 'subframe_window' },
+  { label: 'ALTRO',       color: '#455A64', filter: o => !o.style || o.style === 'custom' },
+];
+
+function groupTable(group: GroupDef, openings: Opening[], startIdx: number, toleranceW: number, toleranceH: number): string {
+  if (openings.length === 0) return '';
+  const rows = openings.map((o, i) => openingRow(o, startIdx + i, i, toleranceW, toleranceH)).join('');
+  return `
+  <div style="margin-bottom:20px; break-inside:avoid;">
+    <!-- Group header (like Marca/Serie/Colore in FST) -->
+    <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;">
+      <tr style="background:${group.color};">
+        <td colspan="2" style="padding:7px 14px;">
+          <span style="color:white;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;">${group.label}</span>
+        </td>
+        <td style="padding:7px 14px; text-align:right;">
+          <span style="color:rgba(255,255,255,0.7);font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">Q.tà: </span>
+          <span style="color:white;font-size:11px;font-weight:700;">${openings.length}</span>
+        </td>
+      </tr>
+      <!-- Column headers (italic, like FST) -->
+      <tr style="background:#f5f7fa;border-bottom:1px solid #dde4ec;">
+        <th style="padding:6px 10px;font-size:9px;font-style:italic;font-weight:600;color:#666;text-align:center;width:32px;border-right:1px solid #eee;">#</th>
+        <th style="padding:6px 8px;font-size:9px;font-style:italic;font-weight:600;color:#666;text-align:center;width:86px;border-right:1px solid #eee;">Disegno</th>
+        <th style="padding:6px 12px;font-size:9px;font-style:italic;font-weight:600;color:#666;border-right:1px solid #eee;">Descrizione</th>
+        <th style="padding:6px 12px;font-size:9px;font-style:italic;font-weight:600;color:#666;text-align:center;border-right:1px solid #eee;">Luce L / H (mm)</th>
+        <th style="padding:6px 12px;font-size:9px;font-style:italic;font-weight:600;color:#666;text-align:center;border-right:1px solid #eee;">Taglio L / H (mm)</th>
+        <th style="padding:6px 12px;font-size:9px;font-style:italic;font-weight:600;color:#666;">Note</th>
+      </tr>
+      ${rows}
+      <!-- Group subtotal (like FST subtotal row) -->
+      <tr style="background:#f5f7fa;border-top:2px solid ${group.color}30;">
+        <td colspan="6" style="padding:6px 14px;text-align:right;">
+          <span style="font-size:9px;color:#888;">Totale ${group.label.toLowerCase()}: </span>
+          <span style="font-size:11px;font-weight:700;color:${group.color};">${openings.length} pz</span>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
 export function generateHTML(project: Project, toleranceW: number, toleranceH: number = toleranceW): string {
-  const date = new Date(project.createdAt).toLocaleDateString('it-IT', {
+  const date = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+  const createdDate = new Date(project.createdAt).toLocaleDateString('it-IT', {
     day: '2-digit', month: 'long', year: 'numeric',
   });
-  const cards = project.openings.map((o, i) => openingCard(o, i, toleranceW, toleranceH)).join('');
 
-  const nWindows  = project.openings.filter(o => o.style?.startsWith('window')).length;
-  const nDoors    = project.openings.filter(o => o.style?.startsWith('door')).length;
-  const nShutters = project.openings.filter(o => o.style?.startsWith('shutter')).length;
-  const nRollers  = project.openings.filter(o => o.style === 'roller_blind').length;
+  // Build grouped tables (like FST groups by Marca/Serie)
+  let globalIdx = 0;
+  const groupedContent = GROUPS.map(group => {
+    const items = project.openings.filter(group.filter);
+    const html = groupTable(group, items, globalIdx, toleranceW, toleranceH);
+    globalIdx += items.length;
+    return html;
+  }).join('');
+
+  const hasNotes = project.openings.some(o => o.textNote);
 
   return `<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="utf-8"/>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f0f4f8; padding: 24px; }
-
-  .header {
-    background: #1565C0; color: white; border-radius: 12px;
-    padding: 24px 28px; margin-bottom: 24px;
-    display: flex; justify-content: space-between; align-items: flex-start;
-  }
-  .header-title { font-size: 22px; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; }
-  .header-sub { font-size: 13px; opacity: 0.75; }
-  .header-meta { text-align: right; font-size: 12px; opacity: 0.8; line-height: 1.8; }
-  .header-badge {
-    background: rgba(255,255,255,0.2); border-radius: 8px;
-    padding: 4px 12px; font-size: 12px; margin-top: 8px;
-    display: inline-block;
-  }
-
-  .stats-row { display: flex; gap: 12px; margin-bottom: 20px; }
-  .stat-box {
-    background: white; border-radius: 10px; padding: 14px 20px;
-    flex: 1; border-left: 4px solid #1565C0;
-  }
-  .stat-num { font-size: 28px; font-weight: 800; color: #1565C0; }
-  .stat-lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-
-  .tol-row {
-    display: flex; gap: 12px; margin-bottom: 20px;
-  }
-  .tol-box {
-    background: white; border-radius: 10px; padding: 10px 16px;
-    flex: 1; border-left: 4px solid #E65100; display: flex; align-items: center; gap: 8px;
-  }
-  .tol-val { font-size: 20px; font-weight: 800; color: #E65100; }
-  .tol-lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-
-  .section-title {
-    font-size: 11px; font-weight: 800; color: #1565C0;
-    text-transform: uppercase; letter-spacing: 1.5px;
-    margin-bottom: 14px; padding-bottom: 6px;
-    border-bottom: 2px solid #1565C0;
-  }
-
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-
-  .card {
-    background: white; border-radius: 12px;
-    border: 1.5px solid #e0e8f0; overflow: hidden;
-    break-inside: avoid;
-  }
-  .card-header {
-    background: #f0f6ff; padding: 10px 12px;
-    display: flex; align-items: center; gap: 8px;
-    border-bottom: 1px solid #e0e8f0;
-  }
-  .card-num {
-    background: #1565C0; color: white;
-    width: 24px; height: 24px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 800; flex-shrink: 0;
-    text-align: center; line-height: 24px;
-  }
-  .card-name { font-size: 13px; font-weight: 700; color: #222; }
-  .card-drawing {
-    display: flex; justify-content: center; align-items: center;
-    padding: 12px; background: #fafbfc;
-    border-bottom: 1px solid #f0f0f0;
-  }
-  .card-dims { padding: 10px 12px; }
-  .dim-row {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 6px;
-  }
-  .dim-label { font-size: 10px; color: #888; font-weight: 700; text-transform: uppercase; }
-  .dim-vals { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
-  .luce { font-size: 13px; font-weight: 800; color: #222; }
-  .taglio { font-size: 11px; font-weight: 600; color: #1565C0; }
-  .card-style {
-    margin: 0 12px 8px; padding: 4px 8px;
-    background: #e3f2fd; border-radius: 6px;
-    font-size: 10px; color: #1565C0; font-weight: 700;
-    text-align: center; text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .card-note {
-    margin: 0 12px 8px; font-size: 10px; color: #666;
-    background: #fffde7; padding: 6px 8px; border-radius: 6px;
-    border-left: 3px solid #FFC107;
-  }
-  .card-photos { margin: 0 12px 10px; font-size: 10px; color: #888; }
-
-  .footer {
-    margin-top: 28px; text-align: center;
-    font-size: 10px; color: #bbb;
-    border-top: 1px solid #e0e0e0; padding-top: 12px;
-  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,Helvetica,sans-serif; background:#fff; color:#1a1a1a; font-size:11px; }
+  @media print { body { background:white; } }
 </style>
 </head>
 <body>
+<div style="max-width:860px; margin:0 auto; padding:28px 32px; background:white;">
 
-<div class="header">
-  <div>
-    <div class="header-title">RILIEVO MISURE</div>
-    <div class="header-sub">${project.name}</div>
-    ${project.clientName ? `<div style="margin-top:8px;font-size:14px;font-weight:700;">${project.clientName}</div>` : ''}
-    ${project.address ? `<div style="font-size:12px;opacity:0.8;margin-top:2px;">📍 ${project.address}</div>` : ''}
+  <!-- ── HEADER (stile FST: logo + riga orizzontale) ── -->
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+    <div>
+      <!-- Logo / nome app -->
+      <div style="display:inline-flex; align-items:center; gap:10px;">
+        <div style="width:36px;height:36px;background:#1565C0;border-radius:6px;
+                    display:flex;align-items:center;justify-content:center;">
+          <span style="color:white;font-size:14px;font-weight:900;letter-spacing:-1px;">PM</span>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:900;color:#1565C0;letter-spacing:0.5px;">Presa Misure</div>
+          <div style="font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:1px;">Rilievo Infissi</div>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:9px;color:#aaa;">${date}</div>
+      <div style="font-size:9px;color:#aaa;margin-top:2px;">Aperture totali: <strong style="color:#1a1a1a;">${project.openings.length}</strong></div>
+    </div>
   </div>
-  <div class="header-meta">
-    ${date}<br/>
-    <div class="header-badge">${project.openings.length} apertur${project.openings.length === 1 ? 'a' : 'e'}</div>
+  <hr style="border:none;border-top:2px solid #1565C0;margin-bottom:16px;"/>
+
+  <!-- ── INFO ORDINE (stile FST: griglia label/valore) ── -->
+  <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:10px;">
+    <tr>
+      <td style="width:50%;padding-bottom:6px;vertical-align:top;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="width:90px;padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;">Progetto</td>
+            <td style="padding:3px 0;font-weight:700;font-size:12px;color:#1a1a1a;border-bottom:1px solid #ddd;">${project.name}</td>
+          </tr>
+          ${project.clientName ? `<tr>
+            <td style="padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;">Cliente</td>
+            <td style="padding:3px 0;font-weight:600;border-bottom:1px solid #ddd;">${project.clientName}</td>
+          </tr>` : ''}
+          ${project.address ? `<tr>
+            <td style="padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;">Indirizzo</td>
+            <td style="padding:3px 0;border-bottom:1px solid #ddd;">${project.address}</td>
+          </tr>` : ''}
+          <tr>
+            <td style="padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;">Data rilievo</td>
+            <td style="padding:3px 0;border-bottom:1px solid #ddd;">${createdDate}</td>
+          </tr>
+        </table>
+      </td>
+      <td style="width:50%;padding-left:28px;vertical-align:top;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;">Tol. larghezza</td>
+            <td style="padding:3px 0;border-bottom:1px solid #ddd;font-weight:600;">${toleranceW} mm</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.5px;">Tol. altezza</td>
+            <td style="padding:3px 0;border-bottom:1px solid #ddd;font-weight:600;">${toleranceH} mm</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── TITOLO SEZIONE (stile FST) ── -->
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+    <span style="font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#1a1a1a;">RIEPILOGO MISURE</span>
+    <span style="font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#1565C0;">INFISSI</span>
   </div>
-</div>
 
-<div class="stats-row">
-  <div class="stat-box"><div class="stat-num">${project.openings.length}</div><div class="stat-lbl">Totale</div></div>
-  <div class="stat-box"><div class="stat-num">${nWindows}</div><div class="stat-lbl">Finestre</div></div>
-  <div class="stat-box"><div class="stat-num">${nDoors}</div><div class="stat-lbl">Porte</div></div>
-  <div class="stat-box"><div class="stat-num">${nShutters}</div><div class="stat-lbl">Persiane</div></div>
-  <div class="stat-box"><div class="stat-num">${nRollers}</div><div class="stat-lbl">Monoblocchi</div></div>
-</div>
+  <!-- ── GRUPPI (uno per tipo, come FST per Marca/Serie) ── -->
+  ${project.openings.length > 0 ? groupedContent : `
+    <div style="text-align:center;padding:40px;color:#bbb;font-size:13px;">Nessuna apertura inserita</div>`}
 
-<div class="tol-row">
-  <div class="tol-box"><div class="tol-val">${toleranceW}</div><div class="tol-lbl">Tol. larghezza (mm)</div></div>
-  <div class="tol-box"><div class="tol-val">${toleranceH}</div><div class="tol-lbl">Tol. altezza (mm)</div></div>
-</div>
+  <!-- ── NOTE (stile FST) ── -->
+  ${hasNotes ? `
+  <div style="margin-top:8px;margin-bottom:20px;">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:4px;">Note</div>
+    <hr style="border:none;border-top:1px solid #ccc;margin-bottom:8px;"/>
+    ${project.openings.filter(o => o.textNote).map(o =>
+      `<div style="font-size:10px;color:#444;padding:3px 0;border-bottom:1px dashed #eee;">
+        <strong>${o.name}:</strong> ${o.textNote}
+      </div>`
+    ).join('')}
+  </div>` : ''}
 
-<div class="section-title">Dettaglio aperture</div>
-<div class="grid">
-  ${cards}
-</div>
+  <!-- ── FOOTER ── -->
+  <hr style="border:none;border-top:1px solid #e0e0e0;margin-top:20px;"/>
+  <div style="display:flex;justify-content:space-between;padding-top:8px;">
+    <div style="font-size:8px;color:#bbb;">Generato con Presa Misure &mdash; ${new Date().toLocaleString('it-IT')}</div>
+    <div style="font-size:8px;color:#bbb;">Tolleranze: L ${toleranceW} mm / H ${toleranceH} mm</div>
+  </div>
 
-<div class="footer">
-  Generato con Presa Misure · ${new Date().toLocaleString('it-IT')}
 </div>
-
 </body>
 </html>`;
 }

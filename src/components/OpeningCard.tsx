@@ -33,6 +33,17 @@ export default function OpeningCard({ opening, onPress, onDelete }: Props) {
 
         {opening.style && <StyleLabel style={opening.style} compact />}
 
+        {(opening.profileSeries || opening.glassType) && (
+          <View style={styles.specRow}>
+            {opening.profileSeries && (
+              <Text style={styles.specTag}>{opening.profileSeries}</Text>
+            )}
+            {opening.glassType && (
+              <Text style={[styles.specTag, styles.specGlass]}>{opening.glassType}</Text>
+            )}
+          </View>
+        )}
+
         <View style={styles.badges}>
           {opening.photos.length > 0 && (
             <View style={styles.badge}>
@@ -69,6 +80,14 @@ const styles = StyleSheet.create({
   dim: { fontSize: 13, color: '#666' },
   dimVal: { fontWeight: '700', color: '#1565C0', fontSize: 15 },
   dimSep: { color: '#AAA', marginHorizontal: 6, fontSize: 13 },
+  specRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 5 },
+  specTag: {
+    fontSize: 10, fontWeight: '600', color: '#555',
+    backgroundColor: '#F0F0F0', borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  specGlass: { backgroundColor: '#E3F2FD', color: '#1565C0' },
+
   badges: { flexDirection: 'row', gap: 6, marginTop: 6 },
   badge: {
     backgroundColor: '#F0F4FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10,

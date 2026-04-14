@@ -495,6 +495,59 @@ function DefaultIndicator({ style, woodId }: { style: OpeningStyle; woodId: stri
         <HandleSymbol hx={GX2-10} leverRight={false} progress={1}/>
       </G>;
 
+    case 'door_entrance': {
+      // Portoncino: vetro superiore con sbarre decorative + 2 pannelli inferiori + serratura + 3 cerniere
+      const divY    = GY + GH * 0.40;        // traverso orizzontale
+      const pp      = 8;                      // padding pannello
+      const glassH  = divY - GY - ST * 2;
+      // pannello inferiore
+      const panY    = divY + ST;
+      const panH    = GY2 - ST - panY;
+      // due pannelli affiancati
+      const halfW   = (GW - ST * 2 - pp * 3) / 2;
+      const panL_X  = GX + ST + pp;
+      const panR_X  = GX + ST + pp * 2 + halfW;
+      const panP_Y  = panY + pp;
+      const panP_H  = panH - pp * 2;
+      // serratura: appena sopra il centro del pannello inferiore
+      const lockY   = panY + panH * 0.35;
+      // 3 barre verticali decorative nel vetro superiore
+      const barW = (GW - ST * 2) / 4;
+      return <G>
+        {/* Anta solida: riempimento pannello */}
+        <Rect x={GX} y={GY} width={GW} height={GH}
+              fill={C_FRAME_FILL} stroke={C_FRAME} strokeWidth={0}/>
+        {/* Vetro superiore */}
+        <Rect x={GX+ST} y={GY+ST} width={GW-ST*2} height={glassH}
+              fill="url(#glass_grad)" stroke="#7AAFC8" strokeWidth={0.8}/>
+        {/* Montanti verticali nel vetro (3 divisori) */}
+        {[1,2,3].map(i => (
+          <Rect key={i} x={GX+ST+barW*i-1} y={GY+ST} width={2.5} height={glassH}
+                fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={0.5}/>
+        ))}
+        {/* Traverso orizzontale */}
+        <Rect x={GX} y={divY} width={GW} height={ST}
+              fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={1.5}/>
+        {/* Pannello inferiore sfondo */}
+        <Rect x={GX+ST} y={panY} width={GW-ST*2} height={panH}
+              fill={C_FRAME_FILL} stroke={C_FRAME} strokeWidth={0.8}/>
+        {/* Pannello sinistro decorativo */}
+        <Rect x={panL_X} y={panP_Y} width={halfW} height={panP_H}
+              fill="none" stroke={C_FRAME} strokeWidth={1.8} rx={2}/>
+        {/* Pannello destro decorativo */}
+        <Rect x={panR_X} y={panP_Y} width={halfW} height={panP_H}
+              fill="none" stroke={C_FRAME} strokeWidth={1.8} rx={2}/>
+        {/* 3 cerniere a sinistra */}
+        <HingeMarks x={GX+4} color={c}/>
+        {/* Maniglia leva destra */}
+        <HandleSymbol hx={GX2-12} leverRight={false} progress={1}/>
+        {/* Cilindro serratura */}
+        <Rect x={GX2-16} y={lockY-5} width={8} height={10}
+              fill={c} rx={2} stroke={C_FRAME} strokeWidth={0.8}/>
+        <Circle cx={GX2-12} cy={lockY} r={2.5} fill="#fff" opacity={0.5}/>
+      </G>;
+    }
+
     case 'door_double':
       return <G>
         <Line x1={GX} y1={GY2} x2={GX2} y2={GY2} stroke={c} strokeWidth={1.5} strokeDasharray="4,3"/>
@@ -650,10 +703,10 @@ interface DimLinesProps {
 }
 
 function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight }: DimLinesProps) {
-  const wLbl  = luceW   != null ? `L: ${luceW} mm`   : 'L: — mm';
-  const wTLbl = taglioW != null ? `T: ${taglioW} mm` : 'T: — mm';
-  const hLbl  = luceH   != null ? `L: ${luceH} mm`   : 'L: — mm';
-  const hTLbl = taglioH != null ? `T: ${taglioH} mm` : 'T: — mm';
+  const wLbl  = luceW   != null ? `Ll ${luceW} mm`   : 'Ll — mm';
+  const wTLbl = taglioW != null ? `Lt ${taglioW} mm` : 'Lt — mm';
+  const hLbl  = luceH   != null ? `Hl ${luceH} mm`   : 'Hl — mm';
+  const hTLbl = taglioH != null ? `Ht ${taglioH} mm` : 'Ht — mm';
 
   return <G>
     <Line x1={FX} y1={FY+FH} x2={FX} y2={DIM_TAGLIO_Y+6} stroke={C_DIM_LUCE} strokeWidth={0.8}/>
@@ -668,9 +721,9 @@ function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight }: DimLinesProps) 
       <Text textAnchor="middle" fontSize={9} fontWeight="700" fill={C_DIM_LUCE}>{wLbl}</Text>
     </G>
 
-    <Line x1={FX} y1={DIM_TAGLIO_Y} x2={FX+FW} y2={DIM_TAGLIO_Y} stroke={C_DIM_TAG} strokeWidth={1.2}/>
-    <Path d={arrow(FX, DIM_TAGLIO_Y, 0)} fill={C_DIM_TAG}/>
-    <Path d={arrow(FX+FW, DIM_TAGLIO_Y, Math.PI)} fill={C_DIM_TAG}/>
+    <Line x1={FX} y1={DIM_TAGLIO_Y} x2={FX+FW} y2={DIM_TAGLIO_Y} stroke={C_DIM_TAG} strokeWidth={0.9}/>
+    <Path d={arrow(FX, DIM_TAGLIO_Y, 0, 3.5)} fill={C_DIM_TAG}/>
+    <Path d={arrow(FX+FW, DIM_TAGLIO_Y, Math.PI, 3.5)} fill={C_DIM_TAG}/>
     <G transform={`translate(${FX+FW/2}, ${DIM_TAGLIO_Y-4})`}>
       <Text textAnchor="middle" fontSize={8} fontWeight="600" fill={C_DIM_TAG}>{wTLbl}</Text>
     </G>
@@ -682,9 +735,9 @@ function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight }: DimLinesProps) 
       <Text textAnchor="middle" fontSize={9} fontWeight="700" fill={C_DIM_LUCE}>{hLbl}</Text>
     </G>
 
-    <Line x1={DIM_TAGLIO_X} y1={FY} x2={DIM_TAGLIO_X} y2={FY+FH} stroke={C_DIM_TAG} strokeWidth={1.2}/>
-    <Path d={arrow(DIM_TAGLIO_X, FY, Math.PI/2)} fill={C_DIM_TAG}/>
-    <Path d={arrow(DIM_TAGLIO_X, FY+FH, -Math.PI/2)} fill={C_DIM_TAG}/>
+    <Line x1={DIM_TAGLIO_X} y1={FY} x2={DIM_TAGLIO_X} y2={FY+FH} stroke={C_DIM_TAG} strokeWidth={0.9}/>
+    <Path d={arrow(DIM_TAGLIO_X, FY, Math.PI/2, 3.5)} fill={C_DIM_TAG}/>
+    <Path d={arrow(DIM_TAGLIO_X, FY+FH, -Math.PI/2, 3.5)} fill={C_DIM_TAG}/>
     <G transform={`translate(${DIM_TAGLIO_X}, ${FY+FH/2}) rotate(-90)`}>
       <Text textAnchor="middle" fontSize={8} fontWeight="600" fill={C_DIM_TAG}>{hTLbl}</Text>
     </G>

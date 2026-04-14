@@ -2,16 +2,18 @@ import { Opening } from '../types';
 
 const BAR_MM       = 6400;
 const KERF_90      = 4;
-const SLAT_PITCH   = 55;   // Rolltek 55mm orientabile
+const SLAT_PITCH   = 55;
 const ZOCCOLO_H    = 120;
 const FASCIA_H     = 120;
-const PF_THRESHOLD = 1500; // H > 1500 → portafinestra, aggiunge fascia
+const PF_THRESHOLD = 1500;
 
 export interface ProfileResult {
   label: string;
   pieces: number;
-  totalMl: number;
-  bars: number;
+  totalMl: number;    // ml puri dei pezzi
+  bars: number;       // barre necessarie
+  sfridoMl: number;   // sfrido totale in ml
+  sfridoPct: number;  // % sfrido su materiale acquistato
 }
 
 export interface MaterialsResult {
@@ -21,38 +23,60 @@ export interface MaterialsResult {
   totalBars90: number;
 }
 
-// Bin-packing sequenziale: pezzi ordinati dal più lungo
-function calcBars(
-  pieces: number[],
-  barMm: number,
-  wastePerCut: number,
-): { bars: number; totalMm: number } {
-  if (!pieces.length) return { bars: 0, totalMm: 0 };
+/**
+ * Bin-packing First Fit Decreasing.
+ * - Il primo pezzo di ogni barra NON ha riattestattura prima di sé.
+ * - Ogni pezzo successivo sulla stessa barra consuma: lunghezza + wastePerCut.
+ * - Lo sfrido è il materiale rimanente inutilizzato a fine barre.
+ */
+function calcBars(pieces: number[], barMm: number, wastePerCut: number) {
+  if (!pieces.length) return { bars: 0, totalPieceMm: 0, sfridoMm: 0 };
+
   const sorted = [...pieces].sort((a, b) => b - a);
-  let bars = 1, rem = barMm, totalMm = 0;
+  let bars = 1;
+  let rem = barMm;
+  let totalPieceMm = 0;
+  let totalConsumed = 0; // materiale effettivamente consumato (pezzi + scarti tra tagli)
+  let firstOnBar = true;
+
   for (const p of sorted) {
-    if (p + wastePerCut > rem) { bars++; rem = barMm; }
-    rem -= (p + wastePerCut);
-    totalMm += p;
+    const cutWaste = firstOnBar ? 0 : wastePerCut;
+    const needed   = p + cutWaste;
+
+    if (needed > rem) {
+      // Apri nuova barra
+      bars++;
+      rem = barMm;
+      firstOnBar = true;
+    }
+
+    const actualWaste = firstOnBar ? 0 : wastePerCut;
+    rem             -= (p + actualWaste);
+    totalConsumed   += (p + actualWaste);
+    totalPieceMm    += p;
+    firstOnBar       = false;
   }
-  return { bars, totalMm };
+
+  // Sfrido = capacità totale acquistata - materiale effettivamente consumato
+  const sfridoMm = bars * barMm - totalConsumed;
+
+  return { bars, totalPieceMm, sfridoMm };
 }
 
-export function calculateMaterials(
-  openings: Opening[],
-  riattestattura = 25,
-): MaterialsResult {
+// ─── Raccolta pezzi per apertura ─────────────────────────────────────────────
+
+export function calculateMaterials(openings: Opening[], riattestattura = 25): MaterialsResult {
   const b45: Record<string, number[]> = {
     'Profilo telaio': [],
     'Profilo anta':   [],
   };
   const b90: Record<string, number[]> = {
-    'Riporto':      [],
-    'Fascia':       [],
-    'Zoccolo':      [],
-    'Mezza lamella':[],
-    'Posizionatore':[],
-    'Lamella':      [],
+    'Riporto':       [],
+    'Fascia':        [],
+    'Zoccolo':       [],
+    'Mezza lamella': [],
+    'Posizionatore': [],
+    'Lamella':       [],
   };
 
   for (const o of openings) {
@@ -66,10 +90,10 @@ export function calculateMaterials(
     const isWindow  = style.startsWith('window');
     const isDoor    = style.startsWith('door');
     const isShutter = style.startsWith('shutter');
-    const leafW     = Math.round(W / n);
 
     if (isWindow) {
       b45['Profilo telaio'].push(W, W, H, H);
+      const leafW = Math.round(W / n);
       for (let i = 0; i < n; i++) {
         b45['Profilo anta'].push(leafW, leafW, H, H);
       }
@@ -81,6 +105,7 @@ export function calculateMaterials(
     if (isDoor) {
       b45['Profilo telaio'].push(W, W, H, H);
       b90['Fascia'].push(W);
+      const leafW = Math.round(W / n);
       for (let i = 0; i < n; i++) {
         b45['Profilo anta'].push(leafW, leafW, H, H);
       }
@@ -88,18 +113,14 @@ export function calculateMaterials(
 
     if (isShutter) {
       const isPF = H > PF_THRESHOLD;
-      // Telaio: 3 lati (no sotto), 45°
       b45['Profilo telaio'].push(W, H, H);
       for (let i = 0; i < n; i++) {
         const lw = Math.round(W / n);
-        // Anta: 3 lati (no sotto), 45°
         b45['Profilo anta'].push(lw, H, H);
-        // Componenti interni, 90°
         b90['Zoccolo'].push(lw);
         if (isPF) b90['Fascia'].push(lw);
         b90['Mezza lamella'].push(lw);
         b90['Posizionatore'].push(lw);
-        // Lamelle
         const availH = H - ZOCCOLO_H - (isPF ? FASCIA_H : 0);
         const slats  = Math.floor(Math.max(0, availH) / SLAT_PITCH);
         for (let j = 0; j < slats; j++) b90['Lamella'].push(lw);
@@ -109,8 +130,16 @@ export function calculateMaterials(
 
   function toResult(label: string, pieces: number[], waste: number): ProfileResult | null {
     if (!pieces.length) return null;
-    const { bars, totalMm } = calcBars(pieces, BAR_MM, waste);
-    return { label, pieces: pieces.length, totalMl: Math.round(totalMm / 100) / 10, bars };
+    const { bars, totalPieceMm, sfridoMm } = calcBars(pieces, BAR_MM, waste);
+    const totalBarMm = bars * BAR_MM;
+    return {
+      label,
+      pieces: pieces.length,
+      totalMl:   Math.round(totalPieceMm / 100) / 10,
+      bars,
+      sfridoMl:  Math.round(sfridoMm / 100) / 10,
+      sfridoPct: Math.round((sfridoMm / totalBarMm) * 100),
+    };
   }
 
   const profiles45 = Object.entries(b45)

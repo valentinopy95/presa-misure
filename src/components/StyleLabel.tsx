@@ -4,15 +4,16 @@ import { OpeningStyle } from '../types';
 import { LiveDrawing } from './drawings';
 
 const LABELS: Record<OpeningStyle, string> = {
-  window_single:        'Finestra singola',
+  window_single:        'Battente',
   window_double:        'Finestra doppia',
   window_sliding:       'Finestra scorrevole',
-  window_tilt_turn:     'Finestra vasistas',
+  window_tilt_turn:     'Vasistas',
   door_single:          'Porta singola',
   door_double:          'Porta doppia',
   door_sliding:         'Porta scorrevole',
   door_french:          'Porta finestra',
   door_bifold:          'Porta a libro',
+  door_entrance:        'Portoncino',
   shutter_single:       'Persiana singola',
   shutter_double:       'Persiana doppia',
   roller_blind:         'Monoblocco tapparella',
