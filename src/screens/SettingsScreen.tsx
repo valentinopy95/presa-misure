@@ -4,9 +4,10 @@ import {
 } from 'react-native';
 import {
   KEYS,
-  DEFAULT_TOLERANCE_W, DEFAULT_TOLERANCE_H,
+  DEFAULT_TOLERANCE_W, DEFAULT_TOLERANCE_H, DEFAULT_RIATTESTATTURA,
   getToleranceW, setToleranceW,
   getToleranceH, setToleranceH,
+  getRiattestattura, setRiattestattura,
 } from '../storage/settings';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole } from '../types';
@@ -36,6 +37,7 @@ export default function SettingsScreen() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [tolWText, setTolWText] = useState<string>(String(DEFAULT_TOLERANCE_W));
   const [tolHText, setTolHText] = useState<string>(String(DEFAULT_TOLERANCE_H));
+  const [riattText, setRiattText] = useState<string>(String(DEFAULT_RIATTESTATTURA));
 
   useEffect(() => {
     AsyncStorage.getItem(KEYS.ROLE).then(v => {
@@ -43,6 +45,7 @@ export default function SettingsScreen() {
     });
     getToleranceW().then(t => setTolWText(String(t)));
     getToleranceH().then(t => setTolHText(String(t)));
+    getRiattestattura().then(r => setRiattText(String(r)));
   }, []);
 
   const selectRole = async (r: UserRole) => {
@@ -62,6 +65,13 @@ export default function SettingsScreen() {
     const val = isNaN(n) || n < 0 ? DEFAULT_TOLERANCE_H : Math.min(n, 999);
     setTolHText(String(val));
     setToleranceH(val);
+  };
+
+  const handleRiattEnd = () => {
+    const n = parseInt(riattText, 10);
+    const val = isNaN(n) || n < 0 ? DEFAULT_RIATTESTATTURA : Math.min(n, 99);
+    setRiattText(String(val));
+    setRiattestattura(val);
   };
 
   const exW = 1200 - (parseInt(tolWText, 10) || 0);
@@ -132,6 +142,33 @@ export default function SettingsScreen() {
           <View>
             <Text style={styles.toleranceLabel}>Taglio altez.</Text>
             <Text style={styles.toleranceFormula}>{exH} mm</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Riattestattura ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Riattestattura taglio 45°</Text>
+      <Text style={styles.sectionSub}>
+        Spreco per riattestattura tra un pezzo e l'altro sulle barre a taglio 45° (default 25 mm)
+      </Text>
+      <View style={styles.toleranceCard}>
+        <View style={styles.toleranceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toleranceLabel}>Spreco per taglio</Text>
+            <Text style={styles.toleranceFormula}>es. 25 mm</Text>
+          </View>
+          <View style={styles.toleranceInputWrap}>
+            <TextInput
+              style={styles.toleranceInput}
+              keyboardType="numeric"
+              value={riattText}
+              onChangeText={setRiattText}
+              onEndEditing={handleRiattEnd}
+              onBlur={handleRiattEnd}
+              maxLength={2}
+              selectTextOnFocus
+            />
+            <Text style={styles.toleranceUnit}>mm</Text>
           </View>
         </View>
       </View>

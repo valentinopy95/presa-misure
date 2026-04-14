@@ -5,13 +5,15 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { TouchableOpacity, Text } from 'react-native';
 import { RootStackParamList } from './src/types';
 import HomeScreen from './src/screens/HomeScreen';
+import SavedProjectsScreen from './src/screens/SavedProjectsScreen';
+import CatalogScreen from './src/screens/CatalogScreen';
 import ProjectScreen from './src/screens/ProjectScreen';
 import MeasurementScreen from './src/screens/MeasurementScreen';
 import StylePickerScreen from './src/screens/StylePickerScreen';
 import DocumentScreen from './src/screens/DocumentScreen';
+import MaterialsScreen from './src/screens/MaterialsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -30,14 +32,17 @@ export default function App() {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={({ navigation }) => ({
-            title: 'Presa Misure',
-            headerRight: () => (
-              <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={{ marginRight: 4 }}>
-                <Text style={{ color: '#fff', fontSize: 22 }}>⚙️</Text>
-              </TouchableOpacity>
-            ),
-          })}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="SavedProjects"
+          component={SavedProjectsScreen}
+          options={{ title: 'Rilievi salvati' }}
+        />
+        <Stack.Screen
+          name="Catalog"
+          component={CatalogScreen}
+          options={{ title: 'Catalogo profili' }}
         />
         <Stack.Screen
           name="Project"
@@ -60,6 +65,11 @@ export default function App() {
           name="Document"
           component={DocumentScreen}
           options={{ title: 'Documento rilievo' }}
+        />
+        <Stack.Screen
+          name="Materials"
+          component={MaterialsScreen}
+          options={{ title: 'Calcolo materiale' }}
         />
         <Stack.Screen
           name="Settings"

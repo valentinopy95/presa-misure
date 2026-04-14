@@ -19,10 +19,7 @@ export type OpeningStyle =
   | 'roller_blind'
   // Controtelaio (unico tipo, a U)
   | 'subframe_window'
-  // Personalizzato
-  | 'custom';
-
-export type OpeningSide = 'left' | 'right' | 'both' | 'tilt';
+export type OpeningSide = 'left' | 'right' | 'center' | 'center-left' | 'center-right' | 'top' | 'bottom';
 
 export interface AudioNote {
   uri: string;
@@ -45,6 +42,8 @@ export interface Opening {
   leafCount: number | null;   // numero ante
   openingSide: OpeningSide | null; // lato apertura
   style: OpeningStyle | null;
+  profileSeries: string | null;   // serie profilo (es. EKOS 100, EKU 66 TT)
+  glassType: string | null;        // tipo vetro (es. Doppio 4/16/4 Ar)
   photos: Photo[];
   textNote: string;
   audioNote: AudioNote | null;
@@ -70,9 +69,12 @@ export interface Project {
 
 export type RootStackParamList = {
   Home: undefined;
+  SavedProjects: undefined;
+  Catalog: undefined;
   Project: { projectId: string };
   Measurement: { projectId: string; openingId?: string };
   StylePicker: { projectId: string; openingId: string };
   Document: { projectId: string };
+  Materials: { projectId: string };
   Settings: undefined;
 };

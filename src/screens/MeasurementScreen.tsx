@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, ScrollView,
-  TouchableOpacity, Image, Alert, Dimensions,
+  TouchableOpacity, Image, Alert, Dimensions, Modal, Pressable,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,12 +19,31 @@ type Route = RouteProp<RootStackParamList, 'Measurement'>;
 const SCREEN_W = Dimensions.get('window').width;
 const DRAWING_W = SCREEN_W - 40;
 
-const OPENING_SIDES: { value: OpeningSide; label: string }[] = [
-  { value: 'left',  label: '← Sinistra' },
-  { value: 'right', label: 'Destra →'   },
-  { value: 'both',  label: '↔ Entrambi' },
-  { value: 'tilt',  label: '↑ Ribalta'  },
-];
+function getOpeningSides(style: OpeningStyle | null, leafCount: number | null): { value: OpeningSide; label: string }[] {
+  if (style === 'window_tilt_turn') {
+    return [
+      { value: 'bottom', label: 'Basso ↓' },
+      { value: 'top',    label: 'Alto ↑'  },
+    ];
+  }
+  const n = leafCount ?? 1;
+  if (n >= 4) return [
+    { value: 'left',         label: '← Sinistra'   },
+    { value: 'center-left',  label: '← Centro-sin' },
+    { value: 'center-right', label: 'Centro-des →' },
+    { value: 'right',        label: 'Destra →'     },
+  ];
+  if (n === 3) return [
+    { value: 'left',   label: '← Sinistra' },
+    { value: 'center', label: 'Centro'      },
+    { value: 'right',  label: 'Destra →'   },
+  ];
+  return [
+    { value: 'left',  label: '← Sinistra' },
+    { value: 'right', label: 'Destra →'   },
+  ];
+}
+
 
 const emptyOpening = (): Opening => ({
   id: uuidv4(),
@@ -35,6 +54,8 @@ const emptyOpening = (): Opening => ({
   leafCount: null,
   openingSide: null,
   style: null,
+  profileSeries: null,
+  glassType: null,
   photos: [],
   textNote: '',
   audioNote: null,
@@ -51,6 +72,7 @@ export default function MeasurementScreen() {
   const [toleranceW, setToleranceW] = useState<number>(10);
   const [toleranceH, setToleranceH] = useState<number>(10);
   const [isSaving, setIsSaving] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
 
   useEffect(() => {
     getToleranceW().then(setToleranceW);
@@ -109,18 +131,27 @@ export default function MeasurementScreen() {
   const removePhoto = (id: string) =>
     update({ photos: opening.photos.filter(p => p.id !== id) });
 
-  const handleSave = async () => {
+  const handleSavePress = () => {
     if (!opening.name.trim()) {
       Alert.alert('Nome richiesto', 'Inserisci un nome per questa apertura.');
       return;
     }
+    setShowSaveModal(true);
+  };
+
+  const doSave = async (andDevelop: boolean) => {
+    setShowSaveModal(false);
     setIsSaving(true);
     const now = new Date().toISOString();
     const toSave: Opening = { ...opening, updatedAt: now };
     if (!openingId) toSave.createdAt = now;
     await saveOpening(projectId, toSave);
     setIsSaving(false);
-    navigation.goBack();
+    if (andDevelop) {
+      navigation.navigate('Materials', { projectId });
+    } else {
+      navigation.goBack();
+    }
   };
 
   const openStylePicker = () => {
@@ -262,8 +293,8 @@ export default function MeasurementScreen() {
         </>
       )}
 
-      {/* ── Numero ante (non per scorrevoli, controtelai) ── */}
-      {!isSubframe && !isSliding && (
+      {/* ── Numero ante (non per controtelai) ── */}
+      {!isSubframe && (
         <>
           <Text style={styles.label}>Numero ante</Text>
           <View style={styles.leafRow}>
@@ -283,11 +314,11 @@ export default function MeasurementScreen() {
       )}
 
       {/* ── Lato apertura (non per scorrevoli, controtelai, persiane) ── */}
-      {!isSubframe && !isSliding && opening.style !== 'shutter_single' && opening.style !== 'shutter_double' && (
+      {!isSubframe && opening.style !== 'shutter_single' && opening.style !== 'shutter_double' && (
         <>
           <Text style={styles.label}>Lato apertura</Text>
           <View style={styles.sideRow}>
-            {OPENING_SIDES.map(opt => (
+            {getOpeningSides(opening.style, opening.leafCount).map(opt => (
               <TouchableOpacity
                 key={opt.value}
                 style={[styles.sideBtn, opening.openingSide === opt.value && styles.sideBtnActive]}
@@ -337,13 +368,32 @@ export default function MeasurementScreen() {
       {/* ── Salva ── */}
       <TouchableOpacity
         style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-        onPress={handleSave}
+        onPress={handleSavePress}
         disabled={isSaving}
       >
         <Text style={styles.saveButtonText}>
           {isSaving ? 'Salvataggio...' : 'Salva apertura'}
         </Text>
       </TouchableOpacity>
+
+      {/* ── Modal salvataggio ── */}
+      <Modal visible={showSaveModal} transparent animationType="fade" onRequestClose={() => setShowSaveModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowSaveModal(false)}>
+          <Pressable style={styles.modalSheet} onPress={() => {}}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Salva apertura</Text>
+            <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => doSave(false)} activeOpacity={0.8}>
+              <Text style={styles.modalBtnPrimaryText}>Salva</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => doSave(true)} activeOpacity={0.8}>
+              <Text style={styles.modalBtnSecondaryText}>Salva e sviluppa materiale</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowSaveModal(false)}>
+              <Text style={styles.modalCancelText}>Annulla</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -443,10 +493,55 @@ const styles = StyleSheet.create({
   addPhotoIcon: { fontSize: 22 },
   addPhotoText: { fontSize: 10, color: '#1565C0', marginTop: 2 },
 
+  // Profile series chips
+  chipScroll: { marginBottom: 4 },
+  chip: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
+    borderWidth: 2, borderColor: '#E0E0E0', backgroundColor: '#fff',
+    marginRight: 8,
+  },
+  chipActive: { borderColor: '#1565C0', backgroundColor: '#E3F2FD' },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#888' },
+  chipTextActive: { color: '#1565C0' },
+
+  // Glass type buttons
+  glassRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  glassBtn: {
+    paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10,
+    borderWidth: 2, borderColor: '#E0E0E0', backgroundColor: '#fff',
+  },
+  glassBtnActive: { borderColor: '#1565C0', backgroundColor: '#E3F2FD' },
+  glassBtnText: { fontSize: 12, fontWeight: '600', color: '#888' },
+  glassBtnTextActive: { color: '#1565C0' },
+
   saveButton: {
     backgroundColor: '#1565C0', borderRadius: 12,
     padding: 17, alignItems: 'center', marginTop: 28,
   },
   saveButtonDisabled: { opacity: 0.6 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  // Save modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    padding: 24, paddingBottom: 36,
+  },
+  modalHandle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD',
+    alignSelf: 'center', marginBottom: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 16 },
+  modalBtnPrimary: {
+    backgroundColor: '#1565C0', borderRadius: 14,
+    padding: 16, alignItems: 'center', marginBottom: 10,
+  },
+  modalBtnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modalBtnSecondary: {
+    backgroundColor: '#E3F2FD', borderRadius: 14, borderWidth: 1.5, borderColor: '#1565C0',
+    padding: 16, alignItems: 'center', marginBottom: 10,
+  },
+  modalBtnSecondaryText: { color: '#1565C0', fontSize: 15, fontWeight: '700' },
+  modalCancel: { alignItems: 'center', paddingVertical: 12 },
+  modalCancelText: { color: '#888', fontSize: 15, fontWeight: '600' },
 });

@@ -17,9 +17,6 @@ const LABELS: Record<OpeningStyle, string> = {
   shutter_double:       'Persiana doppia',
   roller_blind:         'Monoblocco tapparella',
   subframe_window:      'Controtelaio finestra',
-  subframe_door:        'Controtelaio porta',
-  subframe_door_double: 'Controtelaio porta doppia',
-  custom:               'Personalizzato',
 };
 
 interface Props {

@@ -1,13 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const KEYS = {
-  ROLE:        '@measure_user_role',
-  TOLERANCE_W: '@measure_tolerance_w',
-  TOLERANCE_H: '@measure_tolerance_h',
+  ROLE:            '@measure_user_role',
+  TOLERANCE_W:     '@measure_tolerance_w',
+  TOLERANCE_H:     '@measure_tolerance_h',
+  RIATTESTATTURA:  '@measure_riattestattura',
 } as const;
 
 export const DEFAULT_TOLERANCE_W = 10;
 export const DEFAULT_TOLERANCE_H = 10;
+export const DEFAULT_RIATTESTATTURA = 25;
 
 export async function getToleranceW(): Promise<number> {
   const raw = await AsyncStorage.getItem(KEYS.TOLERANCE_W);
@@ -29,6 +31,17 @@ export async function getToleranceH(): Promise<number> {
 
 export async function setToleranceH(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.TOLERANCE_H, String(mm));
+}
+
+export async function getRiattestattura(): Promise<number> {
+  const raw = await AsyncStorage.getItem(KEYS.RIATTESTATTURA);
+  if (!raw) return DEFAULT_RIATTESTATTURA;
+  const n = parseInt(raw, 10);
+  return isNaN(n) || n < 0 ? DEFAULT_RIATTESTATTURA : n;
+}
+
+export async function setRiattestattura(mm: number): Promise<void> {
+  await AsyncStorage.setItem(KEYS.RIATTESTATTURA, String(mm));
 }
 
 // Kept for backward compat — reads toleranceW

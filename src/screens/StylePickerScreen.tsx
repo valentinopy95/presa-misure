@@ -36,8 +36,6 @@ const STYLES: StyleOption[] = [
   { value: 'roller_blind',          label: 'Con tapparella',   category: 'Monoblocchi' },
   // Controtelaio (tipo unico a U, senza lato inferiore)
   { value: 'subframe_window',       label: 'Controtelaio',     category: 'Controtelai' },
-  // Personalizzato
-  { value: 'custom',                label: 'Personalizzato',   category: 'Finestre'    },
 ];
 
 const CATEGORIES: Category[] = ['Finestre', 'Porte', 'Persiane', 'Monoblocchi', 'Controtelai'];

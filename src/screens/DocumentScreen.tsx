@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Modal, Pressable, Platform,
 } from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { RootStackParamList, Project, Opening, OpeningStyle } from '../types';
 import { getProject } from '../storage/database';
 import { getToleranceW, getToleranceH } from '../storage/settings';
@@ -28,7 +29,6 @@ const STYLE_LABELS: Record<OpeningStyle, string> = {
   shutter_double:       'Persiana doppia',
   roller_blind:         'Monoblocco tapparella',
   subframe_window:      'Controtelaio',
-  custom:               'Personalizzato',
 };
 
 const dim = (v: number | null) => v != null ? `${v}` : '—';
@@ -40,6 +40,7 @@ export default function DocumentScreen() {
   const [toleranceW, setToleranceW] = useState(10);
   const [toleranceH, setToleranceH] = useState(10);
   const [exporting, setExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     getProject(projectId).then(setProject);
@@ -47,24 +48,90 @@ export default function DocumentScreen() {
     getToleranceH().then(setToleranceH);
   }, [projectId]);
 
-  const handleExportPDF = async () => {
+  const safeName = project?.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim() ?? 'rilievo';
+
+  // Build PDF (native only) and return local URI
+  const buildPDF = async (): Promise<string> => {
+    if (!project) throw new Error('No project');
+    const html = generateHTML(project, toleranceW, toleranceH);
+    const { uri: tempUri } = await Print.printToFileAsync({ html, base64: false });
+    const destUri = `${FileSystem.documentDirectory}${safeName}.pdf`;
+    await FileSystem.copyAsync({ from: tempUri, to: destUri });
+    return destUri;
+  };
+
+  const handleShare = async () => {
     if (!project) return;
+    setShowExportModal(false);
     setExporting(true);
     try {
-      const html = generateHTML(project, toleranceW, toleranceH);
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `Rilievo - ${project.name}`,
-          UTI: 'com.adobe.pdf',
-        });
-      } else {
-        Alert.alert('PDF salvato', `File salvato in:\n${uri}`);
+      if (Platform.OS === 'web') {
+        // Web: open HTML in new tab — user can print/save as PDF from browser
+        const html = generateHTML(project, toleranceW, toleranceH);
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const tab = window.open(url, '_blank');
+        if (tab) setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return;
       }
+      // Android / iOS
+      const uri = await buildPDF();
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: `Rilievo - ${project.name}`,
+        UTI: 'com.adobe.pdf',
+      });
     } catch (e) {
       Alert.alert('Errore', 'Impossibile generare il PDF. Riprova.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleSaveToDevice = async () => {
+    if (!project) return;
+    setShowExportModal(false);
+    setExporting(true);
+    try {
+      if (Platform.OS === 'web') {
+        // Web: download HTML file (user can open in browser and print as PDF)
+        const html = generateHTML(project, toleranceW, toleranceH);
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}_rilievo.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const srcUri = await buildPDF();
+      const fileName = `${safeName}.pdf`;
+      if (Platform.OS === 'android') {
+        // Android: use Storage Access Framework to pick destination folder
+        const { StorageAccessFramework } = FileSystem;
+        const perms = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (!perms.granted) { setExporting(false); return; }
+        const destUri = await StorageAccessFramework.createFileAsync(
+          perms.directoryUri, fileName, 'application/pdf',
+        );
+        const content = await FileSystem.readAsStringAsync(srcUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        await FileSystem.writeAsStringAsync(destUri, content, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        Alert.alert('Salvato!', `"${fileName}" salvato nella cartella scelta.`);
+      } else {
+        // iOS: share sheet — user can tap "Salva su File"
+        await Sharing.shareAsync(srcUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Salva - ${project.name}`,
+          UTI: 'com.adobe.pdf',
+        });
+      }
+    } catch (e) {
+      Alert.alert('Errore', 'Impossibile salvare il PDF. Riprova.');
     } finally {
       setExporting(false);
     }
@@ -140,7 +207,7 @@ export default function DocumentScreen() {
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.exportBtn, exporting && styles.exportBtnDisabled]}
-          onPress={handleExportPDF}
+          onPress={() => !exporting && setShowExportModal(true)}
           disabled={exporting}
         >
           {exporting ? (
@@ -156,6 +223,51 @@ export default function DocumentScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* ── Export Modal ── */}
+      <Modal
+        visible={showExportModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExportModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowExportModal(false)}>
+          <Pressable style={styles.modalSheet} onPress={() => {}}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Esporta PDF</Text>
+            {project && (
+              <Text style={styles.modalFilename}>
+                {safeName}{Platform.OS === 'web' ? '_rilievo.html' : '.pdf'}
+              </Text>
+            )}
+            <TouchableOpacity style={styles.modalBtn} onPress={handleShare} activeOpacity={0.8}>
+              <Text style={styles.modalBtnIcon}>📤</Text>
+              <View>
+                <Text style={styles.modalBtnTitle}>
+                  {Platform.OS === 'web' ? 'Apri nel browser' : 'Condividi'}
+                </Text>
+                <Text style={styles.modalBtnSub}>
+                  {Platform.OS === 'web' ? 'Stampa o salva come PDF dal browser' : 'Apri nelle app del dispositivo'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalBtn, styles.modalBtnAlt]} onPress={handleSaveToDevice} activeOpacity={0.8}>
+              <Text style={styles.modalBtnIcon}>💾</Text>
+              <View>
+                <Text style={[styles.modalBtnTitle, { color: '#1565C0' }]}>
+                  {Platform.OS === 'web' ? 'Scarica HTML' : Platform.OS === 'ios' ? 'Salva su File' : 'Salva sul dispositivo'}
+                </Text>
+                <Text style={[styles.modalBtnSub, { color: '#7a9cc0' }]}>
+                  {Platform.OS === 'web' ? 'Scarica file HTML, aprilo e stampa come PDF' : Platform.OS === 'ios' ? 'Salva in File tramite share sheet' : 'Scegli una cartella di destinazione'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowExportModal(false)}>
+              <Text style={styles.modalCancelText}>Annulla</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -338,4 +450,40 @@ const styles = StyleSheet.create({
   exportBtnDisabled: { opacity: 0.6 },
   exportBtnIcon: { fontSize: 20 },
   exportBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  // Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    padding: 24, paddingBottom: 36,
+  },
+  modalHandle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD',
+    alignSelf: 'center', marginBottom: 18,
+  },
+  modalTitle: {
+    fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 4,
+  },
+  modalFilename: {
+    fontSize: 12, color: '#888', marginBottom: 20,
+    fontStyle: 'italic',
+  },
+  modalBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: '#1565C0', borderRadius: 14,
+    padding: 16, marginBottom: 10,
+  },
+  modalBtnAlt: {
+    backgroundColor: '#EEF4FF', borderWidth: 1.5, borderColor: '#1565C0',
+  },
+  modalBtnIcon: { fontSize: 24 },
+  modalBtnTitle: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 1 },
+  modalBtnSub:   { fontSize: 11, color: 'rgba(255,255,255,0.75)' },
+  modalCancel: {
+    alignItems: 'center', paddingVertical: 14, marginTop: 4,
+  },
+  modalCancelText: { fontSize: 15, color: '#888', fontWeight: '600' },
 });
