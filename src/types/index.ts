@@ -20,6 +20,10 @@ export type OpeningStyle =
   | 'roller_blind'
   // Controtelaio (unico tipo, a U)
   | 'subframe_window'
+  // Zanzariere
+  | 'mosquito_fixed'
+  | 'mosquito_rollup'
+  | 'mosquito_lateral'
 export type OpeningSide = 'left' | 'right' | 'center' | 'center-left' | 'center-right' | 'top' | 'bottom';
 
 export interface AudioNote {

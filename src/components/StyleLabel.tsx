@@ -18,6 +18,9 @@ const LABELS: Record<OpeningStyle, string> = {
   shutter_double:       'Persiana portafinestra',
   roller_blind:         'Monoblocco tapparella',
   subframe_window:      'Controtelaio finestra',
+  mosquito_fixed:       'Zanzariera fissa',
+  mosquito_rollup:      'Zanzariera sali scendi',
+  mosquito_lateral:     'Zanzariera laterale',
 };
 
 interface Props {

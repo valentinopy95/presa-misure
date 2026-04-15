@@ -90,7 +90,7 @@ export function calculateMaterials(openings: Opening[], riattestattura = 25): Ma
     const { style } = o;
 
     if (!style || W <= 0 || H <= 0) continue;
-    if (style === 'roller_blind' || style === 'subframe_window') continue;
+    if (style === 'roller_blind' || style === 'subframe_window' || style.startsWith('mosquito')) continue;
 
     const isWindow  = style.startsWith('window');
     const isDoor    = style.startsWith('door');

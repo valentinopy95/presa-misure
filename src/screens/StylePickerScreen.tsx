@@ -9,7 +9,7 @@ import { LiveDrawing } from '../components/drawings';
 type Nav = NativeStackNavigationProp<RootStackParamList, 'StylePicker'>;
 type Route = RouteProp<RootStackParamList, 'StylePicker'>;
 
-type Category = 'Finestre' | 'Porte' | 'Persiane' | 'Monoblocchi' | 'Controtelai';
+type Category = 'Finestre' | 'Porte' | 'Persiane' | 'Monoblocchi' | 'Controtelai' | 'Zanzariere';
 
 interface StyleOption {
   value: OpeningStyle;
@@ -33,9 +33,13 @@ const STYLES: StyleOption[] = [
   { value: 'roller_blind',     label: 'Con tapparella',  category: 'Monoblocchi' },
   // Controtelaio
   { value: 'subframe_window',  label: 'Controtelaio',    category: 'Controtelai' },
+  // Zanzariere
+  { value: 'mosquito_fixed',   label: 'Fissa',           category: 'Zanzariere'  },
+  { value: 'mosquito_rollup',  label: 'Sali scendi',     category: 'Zanzariere'  },
+  { value: 'mosquito_lateral', label: 'Laterale',        category: 'Zanzariere'  },
 ];
 
-const CATEGORIES: Category[] = ['Finestre', 'Porte', 'Persiane', 'Monoblocchi', 'Controtelai'];
+const CATEGORIES: Category[] = ['Finestre', 'Porte', 'Persiane', 'Monoblocchi', 'Controtelai', 'Zanzariere'];
 
 const CATEGORY_COLORS: Record<Category, string> = {
   Finestre:    '#1565C0',
@@ -43,6 +47,7 @@ const CATEGORY_COLORS: Record<Category, string> = {
   Persiane:    '#2E7D32',
   Monoblocchi: '#E65100',
   Controtelai: '#795548',
+  Zanzariere:  '#00838F',
 };
 
 export default function StylePickerScreen() {

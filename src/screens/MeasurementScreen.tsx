@@ -107,9 +107,11 @@ export default function MeasurementScreen() {
 
   const taglioW = opening.width  != null ? opening.width  - toleranceW : null;
   const taglioH = opening.height != null ? opening.height - toleranceH : null;
-  const isMonoblocco = opening.style === 'roller_blind';
-  const isSubframe   = opening.style === 'subframe_window';
-  const isSliding    = opening.style === 'door_sliding' || opening.style === 'window_sliding';
+  const isMonoblocco    = opening.style === 'roller_blind';
+  const isSubframe      = opening.style === 'subframe_window';
+  const isSliding       = opening.style === 'door_sliding' || opening.style === 'window_sliding';
+  const isMosquitoNoSide = opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup';
+  const hideLeafCount   = isSubframe || opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup' || opening.style === 'mosquito_lateral';
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchCameraAsync({
@@ -297,8 +299,8 @@ export default function MeasurementScreen() {
         </>
       )}
 
-      {/* ── Numero ante (non per controtelai) ── */}
-      {!isSubframe && (
+      {/* ── Numero ante (non per controtelai o zanzariere) ── */}
+      {!hideLeafCount && (
         <>
           <Text style={styles.label}>Numero ante</Text>
           <View style={styles.leafRow}>
@@ -317,8 +319,8 @@ export default function MeasurementScreen() {
         </>
       )}
 
-      {/* ── Lato apertura (non per controtelai) ── */}
-      {!isSubframe && (
+      {/* ── Lato apertura (non per controtelai o zanzariere fissa/sali-scendi) ── */}
+      {!isSubframe && !isMosquitoNoSide && (
         <>
           <Text style={styles.label}>Lato apertura</Text>
           <View style={styles.sideRow}>

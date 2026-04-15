@@ -30,6 +30,9 @@ const STYLE_LABELS: Record<OpeningStyle, string> = {
   shutter_double:       'Persiana portafinestra',
   roller_blind:         'Monoblocco tapparella',
   subframe_window:      'Controtelaio',
+  mosquito_fixed:       'Zanzariera fissa',
+  mosquito_rollup:      'Zanzariera sali scendi',
+  mosquito_lateral:     'Zanzariera laterale',
 };
 
 const dim = (v: number | null) => v != null ? `${v}` : '—';

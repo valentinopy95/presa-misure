@@ -705,6 +705,91 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide }: { style
         </G>
       </G>;
 
+    // ── ZANZARIERE ────────────────────────────────────────────────────────────
+    case 'mosquito_fixed': {
+      const rows = 14, cols = 9;
+      const cellW = GW / cols, cellH = GH / rows;
+      return <G>
+        <Rect x={GX} y={GY} width={GW} height={GH} fill="rgba(100,170,210,0.08)"/>
+        {Array.from({length: rows + 1}).map((_, i) => (
+          <Line key={`h${i}`} x1={GX} y1={GY + i * cellH} x2={GX2} y2={GY + i * cellH}
+                stroke="rgba(60,110,160,0.35)" strokeWidth={0.7}/>
+        ))}
+        {Array.from({length: cols + 1}).map((_, i) => (
+          <Line key={`v${i}`} x1={GX + i * cellW} y1={GY} x2={GX + i * cellW} y2={GY2}
+                stroke="rgba(60,110,160,0.35)" strokeWidth={0.7}/>
+        ))}
+        <G transform={`translate(${CX}, ${CY})`}>
+          <Text textAnchor="middle" fontSize={9} fill="rgba(30,80,130,0.6)" fontWeight="700">FISSO</Text>
+        </G>
+      </G>;
+    }
+
+    case 'mosquito_rollup': {
+      const casH = FH * 0.13;
+      const meshY = GY;
+      const meshH = GH * 0.62;
+      const rows = 9, cols = 7;
+      const cellW = GW / cols, cellH = meshH / rows;
+      const handleY = meshY + meshH;
+      return <G>
+        {/* Cassonetto */}
+        <Rect x={FX} y={FY} width={FW} height={casH} fill={C_BOX} stroke={C_FRAME} strokeWidth={2}/>
+        <G transform={`translate(${CX}, ${FY + casH / 2 + 3})`}>
+          <Text textAnchor="middle" fontSize={7} fill="rgba(255,255,255,0.85)" fontWeight="700">
+            SALI / SCENDI
+          </Text>
+        </G>
+        {/* Mesh panel (parzialmente calato) */}
+        <Rect x={GX} y={meshY} width={GW} height={meshH} fill="rgba(100,170,210,0.08)"/>
+        {Array.from({length: rows + 1}).map((_, i) => (
+          <Line key={`h${i}`} x1={GX} y1={meshY + i * cellH} x2={GX2} y2={meshY + i * cellH}
+                stroke="rgba(60,110,160,0.35)" strokeWidth={0.7}/>
+        ))}
+        {Array.from({length: cols + 1}).map((_, i) => (
+          <Line key={`v${i}`} x1={GX + i * cellW} y1={meshY} x2={GX + i * cellW} y2={meshY + meshH}
+                stroke="rgba(60,110,160,0.35)" strokeWidth={0.7}/>
+        ))}
+        {/* Barra maniglia */}
+        <Rect x={GX + 4} y={handleY - 3} width={GW - 8} height={6} rx={3}
+              fill={C_IND} stroke={C_FRAME} strokeWidth={0.8}/>
+        {/* Freccia giù */}
+        <Line x1={CX} y1={handleY + 4} x2={CX} y2={handleY + 16}
+              stroke={C_IND} strokeWidth={1.8}/>
+        <Path d={arrow(CX, handleY + 16, Math.PI / 2, 5)} fill={C_IND}/>
+      </G>;
+    }
+
+    case 'mosquito_lateral': {
+      const goesLeft = openingSide !== 'right';
+      const scrW = Math.round(GW * 0.65);
+      const scrX = goesLeft ? GX2 - scrW : GX;
+      const rows = 12, cols = 5;
+      const cellW = scrW / cols, cellH = GH / rows;
+      const handleX = goesLeft ? scrX - 2 : scrX + scrW - 2;
+      const arrowTipX = goesLeft ? GX + 10 : GX2 - 10;
+      const arrowBaseX = goesLeft ? scrX + scrW * 0.4 : scrX + scrW * 0.6;
+      return <G>
+        {/* Pannello rete */}
+        <Rect x={scrX} y={GY} width={scrW} height={GH}
+              fill="rgba(100,170,210,0.08)" stroke="rgba(60,110,160,0.4)" strokeWidth={1}/>
+        {Array.from({length: rows + 1}).map((_, i) => (
+          <Line key={`h${i}`} x1={scrX} y1={GY + i * cellH} x2={scrX + scrW} y2={GY + i * cellH}
+                stroke="rgba(60,110,160,0.35)" strokeWidth={0.7}/>
+        ))}
+        {Array.from({length: cols + 1}).map((_, i) => (
+          <Line key={`v${i}`} x1={scrX + i * cellW} y1={GY} x2={scrX + i * cellW} y2={GY2}
+                stroke="rgba(60,110,160,0.35)" strokeWidth={0.7}/>
+        ))}
+        {/* Maniglia sul bordo libero */}
+        <Rect x={handleX} y={CY - 14} width={4} height={28} rx={2} fill={C_IND}/>
+        {/* Freccia di scorrimento */}
+        <Line x1={arrowBaseX} y1={CY} x2={arrowTipX} y2={CY}
+              stroke={C_IND} strokeWidth={1.8} strokeDasharray="5,3"/>
+        <Path d={arrow(arrowTipX, CY, goesLeft ? Math.PI : 0, 5)} fill={C_IND}/>
+      </G>;
+    }
+
     default:
       return null;
   }
@@ -814,11 +899,12 @@ export default function LiveDrawing({
 
   const woodId = `wood_${style ?? 'none'}`;
 
-  const isSubframe   = style === 'subframe_window';
-  const isShutter    = style === 'shutter_single' || style === 'shutter_double';
-  const isMonoblocco = style === 'roller_blind';
+  const isSubframe    = style === 'subframe_window';
+  const isShutter     = style === 'shutter_single' || style === 'shutter_double';
+  const isMonoblocco  = style === 'roller_blind';
   const isSlidingType = style === 'window_sliding' || style === 'door_sliding';
-  const resolvedLeaf = Math.max(1, leafCount ?? 1);
+  const isZanzariera  = style === 'mosquito_fixed' || style === 'mosquito_rollup' || style === 'mosquito_lateral';
+  const resolvedLeaf  = Math.max(1, leafCount ?? 1);
 
   // ── Animation ──────────────────────────────────────────────────────────────
   const [animProgress, setAnimProgress] = useState(previewMode ? 1 : 0);
@@ -859,6 +945,22 @@ export default function LiveDrawing({
         <CornerMarks x={FX+FW} y={FY+FH} dx={-1} dy={-1}/>
       </G>
     );
+  } else if (isZanzariera) {
+    // Thin aluminum frame, inner area left empty for DefaultIndicator mesh
+    frameLayer = (
+      <>
+        <GlassDefs/>
+        <G>
+          <Rect x={FX} y={FY} width={FW} height={FH}
+                fill="#DDE8EE" stroke={C_FRAME} strokeWidth={2.5}/>
+          <Rect x={GX} y={GY} width={GW} height={GH} fill="#EEF4F8"/>
+          <CornerMarks x={FX}    y={FY}    dx={1}  dy={1}/>
+          <CornerMarks x={FX+FW} y={FY}    dx={-1} dy={1}/>
+          <CornerMarks x={FX}    y={FY+FH} dx={1}  dy={-1}/>
+          <CornerMarks x={FX+FW} y={FY+FH} dx={-1} dy={-1}/>
+        </G>
+      </>
+    );
   } else if (isMonoblocco) {
     frameLayer = <><AlumPatterns/><GlassDefs/></>;
   } else if (isSlidingType) {
@@ -891,7 +993,7 @@ export default function LiveDrawing({
   // ── Indicator layer ────────────────────────────────────────────────────────
   let indicatorLayer: React.ReactNode = null;
   if (style) {
-    if (openingSide && !isSubframe && !isShutter && !isMonoblocco) {
+    if (openingSide && !isSubframe && !isShutter && !isMonoblocco && !isZanzariera) {
       if (isSlidingType) {
         indicatorLayer = (
           <SlidingIndicator
