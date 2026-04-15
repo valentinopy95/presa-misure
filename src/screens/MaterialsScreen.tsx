@@ -105,14 +105,7 @@ function ProfileTable({ rows }: { rows: ProfileResult[] }) {
     <View style={tbl.card}>
       {rows.map((r, i) => (
         <View key={r.label} style={[tbl.row, i % 2 === 1 && tbl.rowAlt]}>
-          {/* Nome profilo + sfrido */}
-          <View style={{ flex: 1 }}>
-            <Text style={tbl.labelCell}>{r.label}</Text>
-            <Text style={tbl.sfridoCell}>
-              sfrido {r.sfridoMl.toFixed(1)} ml ({r.sfridoPct}%)
-            </Text>
-          </View>
-          {/* Barre */}
+          <Text style={tbl.labelCell}>{r.label}</Text>
           <View style={tbl.barsWrap}>
             <Text style={tbl.barsNum}>{r.bars}</Text>
             <Text style={tbl.barsLabel}>barre</Text>
@@ -165,8 +158,7 @@ const tbl = StyleSheet.create({
   row:       { flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center' },
   rowAlt:    { backgroundColor: '#F7FAFF' },
   right:     { textAlign: 'right' },
-  labelCell: { fontWeight: '700', color: '#222', fontSize: 14 },
-  sfridoCell:{ color: '#B94A00', fontSize: 11, marginTop: 2 },
+  labelCell: { fontWeight: '700', color: '#222', fontSize: 14, flex: 1 },
   barsWrap:  { alignItems: 'center', minWidth: 64 },
   barsNum:   { fontSize: 32, fontWeight: '900', color: '#1565C0', lineHeight: 36 },
   barsLabel: { fontSize: 10, color: '#7090C0', fontWeight: '600', textTransform: 'uppercase' },

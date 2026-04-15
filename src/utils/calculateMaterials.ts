@@ -1,19 +1,15 @@
 import { Opening } from '../types';
 
-const BAR_MM       = 6400;
-const KERF_90      = 4;
-const SLAT_PITCH   = 55;
-const ZOCCOLO_H    = 120;
-const FASCIA_H     = 120;
-const PF_THRESHOLD = 1500;
+const BAR_MM       = 6400;  // usable bar length (6500mm commercial - squaring waste)
+const KERF_90      = 4;     // blade kerf for 90° cuts (mm)
+const SLAT_PITCH   = 55;    // lamella pitch (mm)
+const ZOCCOLO_H    = 120;   // zoccolo height (mm)
+const FASCIA_H     = 120;   // fascia height (mm)
+const PF_THRESHOLD = 1500;  // above this H, shutter is "porta-finestra" → add fascia
 
 export interface ProfileResult {
   label: string;
-  pieces: number;
-  totalMl: number;    // ml puri dei pezzi
-  bars: number;       // barre necessarie
-  sfridoMl: number;   // sfrido totale in ml
-  sfridoPct: number;  // % sfrido su materiale acquistato
+  bars: number;
 }
 
 export interface MaterialsResult {
@@ -24,66 +20,75 @@ export interface MaterialsResult {
 }
 
 /**
- * Bin-packing First Fit Decreasing.
- * - Il primo pezzo di ogni barra NON ha riattestattura prima di sé.
- * - Ogni pezzo successivo sulla stessa barra consuma: lunghezza + wastePerCut.
- * - Lo sfrido è il materiale rimanente inutilizzato a fine barre.
+ * First Fit Decreasing bin-packing.
+ *
+ * Rules:
+ *  - Pieces sorted longest first.
+ *  - First piece on each bar: no preceding waste (bar already squared to 45°).
+ *  - Every subsequent piece on the same bar: wastePerCut mm of riattestattura
+ *    consumed between cuts.
+ *  - A piece that doesn't fit opens a new bar.
  */
-function calcBars(pieces: number[], barMm: number, wastePerCut: number) {
-  if (!pieces.length) return { bars: 0, totalPieceMm: 0, sfridoMm: 0 };
+function calcBars(pieces: number[], barMm: number, wastePerCut: number): number {
+  if (!pieces.length) return 0;
 
-  const sorted = [...pieces].sort((a, b) => b - a);
-  let bars = 1;
-  let rem = barMm;
-  let totalPieceMm = 0;
-  let totalConsumed = 0; // materiale effettivamente consumato (pezzi + scarti tra tagli)
-  let firstOnBar = true;
+  // Guard: skip pieces longer than a full bar (shouldn't happen for valid data)
+  const valid = pieces.filter(p => p > 0 && p <= barMm);
+  if (!valid.length) return 0;
 
-  for (const p of sorted) {
-    const cutWaste = firstOnBar ? 0 : wastePerCut;
-    const needed   = p + cutWaste;
+  const sorted = [...valid].sort((a, b) => b - a);
 
-    if (needed > rem) {
-      // Apri nuova barra
-      bars++;
-      rem = barMm;
-      firstOnBar = true;
+  // Each bin holds the remaining space
+  const bins: number[] = [barMm];
+
+  for (const piece of sorted) {
+    let placed = false;
+
+    for (let i = 0; i < bins.length; i++) {
+      const rem = bins[i];
+      const isFirst = rem === barMm; // nothing placed on this bar yet
+      const needed  = piece + (isFirst ? 0 : wastePerCut);
+
+      if (needed <= rem) {
+        bins[i] -= needed;
+        placed = true;
+        break;
+      }
     }
 
-    const actualWaste = firstOnBar ? 0 : wastePerCut;
-    rem             -= (p + actualWaste);
-    totalConsumed   += (p + actualWaste);
-    totalPieceMm    += p;
-    firstOnBar       = false;
+    if (!placed) {
+      // Open a new bar — first piece has no preceding waste
+      bins.push(barMm - piece);
+    }
   }
 
-  // Sfrido = capacità totale acquistata - materiale effettivamente consumato
-  const sfridoMm = bars * barMm - totalConsumed;
-
-  return { bars, totalPieceMm, sfridoMm };
+  return bins.length;
 }
 
-// ─── Raccolta pezzi per apertura ─────────────────────────────────────────────
+// ─── Piece generation per opening ───────────────────────────────────────────
 
 export function calculateMaterials(openings: Opening[], riattestattura = 25): MaterialsResult {
+  // 45° cut pieces grouped by profile category
   const b45: Record<string, number[]> = {
     'Profilo telaio': [],
     'Profilo anta':   [],
   };
+  // 90° cut pieces grouped by profile category
   const b90: Record<string, number[]> = {
-    'Riporto':       [],
-    'Fascia':        [],
-    'Zoccolo':       [],
-    'Mezza lamella': [],
-    'Posizionatore': [],
-    'Lamella':       [],
+    'Soglia / fascia': [],
+    'Zoccolo':         [],
+    'Mezza lamella':   [],
+    'Posizionatore':   [],
+    'Lamella':         [],
+    'Riporto':         [],
   };
 
   for (const o of openings) {
     const W = o.width  ?? 0;
     const H = o.height ?? 0;
     const n = Math.max(1, o.leafCount ?? 1);
-    const style = o.style;
+    const { style } = o;
+
     if (!style || W <= 0 || H <= 0) continue;
     if (style === 'roller_blind' || style === 'subframe_window') continue;
 
@@ -92,19 +97,28 @@ export function calculateMaterials(openings: Opening[], riattestattura = 25): Ma
     const isShutter = style.startsWith('shutter');
 
     if (isWindow) {
+      // Telaio fisso: 4 lati (rettangolo chiuso) → 2×W + 2×H a 45°
       b45['Profilo telaio'].push(W, W, H, H);
+
+      // Anta: 4 lati per ogni foglio → 2×leafW + 2×H a 45°
       const leafW = Math.round(W / n);
       for (let i = 0; i < n; i++) {
         b45['Profilo anta'].push(leafW, leafW, H, H);
       }
+
+      // Montante intermedio tra le ante (riporto) a 90° — 1 per ogni giunzione
       for (let i = 0; i < n - 1; i++) {
         b90['Riporto'].push(H);
       }
     }
 
     if (isDoor) {
-      b45['Profilo telaio'].push(W, W, H, H);
-      b90['Fascia'].push(W);
+      // Telaio fisso porta: 3 lati (traverso superiore + 2 montanti) a 45°
+      // Il basso è la soglia, tagliata a 90°
+      b45['Profilo telaio'].push(W, H, H);
+      b90['Soglia / fascia'].push(W);
+
+      // Anta: 4 lati per ogni foglio a 45°
       const leafW = Math.round(W / n);
       for (let i = 0; i < n; i++) {
         b45['Profilo anta'].push(leafW, leafW, H, H);
@@ -112,34 +126,38 @@ export function calculateMaterials(openings: Opening[], riattestattura = 25): Ma
     }
 
     if (isShutter) {
-      const isPF = H > PF_THRESHOLD;
+      const isPF  = H > PF_THRESHOLD; // porta-finestra → aggiunge fascia centrale
+      const leafW = Math.round(W / n);
+
+      // Telaio fisso persiana: traverso superiore (W) + 2 montanti (H) a 45°
+      // Il basso è lo zoccolo fisso (incluso nel telaio a 90°)
       b45['Profilo telaio'].push(W, H, H);
+
       for (let i = 0; i < n; i++) {
-        const lw = Math.round(W / n);
-        b45['Profilo anta'].push(lw, H, H);
-        b90['Zoccolo'].push(lw);
-        if (isPF) b90['Fascia'].push(lw);
-        b90['Mezza lamella'].push(lw);
-        b90['Posizionatore'].push(lw);
-        const availH = H - ZOCCOLO_H - (isPF ? FASCIA_H : 0);
-        const slats  = Math.floor(Math.max(0, availH) / SLAT_PITCH);
-        for (let j = 0; j < slats; j++) b90['Lamella'].push(lw);
+        // Anta: traverso anta (leafW) + 2 montanti (H) a 45°
+        b45['Profilo anta'].push(leafW, H, H);
+
+        // Componenti interni all'anta — tutti a 90°
+        b90['Zoccolo'].push(leafW);
+        if (isPF) b90['Soglia / fascia'].push(leafW);
+        b90['Mezza lamella'].push(leafW);
+        b90['Posizionatore'].push(leafW);
+
+        // Lamelle: riempiono l'altezza netta dell'anta
+        const netH = H - ZOCCOLO_H - (isPF ? FASCIA_H : 0);
+        const slats = Math.max(0, Math.floor(netH / SLAT_PITCH));
+        for (let j = 0; j < slats; j++) {
+          b90['Lamella'].push(leafW);
+        }
       }
     }
   }
 
   function toResult(label: string, pieces: number[], waste: number): ProfileResult | null {
     if (!pieces.length) return null;
-    const { bars, totalPieceMm, sfridoMm } = calcBars(pieces, BAR_MM, waste);
-    const totalBarMm = bars * BAR_MM;
-    return {
-      label,
-      pieces: pieces.length,
-      totalMl:   Math.round(totalPieceMm / 100) / 10,
-      bars,
-      sfridoMl:  Math.round(sfridoMm / 100) / 10,
-      sfridoPct: Math.round((sfridoMm / totalBarMm) * 100),
-    };
+    const bars = calcBars(pieces, BAR_MM, waste);
+    if (bars === 0) return null;
+    return { label, bars };
   }
 
   const profiles45 = Object.entries(b45)
