@@ -606,45 +606,57 @@ function DefaultIndicator({ style, woodId, leafCount = 1 }: { style: OpeningStyl
     }
 
     // ── PERSIANE ─────────────────────────────────────────────────────────────
-    case 'shutter_single': {
-      const slats = 8, slotH = GH / slats;
-      return <G>
-        {Array.from({length: slats+1}).map((_,i)=>(
-          <Line key={i} x1={GX+2} y1={GY+i*slotH} x2={GX2-2} y2={GY+i*slotH}
-                stroke={C_SLAT} strokeWidth={1}/>
-        ))}
-        {[0.25, 0.5, 0.75].map((f,i)=>(
-          <Circle key={i} cx={GX+4} cy={GY+GH*f} r={3} fill={C_SHUTTER} stroke="white" strokeWidth={1}/>
-        ))}
-        <Path d={`M ${GX+4} ${GY} Q ${GX2-4} ${GY} ${GX2-4} ${GY2}`}
-              fill="none" stroke={C_SHUTTER} strokeWidth={1.5} strokeDasharray="5,3"/>
-        <Path d={arrow(GX2-4, GY2, Math.PI*0.75)} fill={C_SHUTTER}/>
-      </G>;
-    }
-
+    case 'shutter_single':
     case 'shutter_double': {
-      const slats = 8, slotH = GH / slats;
+      // Disegno dinamico basato su leafCount
+      const n      = Math.max(1, leafCount);
+      const sashW  = GW / n;
+      const slats  = 8;
+      const slotH  = GH / slats;
+
       return <G>
-        {Array.from({length: slats+1}).map((_,i)=>(
-          <Line key={i} x1={GX+2} y1={GY+i*slotH} x2={CX-2} y2={GY+i*slotH}
+        {/* Ante */}
+        {Array.from({length: n}).map((_, i) => {
+          const sx  = GX + i * sashW;
+          const sx2 = sx + sashW;
+          // Ante pari: cerniera a sinistra (apre a destra)
+          // Ante dispari: cerniera a destra (apre a sinistra)
+          const hingeLeft = i % 2 === 0;
+          const hingeX    = hingeLeft ? sx + 4 : sx2 - 4;
+          const freeX     = hingeLeft ? sx2 - 4 : sx + 4;
+
+          return <G key={i}>
+            {/* Lamelle */}
+            {Array.from({length: slats + 1}).map((_, j) => (
+              <Line key={j}
+                x1={sx + 2} y1={GY + j * slotH}
+                x2={sx2 - 2} y2={GY + j * slotH}
                 stroke={C_SLAT} strokeWidth={1}/>
-        ))}
-        {Array.from({length: slats+1}).map((_,i)=>(
-          <Line key={`r${i}`} x1={CX+2} y1={GY+i*slotH} x2={GX2-2} y2={GY+i*slotH}
-                stroke={C_SLAT} strokeWidth={1}/>
-        ))}
-        <Line x1={CX} y1={FY} x2={CX} y2={FY+FH} stroke={C_FRAME} strokeWidth={FT/2}/>
-        <Rect x={CX-1} y={GY} width={2} height={GH} fill="white"/>
-        {[0.3, 0.7].map((f,i)=>(
-          <Circle key={i} cx={GX+4} cy={GY+GH*f} r={3} fill={C_SHUTTER} stroke="white" strokeWidth={1}/>
-        ))}
-        {[0.3, 0.7].map((f,i)=>(
-          <Circle key={`r${i}`} cx={GX2-4} cy={GY+GH*f} r={3} fill={C_SHUTTER} stroke="white" strokeWidth={1}/>
-        ))}
-        <Path d={`M ${GX+4} ${GY} Q ${CX-4} ${GY} ${CX-4} ${GY2}`}
+            ))}
+            {/* Cerniere */}
+            {[0.25, 0.5, 0.75].map((f, j) => (
+              <Circle key={j}
+                cx={hingeX} cy={GY + GH * f} r={3}
+                fill={C_SHUTTER} stroke="white" strokeWidth={1}/>
+            ))}
+            {/* Arco apertura */}
+            <Path
+              d={`M ${p(hingeX)} ${p(GY)} Q ${p(freeX)} ${p(GY)} ${p(freeX)} ${p(GY2)}`}
               fill="none" stroke={C_SHUTTER} strokeWidth={1.5} strokeDasharray="5,3"/>
-        <Path d={`M ${GX2-4} ${GY} Q ${CX+4} ${GY} ${CX+4} ${GY2}`}
-              fill="none" stroke={C_SHUTTER} strokeWidth={1.5} strokeDasharray="5,3"/>
+            <Path d={arrow(freeX, GY2, hingeLeft ? Math.PI * 0.75 : Math.PI * 0.25)}
+                  fill={C_SHUTTER}/>
+          </G>;
+        })}
+
+        {/* Montanti divisori tra le ante */}
+        {Array.from({length: n - 1}).map((_, i) => {
+          const dx = GX + (i + 1) * sashW;
+          return <G key={i}>
+            <Line x1={p(dx)} y1={FY} x2={p(dx)} y2={FY + FH}
+                  stroke={C_FRAME} strokeWidth={FT / 2}/>
+            <Rect x={dx - 1} y={GY} width={2} height={GH} fill="white"/>
+          </G>;
+        })}
       </G>;
     }
 
