@@ -317,8 +317,8 @@ export default function MeasurementScreen() {
         </>
       )}
 
-      {/* ── Lato apertura (non per scorrevoli, controtelai, persiane) ── */}
-      {!isSubframe && opening.style !== 'shutter_single' && opening.style !== 'shutter_double' && (
+      {/* ── Lato apertura (non per controtelai) ── */}
+      {!isSubframe && (
         <>
           <Text style={styles.label}>Lato apertura</Text>
           <View style={styles.sideRow}>

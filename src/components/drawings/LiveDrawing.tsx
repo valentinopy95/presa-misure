@@ -438,7 +438,7 @@ function SlidingIndicator({ leafCount, openingSide, progress }: AnimProps) {
 }
 
 // ─── Default style-based indicator (used when openingSide is null) ────────────
-function DefaultIndicator({ style, woodId, leafCount = 1 }: { style: OpeningStyle; woodId: string; leafCount?: number }) {
+function DefaultIndicator({ style, woodId, leafCount = 1, openingSide }: { style: OpeningStyle; woodId: string; leafCount?: number; openingSide?: OpeningSide | null }) {
   const c = C_IND;
   const da = '5,3';
   const sw = 1.6;
@@ -613,15 +613,15 @@ function DefaultIndicator({ style, woodId, leafCount = 1 }: { style: OpeningStyl
       const sashW  = GW / n;
       const slats  = 8;
       const slotH  = GH / slats;
+      // openingSide 'right' → prima anta con cerniera a destra (inverte l'alternanza)
+      const startRight = openingSide === 'right';
 
       return <G>
         {/* Ante */}
         {Array.from({length: n}).map((_, i) => {
           const sx  = GX + i * sashW;
           const sx2 = sx + sashW;
-          // Ante pari: cerniera a sinistra (apre a destra)
-          // Ante dispari: cerniera a destra (apre a sinistra)
-          const hingeLeft = i % 2 === 0;
+          const hingeLeft = startRight ? (i % 2 !== 0) : (i % 2 === 0);
           const hingeX    = hingeLeft ? sx + 4 : sx2 - 4;
           const freeX     = hingeLeft ? sx2 - 4 : sx + 4;
 
@@ -910,7 +910,7 @@ export default function LiveDrawing({
         );
       }
     } else {
-      indicatorLayer = <DefaultIndicator style={style} woodId={woodId} leafCount={resolvedLeaf}/>;
+      indicatorLayer = <DefaultIndicator style={style} woodId={woodId} leafCount={resolvedLeaf} openingSide={openingSide}/>;
     }
   }
 
