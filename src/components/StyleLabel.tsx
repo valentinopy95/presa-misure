@@ -14,8 +14,8 @@ const LABELS: Record<OpeningStyle, string> = {
   door_french:          'Porta finestra',
   door_bifold:          'Porta a libro',
   door_entrance:        'Portoncino',
-  shutter_single:       'Persiana singola',
-  shutter_double:       'Persiana doppia',
+  shutter_single:       'Persiana finestra',
+  shutter_double:       'Persiana portafinestra',
   roller_blind:         'Monoblocco tapparella',
   subframe_window:      'Controtelaio finestra',
 };

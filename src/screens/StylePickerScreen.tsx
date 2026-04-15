@@ -9,7 +9,7 @@ import { LiveDrawing } from '../components/drawings';
 type Nav = NativeStackNavigationProp<RootStackParamList, 'StylePicker'>;
 type Route = RouteProp<RootStackParamList, 'StylePicker'>;
 
-type Category = 'Finestre' | 'Porte' | 'Monoblocchi' | 'Controtelai';
+type Category = 'Finestre' | 'Porte' | 'Persiane' | 'Monoblocchi' | 'Controtelai';
 
 interface StyleOption {
   value: OpeningStyle;
@@ -19,24 +19,28 @@ interface StyleOption {
 
 const STYLES: StyleOption[] = [
   // Finestre
-  { value: 'window_single',    label: 'Battente',       category: 'Finestre'    },
-  { value: 'window_sliding',   label: 'Scorrevole',     category: 'Finestre'    },
-  { value: 'window_tilt_turn', label: 'Vasistas',       category: 'Finestre'    },
+  { value: 'window_single',    label: 'Battente',        category: 'Finestre'    },
+  { value: 'window_sliding',   label: 'Scorrevole',      category: 'Finestre'    },
+  { value: 'window_tilt_turn', label: 'Vasistas',        category: 'Finestre'    },
   // Porte
-  { value: 'door_entrance',    label: 'Portoncino',     category: 'Porte'       },
-  { value: 'door_sliding',     label: 'Scorrevole',     category: 'Porte'       },
-  { value: 'door_french',      label: 'Porta finestra', category: 'Porte'       },
+  { value: 'door_entrance',    label: 'Portoncino',      category: 'Porte'       },
+  { value: 'door_sliding',     label: 'Scorrevole',      category: 'Porte'       },
+  { value: 'door_french',      label: 'Porta finestra',  category: 'Porte'       },
+  // Persiane
+  { value: 'shutter_single',   label: 'Finestra',        category: 'Persiane'    },
+  { value: 'shutter_double',   label: 'Portafinestra',   category: 'Persiane'    },
   // Monoblocchi
-  { value: 'roller_blind',     label: 'Con tapparella', category: 'Monoblocchi' },
+  { value: 'roller_blind',     label: 'Con tapparella',  category: 'Monoblocchi' },
   // Controtelaio
-  { value: 'subframe_window',  label: 'Controtelaio',   category: 'Controtelai' },
+  { value: 'subframe_window',  label: 'Controtelaio',    category: 'Controtelai' },
 ];
 
-const CATEGORIES: Category[] = ['Finestre', 'Porte', 'Monoblocchi', 'Controtelai'];
+const CATEGORIES: Category[] = ['Finestre', 'Porte', 'Persiane', 'Monoblocchi', 'Controtelai'];
 
 const CATEGORY_COLORS: Record<Category, string> = {
   Finestre:    '#1565C0',
   Porte:       '#6A1B9A',
+  Persiane:    '#2E7D32',
   Monoblocchi: '#E65100',
   Controtelai: '#795548',
 };
