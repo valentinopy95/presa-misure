@@ -1,4 +1,5 @@
 import { Project, Opening, OpeningStyle } from '../types';
+import { calculateMaterials, MaterialsResult } from './calculateMaterials';
 
 // ─── ViewBox constants ────────────────────────────────────────────────────────
 const FX = 20, FY = 14, FW = 120, FH = 140, FT = 12;
@@ -171,6 +172,38 @@ function indicator(style: OpeningStyle, boxHeight: number | null): string {
               font-weight="700" font-family="Arial,sans-serif" letter-spacing="0.5">CONTROTELAIO</text>`;
     }
 
+    case 'door_entrance': {
+      // Cover glass area with anthracite door slab
+      let s = `<rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="#2a3240"/>`;
+      // Bugna panels: 2 cols × 3 rows
+      // col width=37, gap=6; row heights=25,42,21, gap=6
+      const bugnas: [number, number, number, number][] = [
+        [40, 34, 37, 25], [83, 34, 37, 25],
+        [40, 65, 37, 42], [83, 65, 37, 42],
+        [40, 113, 37, 21], [83, 113, 37, 21],
+      ];
+      bugnas.forEach(([bx, by, bw, bh]) => {
+        s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="#333d50" rx="1"/>`;
+        s += `<line x1="${bx}" y1="${by}" x2="${bx + bw}" y2="${by}" stroke="rgba(255,255,255,0.22)" stroke-width="1"/>`;
+        s += `<line x1="${bx}" y1="${by}" x2="${bx}" y2="${by + bh}" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>`;
+        s += `<line x1="${bx}" y1="${by + bh}" x2="${bx + bw}" y2="${by + bh}" stroke="rgba(0,0,0,0.45)" stroke-width="1"/>`;
+        s += `<line x1="${bx + bw}" y1="${by}" x2="${bx + bw}" y2="${by + bh}" stroke="rgba(0,0,0,0.35)" stroke-width="1"/>`;
+        s += `<rect x="${bx + 4}" y="${by + 4}" width="${bw - 8}" height="${bh - 8}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.8" rx="1"/>`;
+      });
+      // Hinges (left side, at 25% and 75% of door height)
+      [Math.round(GY + GH * 0.25), Math.round(GY + GH * 0.75)].forEach(hy => {
+        s += `<rect x="${GX + 2}" y="${hy - 6}" width="8" height="12" rx="1.5" fill="#8090a4" stroke="#5a6a7a" stroke-width="0.8"/>`;
+        s += `<circle cx="${GX + 6}" cy="${hy}" r="2" fill="#5a6a7a"/>`;
+      });
+      // Handle (right side, centre height)
+      s += `<rect x="${GX2 - 16}" y="${CY - 14}" width="6" height="28" rx="3" fill="#8090a4" stroke="#5a6a7a" stroke-width="0.8"/>`;
+      s += `<circle cx="${GX2 - 13}" cy="${CY}" r="4" fill="#a0b0c0" stroke="#5a6a7a" stroke-width="0.8"/>`;
+      // Lock cylinder
+      s += `<ellipse cx="${GX2 - 13}" cy="${CY + 20}" rx="3.5" ry="4" fill="#5a6a7a" stroke="#3a4a5a" stroke-width="0.8"/>`;
+      s += `<ellipse cx="${GX2 - 13}" cy="${CY + 20}" rx="1.5" ry="2" fill="#8090a4"/>`;
+      return s;
+    }
+
     default:
       return `
         <line x1="${GX+14}" y1="${CY}" x2="${GX2-14}" y2="${CY}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4,3"/>
@@ -198,7 +231,7 @@ function svgForStyle(style: OpeningStyle | null, boxHeight: number | null): stri
 }
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
-const STYLE_LABELS: Record<OpeningStyle, string> = {
+const STYLE_LABELS: Partial<Record<OpeningStyle, string>> & Record<string, string> = {
   window_single:    'Finestra singola',
   window_double:    'Finestra doppia',
   window_sliding:   'Finestra scorrevole',
@@ -208,11 +241,14 @@ const STYLE_LABELS: Record<OpeningStyle, string> = {
   door_sliding:     'Porta scorrevole',
   door_french:      'Porta finestra',
   door_bifold:      'Porta a libro',
+  door_entrance:    'Portoncino',
   shutter_single:   'Persiana singola',
   shutter_double:   'Persiana doppia',
   roller_blind:     'Monoblocco tapparella',
   subframe_window:  'Controtelaio',
-  custom:           'Personalizzato',
+  mosquito_fixed:   'Zanzariera fissa',
+  mosquito_rollup:  'Zanzariera avvolgibile',
+  mosquito_lateral: 'Zanzariera laterale',
 };
 
 const STYLE_COLORS: Partial<Record<OpeningStyle, string>> = {
@@ -322,6 +358,70 @@ function groupTable(group: GroupDef, openings: Opening[], startIdx: number, tole
   </div>`;
 }
 
+// ─── Materials section ────────────────────────────────────────────────────────
+function materialsSection(result: MaterialsResult): string {
+  const { profiles45, profiles90, totalBars45, totalBars90 } = result;
+  if (profiles45.length === 0 && profiles90.length === 0) return '';
+
+  const row = (label: string, bars: number, color: string) =>
+    `<tr style="border-bottom:1px solid #f0f0f0;">
+      <td style="padding:7px 14px;font-size:11px;font-weight:600;color:#1a2a3a;">${label}</td>
+      <td style="padding:7px 14px;text-align:right;font-size:12px;font-weight:800;color:${color};">
+        ${bars} barr${bars !== 1 ? 'e' : 'a'}
+      </td>
+    </tr>`;
+
+  const table45 = profiles45.length > 0 ? `
+    <table style="width:100%;border-collapse:collapse;border:1px solid #dde4ec;overflow:hidden;">
+      <tr style="background:#1565C0;">
+        <td colspan="2" style="padding:8px 14px;">
+          <span style="color:white;font-size:10px;font-weight:800;letter-spacing:1.5px;">TAGLI A 45°</span>
+        </td>
+      </tr>
+      ${profiles45.map(p => row(p.label, p.bars, '#1565C0')).join('')}
+      <tr style="background:#f5f7fa;border-top:2px solid rgba(21,101,192,0.18);">
+        <td style="padding:7px 14px;font-size:9px;font-weight:700;color:#888;text-transform:uppercase;">Totale</td>
+        <td style="padding:7px 14px;text-align:right;font-size:14px;font-weight:900;color:#1565C0;">${totalBars45}</td>
+      </tr>
+    </table>` : '';
+
+  const table90 = profiles90.length > 0 ? `
+    <table style="width:100%;border-collapse:collapse;border:1px solid #dde4ec;overflow:hidden;">
+      <tr style="background:#E65100;">
+        <td colspan="2" style="padding:8px 14px;">
+          <span style="color:white;font-size:10px;font-weight:800;letter-spacing:1.5px;">TAGLI A 90°</span>
+        </td>
+      </tr>
+      ${profiles90.map(p => row(p.label, p.bars, '#E65100')).join('')}
+      <tr style="background:#f5f7fa;border-top:2px solid rgba(230,81,0,0.18);">
+        <td style="padding:7px 14px;font-size:9px;font-weight:700;color:#888;text-transform:uppercase;">Totale</td>
+        <td style="padding:7px 14px;text-align:right;font-size:14px;font-weight:900;color:#E65100;">${totalBars90}</td>
+      </tr>
+    </table>` : '';
+
+  const grand = totalBars45 + totalBars90;
+
+  return `
+  <div style="margin-top:28px;">
+    <hr style="border:none;border-top:2px solid #E65100;margin-bottom:14px;"/>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+      <span style="font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#1a1a1a;">SVILUPPO MATERIALE</span>
+      <span style="font-size:9px;color:#888;">barre da 6400 mm</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+      <tr>
+        <td style="width:49%;vertical-align:top;">${table45}</td>
+        <td style="width:2%;"></td>
+        <td style="width:49%;vertical-align:top;">${table90}</td>
+      </tr>
+    </table>
+    <div style="text-align:right;padding:10px 16px;background:#1a2a3a;border-radius:6px;">
+      <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px;">TOTALE BARRE: </span>
+      <span style="font-size:17px;font-weight:900;color:#ffffff;">${grand}</span>
+    </div>
+  </div>`;
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 export function generateHTML(project: Project, toleranceW: number, toleranceH: number = toleranceW): string {
   const date = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -339,6 +439,8 @@ export function generateHTML(project: Project, toleranceW: number, toleranceH: n
   }).join('');
 
   const hasNotes = project.openings.some(o => o.textNote);
+  const matResult = calculateMaterials(project.openings);
+  const matHTML = materialsSection(matResult);
 
   return `<!DOCTYPE html>
 <html lang="it">
@@ -360,10 +462,10 @@ export function generateHTML(project: Project, toleranceW: number, toleranceH: n
       <div style="display:inline-flex; align-items:center; gap:10px;">
         <div style="width:36px;height:36px;background:#1565C0;border-radius:6px;
                     display:flex;align-items:center;justify-content:center;">
-          <span style="color:white;font-size:14px;font-weight:900;letter-spacing:-1px;">PM</span>
+          <span style="color:white;font-size:14px;font-weight:900;letter-spacing:-1px;">MM</span>
         </div>
         <div>
-          <div style="font-size:15px;font-weight:900;color:#1565C0;letter-spacing:0.5px;">Presa Misure</div>
+          <div style="font-size:15px;font-weight:900;color:#1565C0;letter-spacing:0.5px;">MeasureMate</div>
           <div style="font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:1px;">Rilievo Infissi</div>
         </div>
       </div>
@@ -435,10 +537,12 @@ export function generateHTML(project: Project, toleranceW: number, toleranceH: n
     ).join('')}
   </div>` : ''}
 
+  ${matHTML}
+
   <!-- ── FOOTER ── -->
   <hr style="border:none;border-top:1px solid #e0e0e0;margin-top:20px;"/>
   <div style="display:flex;justify-content:space-between;padding-top:8px;">
-    <div style="font-size:8px;color:#bbb;">Generato con Presa Misure &mdash; ${new Date().toLocaleString('it-IT')}</div>
+    <div style="font-size:8px;color:#bbb;">Generato con MeasureMate &mdash; ${new Date().toLocaleString('it-IT')}</div>
     <div style="font-size:8px;color:#bbb;">Tolleranze: L ${toleranceW} mm / H ${toleranceH} mm</div>
   </div>
 

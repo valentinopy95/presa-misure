@@ -32,8 +32,6 @@ export default function MaterialsScreen() {
          o.style !== 'roller_blind' && o.style !== 'subframe_window',
   ).length;
 
-  const totalBars = result.totalBars45 + result.totalBars90;
-
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
@@ -42,13 +40,6 @@ export default function MaterialsScreen() {
         <Text style={s.projectName}>{project.name}</Text>
         {!!project.clientName && <Text style={s.projectSub}>{project.clientName}</Text>}
         <Text style={s.projectSub}>{validCount} aperture elaborate</Text>
-      </View>
-
-      {/* Riepilogo barre */}
-      <View style={s.summaryRow}>
-        <SummaryBox label="Barre 45°" value={result.totalBars45} color="#1565C0"/>
-        <SummaryBox label="Barre 90°" value={result.totalBars90} color="#2E7D32"/>
-        <SummaryBox label="Totale"    value={totalBars}          color="#37474F"/>
       </View>
 
       {/* Sezione 45° */}
@@ -82,15 +73,6 @@ export default function MaterialsScreen() {
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
-
-function SummaryBox({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <View style={[sum.box, { borderTopColor: color }]}>
-      <Text style={[sum.value, { color }]}>{value}</Text>
-      <Text style={sum.label}>{label}</Text>
-    </View>
-  );
-}
 
 function SectionHeader({ label, color }: { label: string; color: string }) {
   return (
@@ -128,21 +110,11 @@ const s = StyleSheet.create({
   },
   projectName: { color: '#fff', fontSize: 18, fontWeight: '800' },
   projectSub:  { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 },
-  summaryRow:  { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  summaryRow:  { flexDirection: 'row', gap: 10, marginBottom: 16 },
   empty:       { alignItems: 'center', padding: 32 },
   emptyText:   { color: '#AAA', fontSize: 14, textAlign: 'center', lineHeight: 22 },
 });
 
-const sum = StyleSheet.create({
-  box: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 12,
-    padding: 12, alignItems: 'center', borderTopWidth: 3,
-    elevation: 1,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
-  },
-  value: { fontSize: 26, fontWeight: '800' },
-  label: { fontSize: 10, color: '#888', fontWeight: '600', textTransform: 'uppercase', marginTop: 2, textAlign: 'center' },
-});
 
 const sec = StyleSheet.create({
   wrap: { borderLeftWidth: 4, paddingLeft: 10, marginBottom: 10, marginTop: 6 },

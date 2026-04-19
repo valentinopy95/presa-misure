@@ -3,6 +3,7 @@ import {
   View, FlatList, StyleSheet, TouchableOpacity, Alert, Text,
   Modal, Pressable, ActivityIndicator, Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Print from 'expo-print';
@@ -13,6 +14,7 @@ import { getProject, deleteOpening } from '../storage/database';
 import { getToleranceW, getToleranceH } from '../storage/settings';
 import { generateHTML } from '../utils/pdfExport';
 import OpeningCard from '../components/OpeningCard';
+import { useTheme } from '../contexts/ThemeContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Project'>;
 type Route = RouteProp<RootStackParamList, 'Project'>;
@@ -21,6 +23,7 @@ export default function ProjectScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { projectId } = route.params;
+  const { theme: t } = useTheme();
   const [project, setProject] = useState<Project | null>(null);
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -129,15 +132,21 @@ export default function ProjectScreen() {
   if (!project) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: t.bg }]}>
       {/* Header info */}
-      <View style={styles.projectInfo}>
+      <LinearGradient
+        colors={['#0b1e3e', '#1565C0']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={styles.projectInfo}
+      >
         <Text style={styles.client}>{project.clientName || 'Cliente non specificato'}</Text>
         <Text style={styles.address}>{project.address || 'Indirizzo non specificato'}</Text>
-        <Text style={styles.count}>
-          {project.openings.length} apertur{project.openings.length === 1 ? 'a' : 'e'}
-        </Text>
-      </View>
+        <View style={styles.countBadge}>
+          <Text style={styles.count}>
+            {project.openings.length} apertur{project.openings.length === 1 ? 'a' : 'e'}
+          </Text>
+        </View>
+      </LinearGradient>
 
       <FlatList
         data={project.openings}
@@ -145,8 +154,8 @@ export default function ProjectScreen() {
         contentContainerStyle={project.openings.length === 0 ? styles.emptyContainer : styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Nessuna apertura</Text>
-            <Text style={styles.emptySubtitle}>Premi + per aggiungere una finestra o porta</Text>
+            <Text style={[styles.emptyTitle, { color: t.textPrimary }]}>Nessuna apertura</Text>
+            <Text style={[styles.emptySubtitle, { color: t.textSecondary }]}>Premi + per aggiungere una finestra o porta</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -170,12 +179,6 @@ export default function ProjectScreen() {
             : <Text style={styles.exportFabText}>📄 PDF</Text>}
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.materialFab}
-          onPress={() => navigation.navigate('Materials', { projectId })}
-        >
-          <Text style={styles.exportFabText}>📐 Materiale</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={styles.fab}
           onPress={() => navigation.navigate('Measurement', { projectId })}
         >
@@ -186,9 +189,9 @@ export default function ProjectScreen() {
       {/* Export Modal */}
       <Modal visible={showExportModal} transparent animationType="fade" onRequestClose={() => setShowExportModal(false)}>
         <Pressable style={styles.overlay} onPress={() => setShowExportModal(false)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
+          <Pressable style={[styles.sheet, { backgroundColor: t.card }]} onPress={() => {}}>
             <View style={styles.handle} />
-            <Text style={styles.sheetTitle}>Esporta PDF</Text>
+            <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Esporta PDF</Text>
             {project && (
               <Text style={styles.sheetFile}>
                 {project.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim()}{Platform.OS === 'web' ? '_rilievo.html' : '.pdf'}
@@ -226,20 +229,23 @@ export default function ProjectScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  projectInfo: {
-    backgroundColor: '#1565C0', padding: 16,
+  container: { flex: 1, backgroundColor: '#EEF2F7' },
+  projectInfo: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 20 },
+  client: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.1 },
+  address: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 3 },
+  countBadge: {
+    marginTop: 12, alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 4,
   },
-  client: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  address: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 2 },
-  count: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 6 },
+  count: { color: '#fff', fontSize: 12, fontWeight: '700' },
   list: { padding: 16, gap: 10 },
   emptyContainer: { flex: 1 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, marginTop: 60 },
   emptyTitle: { fontSize: 20, fontWeight: '600', color: '#333', marginBottom: 8 },
   emptySubtitle: { fontSize: 15, color: '#999', textAlign: 'center' },
   fabRow: {
-    position: 'absolute', bottom: 28, right: 24,
+    position: 'absolute', bottom: 60, right: 24,
     flexDirection: 'row', alignItems: 'center', gap: 12,
   },
   fab: {
@@ -251,11 +257,6 @@ const styles = StyleSheet.create({
   exportFab: {
     height: 48, borderRadius: 24, paddingHorizontal: 18,
     backgroundColor: '#0d47a1', alignItems: 'center', justifyContent: 'center',
-    elevation: 6, flexDirection: 'row',
-  },
-  materialFab: {
-    height: 48, borderRadius: 24, paddingHorizontal: 18,
-    backgroundColor: '#2E7D32', alignItems: 'center', justifyContent: 'center',
     elevation: 6, flexDirection: 'row',
   },
   exportFabText: { color: '#fff', fontSize: 14, fontWeight: '700' },

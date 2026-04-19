@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  StatusBar, Animated, Easing, Image,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,7 +17,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 const MENU_ITEMS = [
   {
     key: 'create',
-    icon: '📐',
+    image: require('../../assets/menu_create.gif'),
     title: 'Crea progetto misure',
     subtitle: 'Nuovo rilievo infissi',
     color: '#1565C0',
@@ -20,7 +25,7 @@ const MENU_ITEMS = [
   },
   {
     key: 'catalog',
-    icon: '📋',
+    image: require('../../assets/menu_catalog.gif'),
     title: 'Catalogo profili',
     subtitle: 'Tipologie e disegni tecnici',
     color: '#2E7D32',
@@ -28,22 +33,50 @@ const MENU_ITEMS = [
   },
   {
     key: 'saved',
-    icon: '🗂️',
+    image: require('../../assets/menu_saved.gif'),
     title: 'Rilievi salvati',
     subtitle: 'Apri un progetto esistente',
     color: '#6A1B9A',
     light: '#F3E5F5',
   },
+  {
+    key: 'materials',
+    image: require('../../assets/menu_materials.gif'),
+    title: 'Sviluppo materiale',
+    subtitle: 'Calcola il materiale per un progetto',
+    color: '#E65100',
+    light: '#FFF3E0',
+  },
 ];
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
+  const { theme: t } = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
 
-  const handleCreate = async (name: string, clientName: string, address: string) => {
+  const anims = useRef(MENU_ITEMS.map(() => new Animated.Value(0))).current;
+  const headerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(headerAnim, {
+        toValue: 1, duration: 500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.stagger(90, anims.map(a =>
+        Animated.spring(a, {
+          toValue: 1, useNativeDriver: true,
+          damping: 18, stiffness: 130,
+        })
+      )),
+    ]).start();
+  }, []);
+
+  const handleCreate = async (name: string, clientName: string, clientPhone: string, address: string) => {
     const now = new Date().toISOString();
     const project: Project = {
-      id: uuidv4(), name, clientName, address,
+      id: uuidv4(), name, clientName, clientPhone, address,
       gps: null, openings: [],
       createdAt: now, updatedAt: now,
     };
@@ -56,46 +89,101 @@ export default function HomeScreen() {
     if (key === 'create') setModalVisible(true);
     else if (key === 'catalog') navigation.navigate('Catalog');
     else if (key === 'saved') navigation.navigate('SavedProjects');
+    else if (key === 'materials') navigation.navigate('MaterialsProjects');
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0d47a1" />
+    <View style={[styles.container, { backgroundColor: t.bg }]}>
+      <StatusBar barStyle="light-content" backgroundColor="#05112b" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.logoBox}>
-          <Text style={styles.logoText}>SA</Text>
-        </View>
-        <Text style={styles.appName}>SerraApp</Text>
-        <Text style={styles.appSub}>Rilievo professionale infissi</Text>
-      </View>
+      {/* ── HEADER ── */}
+      <Animated.View style={{
+        opacity: headerAnim,
+        transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) }],
+      }}>
+        <LinearGradient
+          colors={['#05112b', '#0b2870', '#1558c8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.7, y: 1 }}
+          style={styles.header}
+        >
+          {/* Background blobs */}
+          <View style={[styles.blob, { width: 280, height: 280, top: -100, right: -90 }]} />
+          <View style={[styles.blob, { width: 180, height: 180, bottom: -50, left: -50 }]} />
+          <View style={[styles.blob, { width: 90, height: 90, top: 40, left: 60 }]} />
 
-      {/* Menu */}
-      <View style={styles.menu}>
-        {MENU_ITEMS.map(item => (
+          {/* Settings */}
           <TouchableOpacity
-            key={item.key}
-            style={styles.card}
-            onPress={() => handlePress(item.key)}
+            style={styles.settingsBtn}
+            onPress={() => navigation.navigate('Settings')}
             activeOpacity={0.75}
           >
-            <View style={[styles.iconBox, { backgroundColor: item.light }]}>
-              <Text style={styles.icon}>{item.icon}</Text>
-            </View>
-            <View style={styles.cardText}>
-              <Text style={[styles.cardTitle, { color: item.color }]}>{item.title}</Text>
-              <Text style={styles.cardSub}>{item.subtitle}</Text>
-            </View>
-            <Text style={[styles.arrow, { color: item.color }]}>›</Text>
+            <Text style={styles.settingsIcon}>⚙</Text>
           </TouchableOpacity>
-        ))}
-      </View>
 
-      {/* Settings link */}
-      <TouchableOpacity style={styles.settings} onPress={() => navigation.navigate('Settings')}>
-        <Text style={styles.settingsText}>⚙️  Impostazioni</Text>
-      </TouchableOpacity>
+          {/* App icon — large, with glow ring */}
+          <View style={styles.iconGlow}>
+            <Image
+              source={require('../../assets/icon_launcher.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
+
+          <Text style={styles.appName}>MeasureMate</Text>
+          <Text style={styles.appSub}>MISURE PROFESSIONALI PER INFISSI</Text>
+        </LinearGradient>
+      </Animated.View>
+
+      {/* ── MENU ── */}
+      <View style={styles.menu}>
+        {/* Logo brand nel menu */}
+        <View style={styles.brandCard}>
+          <Image
+            source={require('../../assets/icon_app.png')}
+            style={styles.brandImage}
+            resizeMode="contain"
+          />
+        </View>
+
+        {MENU_ITEMS.map((item, i) => {
+          const anim = anims[i];
+          return (
+            <Animated.View
+              key={item.key}
+              style={{
+                opacity: anim,
+                transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
+              }}
+            >
+              <TouchableOpacity
+                style={[styles.card, { backgroundColor: t.card }]}
+                onPress={() => handlePress(item.key)}
+                activeOpacity={0.72}
+              >
+                {/* Left accent stripe */}
+                <View style={[styles.accent, { backgroundColor: item.color }]} />
+
+                {/* Icon box */}
+                <View style={[styles.iconBox, { backgroundColor: item.light }]}>
+                  <Image source={item.image} style={styles.icon} resizeMode="contain" />
+                </View>
+
+                {/* Text */}
+                <View style={styles.cardText}>
+                  <Text style={[styles.cardTitle, { color: item.color }]}>{item.title}</Text>
+                  <Text style={[styles.cardSub, { color: t.textSecondary }]}>{item.subtitle}</Text>
+                </View>
+
+                {/* Arrow */}
+                <View style={[styles.arrowBadge, { backgroundColor: item.light }]}>
+                  <Text style={[styles.arrowChar, { color: item.color }]}>›</Text>
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          );
+        })}
+      </View>
 
       <NewProjectModal
         visible={modalVisible}
@@ -107,42 +195,110 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F4F8' },
+  container: { flex: 1, backgroundColor: '#EEF2F7' },
 
+  // ── Header ──
   header: {
-    backgroundColor: '#1565C0',
-    paddingTop: 52, paddingBottom: 32, paddingHorizontal: 28,
+    paddingTop: 54, paddingBottom: 36, paddingHorizontal: 28,
     alignItems: 'center',
+    overflow: 'hidden',
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    elevation: 10,
+    shadowColor: '#05112b',
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
   },
-  logoBox: {
-    width: 56, height: 56, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
+  blob: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  logoText: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -1 },
-  appName: { color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: 0.5 },
-  appSub: { color: 'rgba(255,255,255,0.65)', fontSize: 13, marginTop: 4 },
+  iconGlow: {
+    marginBottom: 14,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: 'rgba(100,170,255,0.45)',
+    elevation: 18,
+    shadowColor: '#3a80e0',
+    shadowOpacity: 0.65,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 6 },
+    overflow: 'hidden',
+  },
+  logoImage: {
+    width: 100, height: 100,
+    borderRadius: 24,
+  },
+  appName: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    textShadowColor: 'rgba(0,30,120,0.5)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 10,
+  },
+  appSub: {
+    color: 'rgba(140,190,255,0.9)',
+    fontSize: 10,
+    marginTop: 7,
+    letterSpacing: 2.5,
+    fontWeight: '700',
+  },
 
-  menu: { padding: 20, gap: 12, marginTop: 8 },
+  // ── Menu ──
+  menu: { padding: 18, gap: 11, marginTop: 6 },
 
   card: {
     backgroundColor: '#fff',
-    borderRadius: 16, padding: 18,
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    elevation: 2,
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    borderRadius: 18,
+    flexDirection: 'row', alignItems: 'center',
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#0c2d75', shadowOpacity: 0.10, shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
   },
+  accent: { width: 4, alignSelf: 'stretch' },
   iconBox: {
-    width: 52, height: 52, borderRadius: 13,
+    width: 64, height: 64,
+    margin: 12,
+    borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
   },
-  icon: { fontSize: 26 },
-  cardText: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  cardSub: { fontSize: 12, color: '#888' },
-  arrow: { fontSize: 26, fontWeight: '300' },
+  icon: { width: 50, height: 50 },
+  cardText: { flex: 1, paddingVertical: 14, paddingRight: 4 },
+  cardTitle: { fontSize: 14, fontWeight: '800', marginBottom: 3, letterSpacing: 0.1 },
+  cardSub: { fontSize: 11.5, color: '#8a9ab0', fontWeight: '500', letterSpacing: 0.1 },
+  arrowBadge: {
+    width: 30, height: 30, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 14,
+  },
+  arrowChar: { fontSize: 22, fontWeight: '700', lineHeight: 28 },
 
-  settings: { alignItems: 'center', marginTop: 'auto', paddingVertical: 24 },
-  settingsText: { fontSize: 14, color: '#999', fontWeight: '600' },
+  // ── Brand card ──
+  brandCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    elevation: 3,
+    shadowColor: '#0c2d75', shadowOpacity: 0.10, shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
+  },
+  brandImage: {
+    width: 90, height: 90,
+  },
+
+  // ── Settings button ──
+  settingsBtn: {
+    position: 'absolute',
+    top: 52, right: 18,
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  settingsIcon: { fontSize: 17, color: 'rgba(255,255,255,0.85)' },
 });

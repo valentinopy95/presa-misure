@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Opening } from '../types';
+import { Opening, OpeningStyle } from '../types';
 import StyleLabel from './StyleLabel';
 
 interface Props {
@@ -11,27 +11,52 @@ interface Props {
 
 const formatDim = (v: number | null) => (v ? `${v}` : '—');
 
+function accentColor(style: OpeningStyle | null): string {
+  if (!style) return '#90A4AE';
+  if (style.startsWith('window'))   return '#1565C0';
+  if (style.startsWith('door'))     return '#6A1B9A';
+  if (style.startsWith('shutter'))  return '#2E7D32';
+  if (style === 'roller_blind')     return '#E65100';
+  if (style.startsWith('subframe')) return '#5D4037';
+  if (style.startsWith('mosquito')) return '#00838F';
+  return '#455A64';
+}
+
 export default function OpeningCard({ opening, onPress, onDelete }: Props) {
   const hasDims = opening.width || opening.height;
+  const color = accentColor(opening.style);
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      {/* Foto thumbnail se presente */}
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.78}>
+      {/* Left accent */}
+      <View style={[styles.accent, { backgroundColor: color }]}/>
+
+      {/* Photo thumbnail */}
       {opening.photos.length > 0 && (
-        <Image source={{ uri: opening.photos[0].uri }} style={styles.thumb} />
+        <Image source={{ uri: opening.photos[0].uri }} style={styles.thumb}/>
       )}
+
+      {/* Body */}
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{opening.name}</Text>
 
+        {opening.style && <StyleLabel style={opening.style} compact/>}
+
         {hasDims && (
           <View style={styles.dims}>
-            <Text style={styles.dim}>L: <Text style={styles.dimVal}>{formatDim(opening.width)}</Text> mm</Text>
+            <View style={[styles.dimChip, { borderColor: color + '40' }]}>
+              <Text style={styles.dimLabel}>L</Text>
+              <Text style={[styles.dimVal, { color }]}>{formatDim(opening.width)}</Text>
+              <Text style={styles.dimUnit}>mm</Text>
+            </View>
             <Text style={styles.dimSep}>×</Text>
-            <Text style={styles.dim}>H: <Text style={styles.dimVal}>{formatDim(opening.height)}</Text> mm</Text>
+            <View style={[styles.dimChip, { borderColor: color + '40' }]}>
+              <Text style={styles.dimLabel}>H</Text>
+              <Text style={[styles.dimVal, { color }]}>{formatDim(opening.height)}</Text>
+              <Text style={styles.dimUnit}>mm</Text>
+            </View>
           </View>
         )}
-
-        {opening.style && <StyleLabel style={opening.style} compact />}
 
         {(opening.profileSeries || opening.glassType) && (
           <View style={styles.specRow}>
@@ -44,25 +69,31 @@ export default function OpeningCard({ opening, onPress, onDelete }: Props) {
           </View>
         )}
 
-        <View style={styles.badges}>
-          {opening.photos.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>📷 {opening.photos.length}</Text>
-            </View>
-          )}
-          {!!opening.textNote && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>📝</Text>
-            </View>
-          )}
-        </View>
+        {(opening.photos.length > 0 || !!opening.textNote) && (
+          <View style={styles.badges}>
+            {opening.photos.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>📷 {opening.photos.length}</Text>
+              </View>
+            )}
+            {!!opening.textNote && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>📝 Nota</Text>
+              </View>
+            )}
+          </View>
+        )}
       </View>
+
+      {/* Delete */}
       <TouchableOpacity
         style={styles.delete}
         onPress={onDelete}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Text style={styles.deleteIcon}>🗑️</Text>
+        <View style={styles.deleteBox}>
+          <Text style={styles.deleteIcon}>✕</Text>
+        </View>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -71,28 +102,44 @@ export default function OpeningCard({ opening, onPress, onDelete }: Props) {
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row', backgroundColor: '#fff',
-    borderRadius: 12, overflow: 'hidden', elevation: 2,
+    borderRadius: 16, overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#1a3a5c', shadowOpacity: 0.09, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
   },
-  thumb: { width: 80, height: 80, resizeMode: 'cover' },
-  body: { flex: 1, padding: 12 },
-  name: { fontSize: 15, fontWeight: '600', color: '#222' },
-  dims: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  dim: { fontSize: 13, color: '#666' },
-  dimVal: { fontWeight: '700', color: '#1565C0', fontSize: 15 },
-  dimSep: { color: '#AAA', marginHorizontal: 6, fontSize: 13 },
-  specRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 5 },
+  accent: { width: 4 },
+  thumb: { width: 76, height: 76, resizeMode: 'cover' },
+  body: { flex: 1, padding: 13 },
+  name: { fontSize: 15, fontWeight: '800', color: '#1a2a3a', marginBottom: 4 },
+
+  dims: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  dimChip: {
+    flexDirection: 'row', alignItems: 'baseline', gap: 3,
+    backgroundColor: '#F4F7FC', borderRadius: 8, borderWidth: 1,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  dimLabel: { fontSize: 10, fontWeight: '700', color: '#8a9ab0' },
+  dimVal: { fontSize: 15, fontWeight: '800' },
+  dimUnit: { fontSize: 10, color: '#8a9ab0', fontWeight: '600' },
+  dimSep: { color: '#CCC', fontSize: 13 },
+
+  specRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
   specTag: {
-    fontSize: 10, fontWeight: '600', color: '#555',
-    backgroundColor: '#F0F0F0', borderRadius: 6,
-    paddingHorizontal: 6, paddingVertical: 2,
+    fontSize: 10, fontWeight: '700', color: '#556070',
+    backgroundColor: '#EEF2F7', borderRadius: 6,
+    paddingHorizontal: 7, paddingVertical: 2,
   },
   specGlass: { backgroundColor: '#E3F2FD', color: '#1565C0' },
 
-  badges: { flexDirection: 'row', gap: 6, marginTop: 6 },
+  badges: { flexDirection: 'row', gap: 6, marginTop: 7 },
   badge: {
     backgroundColor: '#F0F4FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10,
   },
-  badgeText: { fontSize: 11, color: '#1565C0' },
-  delete: { padding: 12, justifyContent: 'center' },
-  deleteIcon: { fontSize: 18 },
+  badgeText: { fontSize: 11, color: '#1565C0', fontWeight: '600' },
+
+  delete: { justifyContent: 'center', paddingHorizontal: 14 },
+  deleteBox: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: '#FEE8E8', alignItems: 'center', justifyContent: 'center',
+  },
+  deleteIcon: { fontSize: 12, color: '#D32F2F', fontWeight: '800' },
 });

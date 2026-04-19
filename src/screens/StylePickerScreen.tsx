@@ -23,9 +23,10 @@ const STYLES: StyleOption[] = [
   { value: 'window_sliding',   label: 'Scorrevole',      category: 'Finestre'    },
   { value: 'window_tilt_turn', label: 'Vasistas',        category: 'Finestre'    },
   // Porte
+  { value: 'door_single',      label: 'Battente',        category: 'Porte'       },
+  { value: 'door_double',      label: 'Doppio battente', category: 'Porte'       },
   { value: 'door_entrance',    label: 'Portoncino',      category: 'Porte'       },
   { value: 'door_sliding',     label: 'Scorrevole',      category: 'Porte'       },
-  { value: 'door_french',      label: 'Porta finestra',  category: 'Porte'       },
   // Persiane
   { value: 'shutter_single',   label: 'Finestra',        category: 'Persiane'    },
   { value: 'shutter_double',   label: 'Portafinestra',   category: 'Persiane'    },

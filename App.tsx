@@ -4,6 +4,7 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 
 import { RootStackParamList } from './src/types';
 import HomeScreen from './src/screens/HomeScreen';
@@ -14,19 +15,24 @@ import MeasurementScreen from './src/screens/MeasurementScreen';
 import StylePickerScreen from './src/screens/StylePickerScreen';
 import DocumentScreen from './src/screens/DocumentScreen';
 import MaterialsScreen from './src/screens/MaterialsScreen';
+import MaterialsProjectsScreen from './src/screens/MaterialsProjectsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function App() {
+function AppNavigator() {
+  const { theme } = useTheme();
+  const headerBg = '#0c2d75';
   return (
     <NavigationContainer>
       <StatusBar style="light" />
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: '#1565C0' },
+          headerStyle: { backgroundColor: headerBg },
           headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '700' },
+          headerTitleStyle: { fontWeight: '800', fontSize: 16, letterSpacing: 0.3 },
+          headerBackTitleVisible: false,
+          headerShadowVisible: false,
         }}
       >
         <Stack.Screen
@@ -72,11 +78,24 @@ export default function App() {
           options={{ title: 'Calcolo materiale' }}
         />
         <Stack.Screen
+          name="MaterialsProjects"
+          component={MaterialsProjectsScreen}
+          options={{ title: 'Sviluppo materiale' }}
+        />
+        <Stack.Screen
           name="Settings"
           component={SettingsScreen}
           options={{ title: 'Impostazioni' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppNavigator />
+    </ThemeProvider>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { View, FlatList, StyleSheet, Alert, Text } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Project, RootStackParamList } from '../types';
@@ -10,6 +11,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'SavedProjects'>;
 
 export default function SavedProjectsScreen() {
   const navigation = useNavigation<Nav>();
+  const { theme: t } = useTheme();
   const [projects, setProjects] = useState<Project[]>([]);
 
   useFocusEffect(
@@ -29,15 +31,16 @@ export default function SavedProjectsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: t.bg }]}>
       <FlatList
         data={projects}
         keyExtractor={item => item.id}
         contentContainerStyle={projects.length === 0 ? styles.emptyContainer : styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Nessun rilievo salvato</Text>
-            <Text style={styles.emptySubtitle}>Torna alla home e crea un nuovo progetto</Text>
+            <Text style={styles.emptyIcon}>🗂️</Text>
+            <Text style={[styles.emptyTitle, { color: t.textPrimary }]}>Nessun rilievo salvato</Text>
+            <Text style={[styles.emptySubtitle, { color: t.textSecondary }]}>Torna alla home e crea un nuovo progetto</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -53,10 +56,11 @@ export default function SavedProjectsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1, backgroundColor: '#EEF2F7' },
   list: { padding: 16, gap: 12 },
   emptyContainer: { flex: 1 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, marginTop: 60 },
-  emptyTitle: { fontSize: 20, fontWeight: '600', color: '#333', marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: '#999', textAlign: 'center' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, marginTop: 80 },
+  emptyIcon: { fontSize: 52, marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#1a2a3a', marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, color: '#8a9ab0', textAlign: 'center', lineHeight: 20 },
 });

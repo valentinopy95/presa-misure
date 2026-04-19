@@ -46,6 +46,11 @@ export interface Opening {
   boxHeight: number | null;   // mm altezza cassonetto (solo roller_blind)
   leafCount: number | null;   // numero ante
   openingSide: OpeningSide | null; // lato apertura
+  hasFascia: boolean | null;       // fascia centrale (solo porte)
+  hasSoglia: boolean | null;       // soglia ribassata (solo porte)
+  sopraluce: boolean;              // pannello fisso sopra l'infisso
+  sopraluceHeight: number | null;  // altezza luce sopraluce (mm)
+  blindType: 'cintino' | 'motore' | null; // tipo azionamento (solo monoblocco)
   style: OpeningStyle | null;
   profileSeries: string | null;   // serie profilo (es. EKOS 100, EKU 66 TT)
   glassType: string | null;        // tipo vetro (es. Doppio 4/16/4 Ar)
@@ -65,6 +70,7 @@ export interface Project {
   id: string;
   name: string;
   clientName: string;
+  clientPhone: string;
   address: string;
   gps: GpsCoords | null;
   openings: Opening[];
@@ -81,5 +87,6 @@ export type RootStackParamList = {
   StylePicker: { projectId: string; openingId: string };
   Document: { projectId: string };
   Materials: { projectId: string };
+  MaterialsProjects: undefined;
   Settings: undefined;
 };

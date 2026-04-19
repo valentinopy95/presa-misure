@@ -75,12 +75,15 @@ export function calculateMaterials(openings: Opening[], riattestattura = 25): Ma
   };
   // 90° cut pieces grouped by profile category
   const b90: Record<string, number[]> = {
-    'Soglia / fascia': [],
-    'Zoccolo':         [],
-    'Mezza lamella':   [],
-    'Posizionatore':   [],
-    'Lamella':         [],
-    'Riporto':         [],
+    'Soglia ribassata': [],
+    'Fascia':           [],
+    'Fermavetro':    [],
+    'Traverso':      [],
+    'Zoccolo':       [],
+    'Mezza lamella': [],
+    'Posizionatore': [],
+    'Lamella':       [],
+    'Riporto':       [],
   };
 
   for (const o of openings) {
@@ -110,44 +113,70 @@ export function calculateMaterials(openings: Opening[], riattestattura = 25): Ma
       for (let i = 0; i < n - 1; i++) {
         b90['Riporto'].push(H);
       }
+
+      // Sopraluce: traverso (W − 50) + fermavetro (2×W + 2×SLH) a 90°
+      if ((o.sopraluce ?? false) && o.sopraluceHeight) {
+        const SLH = o.sopraluceHeight;
+        b90['Traverso'].push(Math.max(1, W - 50));
+        b90['Fermavetro'].push(W, W, SLH, SLH);
+      }
     }
 
     if (isDoor) {
-      // Telaio fisso porta: 3 lati (traverso superiore + 2 montanti) a 45°
-      // Il basso è la soglia, tagliata a 90°
-      b45['Profilo telaio'].push(W, H, H);
-      b90['Soglia / fascia'].push(W);
+      if (o.hasSoglia) {
+        // Soglia ribassata ON: telaio 3 lati (traverso + 2 montanti) + soglia a 90°
+        b45['Profilo telaio'].push(W, H, H);
+        b90['Soglia ribassata'].push(W);
+      } else {
+        // Soglia ribassata OFF: telaio 4 lati (rettangolo chiuso)
+        b45['Profilo telaio'].push(W, W, H, H);
+      }
+      if (o.hasFascia) b90['Fascia'].push(W);
 
       // Anta: 4 lati per ogni foglio a 45°
       const leafW = Math.round(W / n);
       for (let i = 0; i < n; i++) {
         b45['Profilo anta'].push(leafW, leafW, H, H);
       }
+
+      // Sopraluce: traverso (W − 50) + fermavetro (2×W + 2×SLH) a 90°
+      if ((o.sopraluce ?? false) && o.sopraluceHeight && style !== 'door_sliding') {
+        const SLH = o.sopraluceHeight;
+        b90['Traverso'].push(Math.max(1, W - 50));
+        b90['Fermavetro'].push(W, W, SLH, SLH);
+      }
     }
 
     if (isShutter) {
-      const isPF  = H > PF_THRESHOLD; // porta-finestra → aggiunge fascia centrale
+      const isPF  = style === 'shutter_double' || H > PF_THRESHOLD;
       const leafW = Math.round(W / n);
+      const innerW = Math.max(0, leafW - 50); // misura anta - 5cm
 
-      // Telaio fisso persiana: traverso superiore (W) + 2 montanti (H) a 45°
-      // Il basso è lo zoccolo fisso (incluso nel telaio a 90°)
+      // Telaio fisso: traverso superiore (W) + 2 montanti (H) a 45°
       b45['Profilo telaio'].push(W, H, H);
 
       for (let i = 0; i < n; i++) {
-        // Anta: traverso anta (leafW) + 2 montanti (H) a 45°
+        // Anta: traverso (leafW) + 2 montanti (H) a 45°
         b45['Profilo anta'].push(leafW, H, H);
 
-        // Componenti interni all'anta — tutti a 90°
-        b90['Zoccolo'].push(leafW);
-        if (isPF) b90['Soglia / fascia'].push(leafW);
-        b90['Mezza lamella'].push(leafW);
-        b90['Posizionatore'].push(leafW);
+        // Zoccolo: 1 per anta
+        b90['Zoccolo'].push(innerW);
+
+        // Mezza lamella + Posizionatore: 2 pezzi ciascuno per finestra, 4 per portafinestra
+        const mlCount = isPF ? 4 : 2;
+        for (let j = 0; j < mlCount; j++) {
+          b90['Mezza lamella'].push(innerW);
+          b90['Posizionatore'].push(innerW);
+        }
+
+        // Fascia: 1 per anta solo portafinestra
+        if (isPF) b90['Fascia'].push(innerW);
 
         // Lamelle: riempiono l'altezza netta dell'anta
         const netH = H - ZOCCOLO_H - (isPF ? FASCIA_H : 0);
         const slats = Math.max(0, Math.floor(netH / SLAT_PITCH));
         for (let j = 0; j < slats; j++) {
-          b90['Lamella'].push(leafW);
+          b90['Lamella'].push(innerW);
         }
       }
     }

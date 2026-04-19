@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Presa Misure",
-    "slug": "presa-misure",
+    "name": "MeasureMate",
+    "slug": "measuremate",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon_app.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon_app.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,

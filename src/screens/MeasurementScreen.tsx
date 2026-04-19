@@ -53,6 +53,11 @@ const emptyOpening = (): Opening => ({
   boxHeight: null,
   leafCount: null,
   openingSide: null,
+  hasFascia: null,
+  hasSoglia: null,
+  sopraluce: false,
+  sopraluceHeight: null,
+  blindType: null,
   style: null,
   profileSeries: null,
   glassType: null,
@@ -75,6 +80,10 @@ export default function MeasurementScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
+  const normalizeOpening = (o: Opening): Opening => ({
+    sopraluce: false, sopraluceHeight: null, ...o,
+  });
+
   useEffect(() => {
     getToleranceW().then(setToleranceW);
     getToleranceH().then(setToleranceH);
@@ -82,22 +91,21 @@ export default function MeasurementScreen() {
     if (openingId) {
       getProject(projectId).then(p => {
         const existing = p?.openings.find(o => o.id === openingId);
-        if (existing) setOpening(existing);
+        if (existing) setOpening(normalizeOpening(existing));
       });
     }
   }, [openingId, projectId]);
 
   useEffect(() => {
+    const currentId = openingId ?? opening.id;
     const unsub = navigation.addListener('focus', () => {
       getToleranceW().then(setToleranceW);
       getToleranceH().then(setToleranceH);
       getDimMode().then(setDimMode);
-      if (openingId) {
-        getProject(projectId).then(p => {
-          const existing = p?.openings.find(o => o.id === openingId);
-          if (existing) setOpening(existing);
-        });
-      }
+      getProject(projectId).then(p => {
+        const existing = p?.openings.find(o => o.id === currentId);
+        if (existing) setOpening(normalizeOpening(existing));
+      });
     });
     return unsub;
   }, [navigation, openingId, projectId]);
@@ -112,6 +120,11 @@ export default function MeasurementScreen() {
   const isSliding       = opening.style === 'door_sliding' || opening.style === 'window_sliding';
   const isMosquitoNoSide = opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup';
   const hideLeafCount   = isSubframe || opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup' || opening.style === 'mosquito_lateral';
+  const isDoor          = opening.style?.startsWith('door') ?? false;
+  const isWindow        = opening.style?.startsWith('window') ?? false;
+  const showFascia      = isDoor && opening.style !== 'door_sliding';
+  const showSoglia      = isDoor && opening.style !== 'door_sliding';
+  const showSopraluce   = (isWindow || (isDoor && !isSliding)) && !isMonoblocco && !isSubframe;
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchCameraAsync({
@@ -181,6 +194,11 @@ export default function MeasurementScreen() {
           openingSide={opening.openingSide}
           displayWidth={DRAWING_W - 16}
           dimMode={dimMode}
+          hasFascia={opening.hasFascia}
+          hasSoglia={opening.hasSoglia}
+          blindType={opening.blindType}
+          sopraluce={opening.sopraluce}
+          sopraluceHeight={opening.sopraluceHeight}
         />
         {!opening.style && (
           <Text style={styles.drawingPlaceholder}>
@@ -274,7 +292,7 @@ export default function MeasurementScreen() {
       </View>
       <Text style={styles.toleranceHint}>Tolleranze modificabili in Impostazioni ⚙️</Text>
 
-      {/* ── Altezza cassonetto (solo monoblocco) ── */}
+      {/* ── Altezza cassonetto + azionamento (solo monoblocco) ── */}
       {isMonoblocco && (
         <>
           <Text style={styles.label}>Altezza cassonetto</Text>
@@ -295,6 +313,20 @@ export default function MeasurementScreen() {
                 <Text style={styles.unit}>mm</Text>
               </View>
             </View>
+          </View>
+          <Text style={styles.label}>Tipo azionamento</Text>
+          <View style={styles.leafRow}>
+            {(['cintino', 'motore'] as const).map(type => (
+              <TouchableOpacity
+                key={type}
+                style={[styles.leafBtn, opening.blindType === type && styles.leafBtnActive]}
+                onPress={() => update({ blindType: opening.blindType === type ? null : type })}
+              >
+                <Text style={[styles.leafBtnText, opening.blindType === type && styles.leafBtnTextActive]}>
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </>
       )}
@@ -339,6 +371,64 @@ export default function MeasurementScreen() {
         </>
       )}
 
+      {/* ── Soglia ribassata (solo porte non scorrevoli) ── */}
+      {showSoglia && (
+        <>
+          <Text style={styles.label}>Soglia ribassata</Text>
+          <TouchableOpacity
+            style={[styles.toggleBtn, opening.hasSoglia === true && styles.toggleBtnActive]}
+            onPress={() => update({ hasSoglia: opening.hasSoglia === true ? null : true })}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.toggleDot, opening.hasSoglia === true && styles.toggleDotActive]}/>
+            <Text style={[styles.toggleText, opening.hasSoglia === true && styles.toggleTextActive]}>
+              {opening.hasSoglia === true ? 'Presente' : 'Non presente'}
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+
+      {/* ── Sopraluce (pannello fisso sopra l'infisso) ── */}
+      {showSopraluce && (
+        <>
+          <Text style={styles.label}>Sopraluce</Text>
+          <TouchableOpacity
+            style={[styles.toggleBtn, opening.sopraluce && styles.toggleBtnActive]}
+            onPress={() => update({ sopraluce: !opening.sopraluce, sopraluceHeight: opening.sopraluce ? null : opening.sopraluceHeight })}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.toggleDot, opening.sopraluce && styles.toggleDotActive]}/>
+            <Text style={[styles.toggleText, opening.sopraluce && styles.toggleTextActive]}>
+              {opening.sopraluce ? 'Presente' : 'Non presente'}
+            </Text>
+          </TouchableOpacity>
+          {opening.sopraluce && (
+            <>
+              <Text style={styles.label}>Altezza sopraluce</Text>
+              <View style={styles.dimCard}>
+                <View style={styles.dimRow}>
+                  <View style={styles.dimLabelCol}>
+                    <Text style={styles.dimType}>LUCE</Text>
+                    <Text style={styles.dimDesc}>altezza pannello sopraluce</Text>
+                  </View>
+                  <View style={styles.dimInputWrap}>
+                    <TextInput
+                      style={styles.dimField}
+                      placeholder="—"
+                      keyboardType="numeric"
+                      value={opening.sopraluceHeight?.toString() ?? ''}
+                      onChangeText={t => update({ sopraluceHeight: t ? Number(t) : null })}
+                    />
+                    <Text style={styles.unit}>mm</Text>
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+        </>
+      )}
+
       {/* ── Note ── */}
       <Text style={styles.label}>Note</Text>
       <TextInput
@@ -352,20 +442,24 @@ export default function MeasurementScreen() {
 
       {/* ── Foto ── */}
       <Text style={styles.label}>Foto</Text>
-      <View style={styles.photoRow}>
-        {opening.photos.map(photo => (
-          <View key={photo.id} style={styles.photoThumb}>
-            <Image source={{ uri: photo.uri }} style={styles.thumb}/>
-            <TouchableOpacity style={styles.removePhoto} onPress={() => removePhoto(photo.id)}>
-              <Text style={styles.removePhotoText}>×</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
-        <TouchableOpacity style={styles.addPhoto} onPress={pickPhoto}>
+      {opening.photos.length > 0 && (
+        <View style={styles.photoGrid}>
+          {opening.photos.map(photo => (
+            <View key={photo.id} style={styles.photoThumb}>
+              <Image source={{ uri: photo.uri }} style={styles.thumb}/>
+              <TouchableOpacity style={styles.removePhoto} onPress={() => removePhoto(photo.id)}>
+                <Text style={styles.removePhotoText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+      <View style={styles.photoButtons}>
+        <TouchableOpacity style={styles.addPhotoBtn} onPress={pickPhoto} activeOpacity={0.75}>
           <Text style={styles.addPhotoIcon}>📷</Text>
           <Text style={styles.addPhotoText}>Fotocamera</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.addPhoto} onPress={pickFromGallery}>
+        <TouchableOpacity style={styles.addPhotoBtn} onPress={pickFromGallery} activeOpacity={0.75}>
           <Text style={styles.addPhotoIcon}>🖼️</Text>
           <Text style={styles.addPhotoText}>Galleria</Text>
         </TouchableOpacity>
@@ -482,22 +576,25 @@ const styles = StyleSheet.create({
   sideBtnText: { fontSize: 13, fontWeight: '600', color: '#888' },
   sideBtnTextActive: { color: '#1565C0' },
 
-  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  photoThumb: { width: 80, height: 80, position: 'relative' },
-  thumb: { width: 80, height: 80, borderRadius: 8 },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  photoThumb: { width: 78, height: 78, position: 'relative' },
+  thumb: { width: 78, height: 78, borderRadius: 10 },
   removePhoto: {
-    position: 'absolute', top: -8, right: -8,
+    position: 'absolute', top: -6, right: -6,
     backgroundColor: '#E53935', width: 22, height: 22,
     borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+    elevation: 3,
   },
-  removePhotoText: { color: '#fff', fontSize: 15, lineHeight: 18 },
-  addPhoto: {
-    width: 80, height: 80, borderRadius: 8,
-    borderWidth: 2, borderColor: '#1565C0', borderStyle: 'dashed',
-    alignItems: 'center', justifyContent: 'center',
+  removePhotoText: { color: '#fff', fontSize: 12, fontWeight: '800', lineHeight: 16 },
+  photoButtons: { flexDirection: 'row', gap: 10 },
+  addPhotoBtn: {
+    flex: 1, height: 54, borderRadius: 14,
+    backgroundColor: '#EEF2F7',
+    borderWidth: 1.5, borderColor: '#1565C0', borderStyle: 'dashed',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   addPhotoIcon: { fontSize: 22 },
-  addPhotoText: { fontSize: 10, color: '#1565C0', marginTop: 2 },
+  addPhotoText: { fontSize: 13, color: '#1565C0', fontWeight: '700' },
 
   // Profile series chips
   chipScroll: { marginBottom: 4 },
@@ -519,6 +616,21 @@ const styles = StyleSheet.create({
   glassBtnActive: { borderColor: '#1565C0', backgroundColor: '#E3F2FD' },
   glassBtnText: { fontSize: 12, fontWeight: '600', color: '#888' },
   glassBtnTextActive: { color: '#1565C0' },
+
+  // Toggle on/off button
+  toggleBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12,
+    borderWidth: 2, borderColor: '#E0E0E0', backgroundColor: '#fff',
+  },
+  toggleBtnActive: { borderColor: '#1565C0', backgroundColor: '#E3F2FD' },
+  toggleDot: {
+    width: 14, height: 14, borderRadius: 7,
+    backgroundColor: '#CCC',
+  },
+  toggleDotActive: { backgroundColor: '#1565C0' },
+  toggleText: { fontSize: 15, fontWeight: '700', color: '#888' },
+  toggleTextActive: { color: '#1565C0' },
 
   saveButton: {
     backgroundColor: '#1565C0', borderRadius: 12,

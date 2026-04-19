@@ -1,60 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Switch,
 } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 import {
-  KEYS,
   DEFAULT_TOLERANCE_W, DEFAULT_TOLERANCE_H, DEFAULT_RIATTESTATTURA,
   getToleranceW, setToleranceW,
   getToleranceH, setToleranceH,
   getRiattestattura, setRiattestattura,
-  getDimMode, setDimMode,
 } from '../storage/settings';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserRole } from '../types';
-
-const ROLES: { value: UserRole; label: string; description: string; emoji: string }[] = [
-  {
-    value: 'builder',
-    label: 'Costruttore / Cliente',
-    description: 'Richiede un preventivo al fornitore di finestre o porte',
-    emoji: '🏗️',
-  },
-  {
-    value: 'sales',
-    label: 'Commerciale',
-    description: 'Registra misure indicative per una quotazione preliminare',
-    emoji: '💼',
-  },
-  {
-    value: 'surveyor',
-    label: 'Tecnico rilevatore',
-    description: 'Registra misure precise per la produzione',
-    emoji: '📐',
-  },
-];
 
 export default function SettingsScreen() {
-  const [role, setRole] = useState<UserRole | null>(null);
+  const { theme, toggleDark } = useTheme();
+  const t = theme;
   const [tolWText, setTolWText] = useState<string>(String(DEFAULT_TOLERANCE_W));
   const [tolHText, setTolHText] = useState<string>(String(DEFAULT_TOLERANCE_H));
   const [riattText, setRiattText] = useState<string>(String(DEFAULT_RIATTESTATTURA));
-  const [dimMode, setDimModeState] = useState<'taglio' | 'luce'>('taglio');
 
   useEffect(() => {
-    AsyncStorage.getItem(KEYS.ROLE).then(v => {
-      if (v) setRole(v as UserRole);
-    });
-    getToleranceW().then(t => setTolWText(String(t)));
-    getToleranceH().then(t => setTolHText(String(t)));
-    getRiattestattura().then(r => setRiattText(String(r)));
-    getDimMode().then(setDimModeState);
+    getToleranceW().then(v => setTolWText(String(v)));
+    getToleranceH().then(v => setTolHText(String(v)));
+    getRiattestattura().then(v => setRiattText(String(v)));
   }, []);
-
-  const selectRole = async (r: UserRole) => {
-    setRole(r);
-    await AsyncStorage.setItem(KEYS.ROLE, r);
-  };
 
   const handleTolWEnd = () => {
     const n = parseInt(tolWText, 10);
@@ -81,23 +48,43 @@ export default function SettingsScreen() {
   const exH = 2200 - (parseInt(tolHText, 10) || 0);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: t.bg }]} contentContainerStyle={styles.content}>
+
+      {/* ── Modalità scura ── */}
+      <Text style={[styles.sectionTitle, { color: t.textPrimary, borderLeftColor: '#1565C0' }]}>Modalità scura</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>Attiva il tema scuro in tutta l'app</Text>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card, borderColor: t.cardBorder }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>TEMA</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>
+              {t.dark ? 'Scuro' : 'Chiaro'}
+            </Text>
+          </View>
+          <Switch
+            value={t.dark}
+            onValueChange={toggleDark}
+            trackColor={{ false: '#ccd5de', true: '#1565C0' }}
+            thumbColor={t.dark ? '#e4eeff' : '#fff'}
+          />
+        </View>
+      </View>
 
       {/* ── Tolleranza Larghezza ── */}
-      <Text style={styles.sectionTitle}>Tolleranza taglio larghezza</Text>
-      <Text style={styles.sectionSub}>
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Tolleranza taglio larghezza</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
         Differenza applicata alla larghezza luce per ottenere la misura taglio
       </Text>
-      <View style={styles.toleranceCard}>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
         <View style={styles.toleranceRow}>
           <View>
-            <Text style={styles.toleranceLabel}>Luce largh.</Text>
-            <Text style={styles.toleranceFormula}>es. 1200 mm</Text>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Luce largh.</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 1200 mm</Text>
           </View>
           <Text style={styles.toleranceMinus}>−</Text>
           <View style={styles.toleranceInputWrap}>
             <TextInput
-              style={styles.toleranceInput}
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
               keyboardType="numeric"
               value={tolWText}
               onChangeText={setTolWText}
@@ -106,31 +93,31 @@ export default function SettingsScreen() {
               maxLength={4}
               selectTextOnFocus
             />
-            <Text style={styles.toleranceUnit}>mm</Text>
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
           </View>
           <Text style={styles.toleranceMinus}>=</Text>
           <View>
-            <Text style={styles.toleranceLabel}>Taglio largh.</Text>
-            <Text style={styles.toleranceFormula}>{exW} mm</Text>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Taglio largh.</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>{exW} mm</Text>
           </View>
         </View>
       </View>
 
       {/* ── Tolleranza Altezza ── */}
-      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Tolleranza taglio altezza</Text>
-      <Text style={styles.sectionSub}>
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Tolleranza taglio altezza</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
         Differenza applicata all'altezza luce per ottenere la misura taglio
       </Text>
-      <View style={styles.toleranceCard}>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
         <View style={styles.toleranceRow}>
           <View>
-            <Text style={styles.toleranceLabel}>Luce altez.</Text>
-            <Text style={styles.toleranceFormula}>es. 2200 mm</Text>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Luce altez.</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 2200 mm</Text>
           </View>
           <Text style={styles.toleranceMinus}>−</Text>
           <View style={styles.toleranceInputWrap}>
             <TextInput
-              style={styles.toleranceInput}
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
               keyboardType="numeric"
               value={tolHText}
               onChangeText={setTolHText}
@@ -139,30 +126,30 @@ export default function SettingsScreen() {
               maxLength={4}
               selectTextOnFocus
             />
-            <Text style={styles.toleranceUnit}>mm</Text>
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
           </View>
           <Text style={styles.toleranceMinus}>=</Text>
           <View>
-            <Text style={styles.toleranceLabel}>Taglio altez.</Text>
-            <Text style={styles.toleranceFormula}>{exH} mm</Text>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Taglio altez.</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>{exH} mm</Text>
           </View>
         </View>
       </View>
 
       {/* ── Riattestattura ── */}
-      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Riattestattura taglio 45°</Text>
-      <Text style={styles.sectionSub}>
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Riattestattura taglio 45°</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
         Spreco per riattestattura tra un pezzo e l'altro sulle barre a taglio 45° (default 25 mm)
       </Text>
-      <View style={styles.toleranceCard}>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
         <View style={styles.toleranceRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.toleranceLabel}>Spreco per taglio</Text>
-            <Text style={styles.toleranceFormula}>es. 25 mm</Text>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Spreco per taglio</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 25 mm</Text>
           </View>
           <View style={styles.toleranceInputWrap}>
             <TextInput
-              style={styles.toleranceInput}
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
               keyboardType="numeric"
               value={riattText}
               onChangeText={setRiattText}
@@ -171,66 +158,28 @@ export default function SettingsScreen() {
               maxLength={2}
               selectTextOnFocus
             />
-            <Text style={styles.toleranceUnit}>mm</Text>
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
           </View>
         </View>
       </View>
 
-      {/* ── Visualizzazione misure ── */}
-      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Misura visualizzata nel disegno</Text>
-      <Text style={styles.sectionSub}>
-        Scegli se mostrare la misura luce o taglio nelle frecce del disegno
-      </Text>
-      <View style={styles.toggleRow}>
-        {(['taglio', 'luce'] as const).map(mode => (
-          <TouchableOpacity
-            key={mode}
-            style={[styles.toggleBtn, dimMode === mode && styles.toggleBtnActive]}
-            onPress={() => { setDimModeState(mode); setDimMode(mode); }}
-          >
-            <Text style={[styles.toggleBtnText, dimMode === mode && styles.toggleBtnTextActive]}>
-              {mode === 'taglio' ? 'Taglio (Lt / Ht)' : 'Luce (Ll / Hl)'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* ── Ruolo ── */}
-      <Text style={[styles.sectionTitle, { marginTop: 28 }]}>Ruolo utente</Text>
-      <Text style={styles.sectionSub}>
-        Seleziona il tuo profilo per personalizzare l'esperienza
-      </Text>
-
-      {ROLES.map(r => (
-        <TouchableOpacity
-          key={r.value}
-          style={[styles.roleCard, role === r.value && styles.roleCardActive]}
-          onPress={() => selectRole(r.value)}
-        >
-          <Text style={styles.roleEmoji}>{r.emoji}</Text>
-          <View style={styles.roleText}>
-            <Text style={[styles.roleLabel, role === r.value && styles.roleLabelActive]}>
-              {r.label}
-            </Text>
-            <Text style={styles.roleDesc}>{r.description}</Text>
-          </View>
-          {role === r.value && <Text style={styles.check}>✓</Text>}
-        </TouchableOpacity>
-      ))}
-
-      <Text style={styles.version}>Versione 1.0.0</Text>
+      <Text style={[styles.version, { color: t.dark ? '#3a5a7a' : '#CCC' }]}>Versione 1.0.0</Text>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1, backgroundColor: '#EEF2F7' },
   content: { padding: 20, paddingBottom: 40 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#222', marginBottom: 4 },
-  sectionSub: { fontSize: 13, color: '#888', marginBottom: 14 },
+  sectionTitle: {
+    fontSize: 15, fontWeight: '800', color: '#1a2a3a', marginBottom: 3,
+    borderLeftWidth: 3, borderLeftColor: '#1565C0', paddingLeft: 10,
+  },
+  sectionSub: { fontSize: 12, color: '#8a9ab0', marginBottom: 14, paddingLeft: 13 },
 
   toleranceCard: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 18, elevation: 1,
+    backgroundColor: '#fff', borderRadius: 16, padding: 18, elevation: 3,
+    shadowColor: '#1a3a5c', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
   toleranceRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -248,11 +197,12 @@ const styles = StyleSheet.create({
 
   roleCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
+    backgroundColor: '#fff', borderRadius: 16, padding: 16,
     marginBottom: 12, borderWidth: 2, borderColor: 'transparent',
-    elevation: 1,
+    elevation: 3,
+    shadowColor: '#1a3a5c', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
-  roleCardActive: { borderColor: '#1565C0', backgroundColor: '#E3F2FD' },
+  roleCardActive: { borderColor: '#1565C0', backgroundColor: '#EEF5FF' },
   roleEmoji: { fontSize: 28, marginRight: 14 },
   roleText: { flex: 1 },
   roleLabel: { fontSize: 15, fontWeight: '600', color: '#333' },
@@ -263,11 +213,12 @@ const styles = StyleSheet.create({
 
   toggleRow: { flexDirection: 'row', gap: 10 },
   toggleBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 12,
+    flex: 1, paddingVertical: 14, borderRadius: 14,
     backgroundColor: '#fff', alignItems: 'center',
-    borderWidth: 2, borderColor: 'transparent', elevation: 1,
+    borderWidth: 2, borderColor: 'transparent', elevation: 2,
+    shadowColor: '#1a3a5c', shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
-  toggleBtnActive: { borderColor: '#1565C0', backgroundColor: '#E3F2FD' },
-  toggleBtnText: { fontSize: 13, fontWeight: '600', color: '#666' },
+  toggleBtnActive: { borderColor: '#1565C0', backgroundColor: '#EEF5FF' },
+  toggleBtnText: { fontSize: 13, fontWeight: '700', color: '#8a9ab0' },
   toggleBtnTextActive: { color: '#1565C0' },
 });
