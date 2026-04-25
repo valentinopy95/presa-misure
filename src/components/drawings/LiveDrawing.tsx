@@ -499,6 +499,13 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
   const sw = 1.6;
 
   switch (style) {
+    case 'window_fixed':
+      // Solo telaio, nessuna anta — vetro fisso
+      return <G>
+        <Line x1={GX+8} y1={GY+8} x2={GX2-8} y2={GY2-8} stroke={c} strokeWidth={1} opacity={0.3}/>
+        <Line x1={GX2-8} y1={GY+8} x2={GX+8} y2={GY2-8} stroke={c} strokeWidth={1} opacity={0.3}/>
+      </G>;
+
     case 'window_single':
       return <G>
         <HingeMarks x={GX+4} color={c}/>
@@ -561,96 +568,128 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
       </G>;
 
     case 'door_entrance': {
-      // Portoncino: anta grande (~60%) + anta piccola fissa (~40%)
       const doorBg  = '#2a3240';
       const panelBg = '#333d50';
       const hi      = 'rgba(255,255,255,0.20)';
       const sh      = 'rgba(0,0,0,0.55)';
       const pp = 8, g = 6, bevel = 4;
 
-      // Width split: main 3/5, small 2/5
-      const mainW  = Math.round(GW * 3 / 5);
-      const smallW = GW - mainW;
-
-      // openingSide==='right' → main door on right; default → main door on left
-      const mainLeft = openingSide !== 'right';
-      const mainX  = mainLeft ? GX           : GX + smallW;
-      const smallX = mainLeft ? GX + mainW   : GX;
-
-      // Bugna helper (bv = bevel size)
       const bugna = (x: number, y: number, w: number, h: number, bv: number, key: number) => (
         <G key={key}>
           <Rect x={x} y={y} width={w} height={h} fill={panelBg} rx={2}/>
-          <Line x1={x} y1={y + h} x2={x} y2={y} stroke={hi} strokeWidth={2}/>
-          <Line x1={x} y1={y} x2={x + w} y2={y} stroke={hi} strokeWidth={2}/>
-          <Line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={sh} strokeWidth={2}/>
-          <Line x1={x} y1={y + h} x2={x + w} y2={y + h} stroke={sh} strokeWidth={2}/>
-          <Rect x={x + bv} y={y + bv} width={w - bv * 2} height={h - bv * 2}
+          <Line x1={x} y1={y+h} x2={x} y2={y} stroke={hi} strokeWidth={2}/>
+          <Line x1={x} y1={y} x2={x+w} y2={y} stroke={hi} strokeWidth={2}/>
+          <Line x1={x+w} y1={y} x2={x+w} y2={y+h} stroke={sh} strokeWidth={2}/>
+          <Line x1={x} y1={y+h} x2={x+w} y2={y+h} stroke={sh} strokeWidth={2}/>
+          <Rect x={x+bv} y={y+bv} width={w-bv*2} height={h-bv*2}
                 fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={0.8}/>
-          <Line x1={x + bv} y1={y + bv} x2={x + w - bv} y2={y + bv} stroke={hi} strokeWidth={0.8}/>
-          <Line x1={x + bv} y1={y + bv} x2={x + bv} y2={y + h - bv} stroke={hi} strokeWidth={0.8}/>
+          <Line x1={x+bv} y1={y+bv} x2={x+w-bv} y2={y+bv} stroke={hi} strokeWidth={0.8}/>
+          <Line x1={x+bv} y1={y+bv} x2={x+bv} y2={y+h-bv} stroke={hi} strokeWidth={0.8}/>
         </G>
       );
 
-      // Row heights
       const row1H = Math.round(GH * 0.16);
       const row2H = Math.round(GH * 0.46);
       const row1Y = GY + pp;
       const row2Y = row1Y + row1H + g;
       const row3Y = row2Y + row2H + g;
       const row3H = (GY + GH - pp) - row3Y;
-      const lockY = row2Y + Math.round(row2H * 0.42);
 
-      // Main door: 2 columns of bugne
-      const mainColW = Math.round((mainW - pp * 2 - g) / 2);
+      // leafCount=1 → 1 anta singola; leafCount=2 → 2 ante; else → 1 anta e mezzo
+      const n = Math.max(1, leafCount);
+
+      if (n === 1) {
+        // ── 1 anta singola ──
+        const colW = Math.round((GW - pp*2 - g) / 2);
+        const col1X = GX + pp, col2X = col1X + colW + g;
+        const lockY = row2Y + Math.round(row2H * 0.42);
+        const hx = openingSide === 'right' ? GX + GW - 14 : GX + 14;
+        const lr = openingSide !== 'right';
+        const hinge = openingSide === 'right' ? GX + GW - 4 : GX + 4;
+        const lx = openingSide === 'right' ? GX + GW - 13 : GX + 13;
+        return <G>
+          <Rect x={GX} y={GY} width={GW} height={GH} fill={doorBg}/>
+          {bugna(col1X, row1Y, colW, row1H, bevel, 0)}
+          {bugna(col2X, row1Y, colW, row1H, bevel, 1)}
+          {bugna(col1X, row2Y, colW, row2H, bevel, 2)}
+          {bugna(col2X, row2Y, colW, row2H, bevel, 3)}
+          {bugna(col1X, row3Y, colW, row3H, bevel, 4)}
+          {bugna(col2X, row3Y, colW, row3H, bevel, 5)}
+          <HingeMarks x={hinge} color="#8090a4"/>
+          <ManigliaDoor hx={hx} leverRight={lr}/>
+          <Rect x={lx-5} y={row2Y+Math.round(row2H*0.42)-7} width={10} height={14}
+                rx={2.5} fill="#4a5a6a" stroke="#2a3a4a" strokeWidth={0.8}/>
+          <Circle cx={lx} cy={row2Y+Math.round(row2H*0.42)} r={3.5} fill="#8090a4"/>
+          <Circle cx={lx} cy={row2Y+Math.round(row2H*0.42)} r={2} fill="#5a6a7a"/>
+        </G>;
+      }
+
+      if (n >= 2) {
+        // ── 2 ante simmetriche ──
+        const halfW = Math.round(GW / 2);
+        const colW  = Math.round((halfW - pp*2 - g) / 2);
+        const lockY = row2Y + Math.round(row2H * 0.42);
+        return <G>
+          {[0, 1].map(i => {
+            const ax = GX + i * halfW;
+            const c1 = ax + pp, c2 = c1 + colW + g;
+            const hx = i === 0 ? ax + halfW - 14 : ax + 14;
+            const lr = i === 0;
+            const hinge = i === 0 ? ax + 4 : ax + halfW - 4;
+            const lx = i === 0 ? ax + halfW - 13 : ax + 13;
+            return <G key={i}>
+              <Rect x={ax} y={GY} width={halfW} height={GH} fill={doorBg}/>
+              {bugna(c1, row1Y, colW, row1H, bevel, i*10+0)}
+              {bugna(c2, row1Y, colW, row1H, bevel, i*10+1)}
+              {bugna(c1, row2Y, colW, row2H, bevel, i*10+2)}
+              {bugna(c2, row2Y, colW, row2H, bevel, i*10+3)}
+              {bugna(c1, row3Y, colW, row3H, bevel, i*10+4)}
+              {bugna(c2, row3Y, colW, row3H, bevel, i*10+5)}
+              <HingeMarks x={hinge} color="#8090a4"/>
+              <ManigliaDoor hx={hx} leverRight={lr}/>
+              <Rect x={lx-5} y={lockY-7} width={10} height={14}
+                    rx={2.5} fill="#4a5a6a" stroke="#2a3a4a" strokeWidth={0.8}/>
+              <Circle cx={lx} cy={lockY} r={3.5} fill="#8090a4"/>
+              <Circle cx={lx} cy={lockY} r={2} fill="#5a6a7a"/>
+            </G>;
+          })}
+        </G>;
+      }
+
+      // ── 1 anta e mezzo (default) ──
+      const mainW  = Math.round(GW * 3 / 5);
+      const smallW = GW - mainW;
+      const mainLeft = openingSide !== 'right';
+      const mainX  = mainLeft ? GX : GX + smallW;
+      const smallX = mainLeft ? GX + mainW : GX;
+      const mainColW = Math.round((mainW - pp*2 - g) / 2);
       const mainCol1X = mainX + pp;
       const mainCol2X = mainCol1X + mainColW + g;
-
-      // Small panel: 1 column of bugne (slightly reduced padding)
       const smPP = 7;
       const smColW = smallW - smPP * 2;
       const smallCol1X = smallX + smPP;
-
-      // Handle on inner edge (toward separator), hinge on outer edge
-      const handleX   = mainLeft ? mainX + mainW - 14 : mainX + 14;
+      const handleX  = mainLeft ? mainX + mainW - 14 : mainX + 14;
       const leverRight = mainLeft;
-      const hingeX    = mainLeft ? mainX + 4           : mainX + mainW - 4;
-      const lockCX    = mainLeft ? mainX + mainW - 13  : mainX + 13;
-
-      // Montante separator position
-      const sepX = mainLeft ? mainX + mainW : smallX + smallW;
-
+      const hingeX   = mainLeft ? mainX + 4 : mainX + mainW - 4;
+      const lockCX   = mainLeft ? mainX + mainW - 13 : mainX + 13;
+      const lockY    = row2Y + Math.round(row2H * 0.42);
       return <G>
-        {/* ── Anta principale (grande) ── */}
-        <Rect x={mainX} y={GY} width={mainW} height={GH} fill={doorBg}/>
-        {[0.33, 0.67].map((f, i) => (
-          <Line key={i} x1={mainX + mainW * f} y1={GY} x2={mainX + mainW * f} y2={GY + GH}
-                stroke="rgba(0,0,0,0.12)" strokeWidth={0.5}/>
-        ))}
+        <Rect x={GX} y={GY} width={GW} height={GH} fill={doorBg}/>
         {bugna(mainCol1X, row1Y, mainColW, row1H, bevel, 0)}
         {bugna(mainCol2X, row1Y, mainColW, row1H, bevel, 1)}
         {bugna(mainCol1X, row2Y, mainColW, row2H, bevel, 2)}
         {bugna(mainCol2X, row2Y, mainColW, row2H, bevel, 3)}
         {bugna(mainCol1X, row3Y, mainColW, row3H, bevel, 4)}
         {bugna(mainCol2X, row3Y, mainColW, row3H, bevel, 5)}
-        <HingeMarks x={hingeX} color="#8090a4"/>
-        <ManigliaDoor hx={handleX} leverRight={leverRight}/>
-        <Rect x={lockCX - 5} y={lockY - 7} width={10} height={14}
-              rx={2.5} fill="#4a5a6a" stroke="#2a3a4a" strokeWidth={0.8}/>
-        <Circle cx={lockCX} cy={lockY} r={3.5} fill="#8090a4"/>
-        <Circle cx={lockCX} cy={lockY} r={2} fill="#5a6a7a"/>
-        <Line x1={lockCX - 1.5} y1={lockY - 1.5} x2={lockCX + 1.5} y2={lockY + 1.5}
-              stroke="rgba(255,255,255,0.3)" strokeWidth={0.8}/>
-
-        {/* ── Anta piccola fissa ── */}
-        <Rect x={smallX} y={GY} width={smallW} height={GH} fill={doorBg} opacity={0.78}/>
         {bugna(smallCol1X, row1Y, smColW, row1H, 3, 6)}
         {bugna(smallCol1X, row2Y, smColW, row2H, 3, 7)}
         {bugna(smallCol1X, row3Y, smColW, row3H, 3, 8)}
-
-        {/* ── Montante divisorio ── */}
-        <Rect x={sepX - FT / 2} y={FY} width={FT} height={FH}
-              fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={1}/>
+        <HingeMarks x={hingeX} color="#8090a4"/>
+        <ManigliaDoor hx={handleX} leverRight={leverRight}/>
+        <Rect x={lockCX-5} y={lockY-7} width={10} height={14}
+              rx={2.5} fill="#4a5a6a" stroke="#2a3a4a" strokeWidth={0.8}/>
+        <Circle cx={lockCX} cy={lockY} r={3.5} fill="#8090a4"/>
+        <Circle cx={lockCX} cy={lockY} r={2} fill="#5a6a7a"/>
       </G>;
     }
 
@@ -678,11 +717,17 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
         <Rect x={CX-7} y={CY-10} width={5} height={20} rx={2.5} fill={c}/>
       </G>;
 
-    case 'door_french':
+    case 'door_french': {
+      const _fH = 14;
+      const _fY = Math.round(GY + GH * 0.58 - _fH / 2);
       return <G>
         <Line x1={GX} y1={GY2} x2={GX2} y2={GY2} stroke={c} strokeWidth={1.5} strokeDasharray="4,3"/>
         <Rect x={CX-FT/2} y={FY} width={FT} height={FH} fill="url(#al_hatch)" stroke={C_FRAME} strokeWidth={1}/>
         <Rect x={CX-1} y={GY} width={2} height={GH} fill="white"/>
+        {/* Fascia orizzontale colore telaio */}
+        <Rect x={GX} y={_fY} width={GW} height={_fH} fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={1.5}/>
+        <Line x1={GX+4} y1={_fY+4} x2={GX2-4} y2={_fY+4} stroke="rgba(255,255,255,0.5)" strokeWidth={0.8}/>
+        <Line x1={GX+4} y1={_fY+_fH-4} x2={GX2-4} y2={_fY+_fH-4} stroke="rgba(80,110,140,0.2)" strokeWidth={0.6}/>
         <HingeMarks x={GX+4} color={c}/>
         <HingeMarks x={GX2-4} color={c}/>
         <VMark vx={CX-8} vy={CY} ex={GX+12} ey1={GY+14} ey2={GY2-10} progress={1} color={c}/>
@@ -690,6 +735,7 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
         <ManigliaDoor hx={CX-14} leverRight={true}/>
         <ManigliaDoor hx={CX+14} leverRight={false}/>
       </G>;
+    }
 
     case 'door_bifold': {
       const pL = GX+GW*0.25, pR = GX+GW*0.75, pY = GY+14, arcR = GW/2-8;
@@ -716,9 +762,10 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
       const slats      = 11;
       const slotH      = GH / slats;
       const startRight = openingSide === 'right';
-      const C_SLAT_TOP = 'rgba(255,255,255,0.65)';
-      const C_SLAT_BOT = 'rgba(0,0,0,0.18)';
-      const C_HINGE    = '#3d5c28';
+      const C_AL_BG    = '#D8E2EC';
+      const C_AL_SLAT  = '#7A9BB0';
+      const C_HINGE_AL = '#5A6878';
+      const C_HANDLE   = '#8098B0';
 
       return <G>
         {Array.from({length: n}).map((_, i) => {
@@ -729,18 +776,18 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
           const freeX     = hingeLeft ? sx2 - 5 : sx + 5;
 
           return <G key={i}>
-            {/* Bordo anta */}
+            {/* Sfondo anta alluminio */}
             <Rect x={sx + 2} y={GY + 2} width={sashW - 4} height={GH - 4}
-                  fill="none" stroke={`${C_SHUTTER}99`} strokeWidth={2.5} rx={1}/>
+                  fill={C_AL_BG} stroke="#4A6070" strokeWidth={2} rx={1}/>
 
             {/* Lamelle con effetto profondità */}
             {Array.from({length: slats}).map((_, j) => {
               const y = GY + (j + 0.5) * slotH;
               return <G key={j}>
                 <Line x1={sx + 4} y1={y + 1.5} x2={sx2 - 4} y2={y + 1.5}
-                      stroke={C_SLAT_BOT} strokeWidth={2}/>
+                      stroke="rgba(60,80,100,0.18)" strokeWidth={2}/>
                 <Line x1={sx + 4} y1={y} x2={sx2 - 4} y2={y}
-                      stroke={C_SLAT_TOP} strokeWidth={1.5}/>
+                      stroke={C_AL_SLAT} strokeWidth={1.2}/>
               </G>;
             })}
 
@@ -748,18 +795,18 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
             {[0.2, 0.5, 0.8].map((f, j) => (
               <Rect key={j}
                 x={hingeX - 3} y={GY + GH * f - 7} width={6} height={14}
-                fill={C_HINGE} stroke="white" strokeWidth={1} rx={1}/>
+                fill={C_HINGE_AL} stroke="rgba(255,255,255,0.5)" strokeWidth={1} rx={1}/>
             ))}
 
             {/* Maniglia sul bordo libero */}
             <Rect x={freeX - 3} y={CY - 18} width={6} height={36}
-                  fill={`${C_SHUTTER}dd`} stroke="white" strokeWidth={0.8} rx={3}/>
+                  fill={C_HANDLE} stroke="rgba(255,255,255,0.6)" strokeWidth={0.8} rx={3}/>
 
             {/* Arco apertura */}
             <Path d={`M ${p(hingeX)} ${p(GY + 4)} Q ${p(freeX)} ${p(GY + 4)} ${p(freeX)} ${p(GY2 - 4)}`}
-                  fill="none" stroke={`${C_SHUTTER}bb`} strokeWidth={1.5} strokeDasharray="6,3"/>
+                  fill="none" stroke={`${C_IND}99`} strokeWidth={1.5} strokeDasharray="6,3"/>
             <Path d={arrow(freeX, GY2 - 4, hingeLeft ? Math.PI * 0.75 : Math.PI * 0.25)}
-                  fill={C_SHUTTER}/>
+                  fill={C_IND}/>
           </G>;
         })}
 
@@ -769,29 +816,29 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
           return <G key={i}>
             <Line x1={p(dx)} y1={FY} x2={p(dx)} y2={FY + FH}
                   stroke={C_FRAME} strokeWidth={FT / 2}/>
-            <Rect x={dx - 1} y={GY} width={2} height={GH} fill="white"/>
+            <Rect x={dx - 1} y={GY} width={2} height={GH} fill="#B8C8D4"/>
           </G>;
         })}
 
         {/* Fascia centrale — solo portafinestra (shutter_double), sempre presente */}
         {style === 'shutter_double' && (() => {
-          const fasciaH = 20;
-          const fasciaY = GY + GH * 0.38 - fasciaH / 2;
+          const fasciaH = 16;
+          const fasciaY = GY + GH * 0.58 - fasciaH / 2;
           return (
             <G>
               {Array.from({ length: n }).map((_, i) => {
                 const sx = GX + i * sashW;
-                const fx = sx + ST;
-                const fw = sashW - ST * 2;
+                const fx = sx + 4;
+                const fw = sashW - 8;
                 const midY = fasciaY + fasciaH / 2;
                 return (
                   <G key={i}>
                     <Rect x={p(fx)} y={p(fasciaY)} width={p(fw)} height={p(fasciaH)}
-                          fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={1.8}/>
-                    <Line x1={p(fx + 4)} y1={p(midY - 4)} x2={p(fx + fw - 4)} y2={p(midY - 4)}
-                          stroke="rgba(255,255,255,0.5)" strokeWidth={0.9}/>
-                    <Line x1={p(fx + 4)} y1={p(midY + 4)} x2={p(fx + fw - 4)} y2={p(midY + 4)}
-                          stroke="rgba(80,110,140,0.22)" strokeWidth={0.7}/>
+                          fill="#B8C8D4" stroke="#4A6070" strokeWidth={1.5} rx={1}/>
+                    <Line x1={p(fx + 3)} y1={p(midY - 3)} x2={p(fx + fw - 3)} y2={p(midY - 3)}
+                          stroke="rgba(255,255,255,0.45)" strokeWidth={1}/>
+                    <Line x1={p(fx + 3)} y1={p(midY + 3)} x2={p(fx + fw - 3)} y2={p(midY + 3)}
+                          stroke="rgba(40,60,80,0.15)" strokeWidth={0.8}/>
                   </G>
                 );
               })}
@@ -1138,11 +1185,11 @@ export default function LiveDrawing({
       </>
     );
   } else if (isShutter) {
-    // Shutter: frame fill is shutter-green, no hatch
+    // Shutter: aluminum frame, no hatch
     frameLayer = (
       <G>
-        <Rect x={FX} y={FY} width={FW} height={FH} fill={`${C_SHUTTER}cc`} stroke={C_FRAME} strokeWidth={2.5}/>
-        <Rect x={GX} y={GY} width={GW} height={GH} fill={C_SHUTTER}/>
+        <Rect x={FX} y={FY} width={FW} height={FH} fill="#B8C8D4" stroke={C_FRAME} strokeWidth={2.5}/>
+        <Rect x={GX} y={GY} width={GW} height={GH} fill="#D8E2EC"/>
         <CornerMarks x={FX}    y={FY}    dx={1}  dy={1}/>
         <CornerMarks x={FX+FW} y={FY}    dx={-1} dy={1}/>
         <CornerMarks x={FX}    y={FY+FH} dx={1}  dy={-1}/>

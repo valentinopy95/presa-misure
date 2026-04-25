@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, InteractionManager, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, OpeningStyle } from '../types';
@@ -19,12 +19,12 @@ interface StyleOption {
 
 const STYLES: StyleOption[] = [
   // Finestre
+  { value: 'window_fixed',     label: 'Fisso',           category: 'Finestre'    },
   { value: 'window_single',    label: 'Battente',        category: 'Finestre'    },
   { value: 'window_sliding',   label: 'Scorrevole',      category: 'Finestre'    },
   { value: 'window_tilt_turn', label: 'Vasistas',        category: 'Finestre'    },
   // Porte
   { value: 'door_single',      label: 'Battente',        category: 'Porte'       },
-  { value: 'door_double',      label: 'Doppio battente', category: 'Porte'       },
   { value: 'door_entrance',    label: 'Portoncino',      category: 'Porte'       },
   { value: 'door_sliding',     label: 'Scorrevole',      category: 'Porte'       },
   // Persiane
@@ -51,10 +51,27 @@ const CATEGORY_COLORS: Record<Category, string> = {
   Zanzariere:  '#00838F',
 };
 
+// Card con memo — LiveDrawing non si ridisegna se le props non cambiano
+const StyleCard = React.memo(({ option, onPress }: { option: StyleOption; onPress: () => void }) => (
+  <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
+    <View style={styles.drawingWrap}>
+      <LiveDrawing style={option.value} previewMode previewSize={82} />
+    </View>
+    <Text style={styles.cardLabel}>{option.label}</Text>
+  </TouchableOpacity>
+));
+
 export default function StylePickerScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { projectId, openingId } = route.params;
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    // Aspetta che l'animazione di navigazione finisca prima di renderizzare le SVG
+    const task = InteractionManager.runAfterInteractions(() => setReady(true));
+    return () => task.cancel();
+  }, []);
 
   const handleSelect = async (style: OpeningStyle) => {
     const project = await getProject(projectId);
@@ -64,6 +81,12 @@ export default function StylePickerScreen() {
     }
     navigation.goBack();
   };
+
+  if (!ready) return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F4F8' }}>
+      <ActivityIndicator size="large" color="#1565C0" />
+    </View>
+  );
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -77,21 +100,11 @@ export default function StylePickerScreen() {
             </View>
             <View style={styles.grid}>
               {items.map(option => (
-                <TouchableOpacity
+                <StyleCard
                   key={option.value}
-                  style={styles.card}
+                  option={option}
                   onPress={() => handleSelect(option.value)}
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.drawingWrap}>
-                    <LiveDrawing
-                      style={option.value}
-                      previewMode
-                      previewSize={82}
-                    />
-                  </View>
-                  <Text style={styles.cardLabel}>{option.label}</Text>
-                </TouchableOpacity>
+                />
               ))}
             </View>
           </View>

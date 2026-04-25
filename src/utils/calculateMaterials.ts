@@ -1,90 +1,128 @@
 import { Opening } from '../types';
 
-const BAR_MM       = 6400;  // usable bar length (6500mm commercial - squaring waste)
-const KERF_90      = 4;     // blade kerf for 90° cuts (mm)
-const SLAT_PITCH   = 55;    // lamella pitch (mm)
-const ZOCCOLO_H    = 120;   // zoccolo height (mm)
-const FASCIA_H     = 120;   // fascia height (mm)
-const PF_THRESHOLD = 1500;  // above this H, shutter is "porta-finestra" → add fascia
+const DEFAULT_BAR_MM  = 6400;
+const DEFAULT_KERF_90 = 4;
+const PF_THRESHOLD    = 1500;
+
+export const MIN_REMNANT_MM = 500;
+
+export interface MaterialsConfig {
+  riattestattura?:  number;  // waste between 45° cuts on same bar (default 25mm)
+  barLength?:       number;  // usable bar length (default 6400mm)
+  kerf90?:          number;  // blade kerf per 90° cut (default 4mm)
+  safetyMarginPct?: number;  // safety margin % on bar count (default 5)
+  slatPitch?:       number;  // shutter slat pitch (default 55mm)
+  zoccoloH?:        number;  // shutter bottom rail height (default 120mm)
+  fasciaH?:         number;  // shutter top fascia height for porta-finestra (default 120mm)
+  antaReduction?:   number;  // total reduction telaio→anta (default 0mm)
+}
 
 export interface ProfileResult {
-  label: string;
-  bars: number;
+  label:   string;
+  bars:    number;
+  offcuts: number[];
 }
 
 export interface MaterialsResult {
-  profiles45: ProfileResult[];
-  profiles90: ProfileResult[];
+  profiles45:  ProfileResult[];
+  profiles90:  ProfileResult[];
   totalBars45: number;
   totalBars90: number;
+  warnings:    string[];  // pieces exceeding bar length
 }
 
 /**
  * First Fit Decreasing bin-packing.
- *
- * Rules:
- *  - Pieces sorted longest first.
- *  - First piece on each bar: no preceding waste (bar already squared to 45°).
- *  - Every subsequent piece on the same bar: wastePerCut mm of riattestattura
- *    consumed between cuts.
- *  - A piece that doesn't fit opens a new bar.
+ * kerfOnFirstCut=true  (90°): every cut pays kerf, including first on a fresh bar.
+ * kerfOnFirstCut=false (45°): bar arrives pre-squared, first piece pays no kerf.
  */
-function calcBars(pieces: number[], barMm: number, wastePerCut: number): number {
-  if (!pieces.length) return 0;
+function calcBars(
+  pieces: number[],
+  barMm: number,
+  wastePerCut: number,
+  kerfOnFirstCut = false,
+): { count: number; offcuts: number[] } {
+  if (!pieces.length) return { count: 0, offcuts: [] };
 
-  // Guard: skip pieces longer than a full bar (shouldn't happen for valid data)
   const valid = pieces.filter(p => p > 0 && p <= barMm);
-  if (!valid.length) return 0;
+  if (!valid.length) return { count: 0, offcuts: [] };
 
   const sorted = [...valid].sort((a, b) => b - a);
-
-  // Each bin holds the remaining space
   const bins: number[] = [barMm];
 
   for (const piece of sorted) {
     let placed = false;
-
     for (let i = 0; i < bins.length; i++) {
-      const rem = bins[i];
-      const isFirst = rem === barMm; // nothing placed on this bar yet
+      const rem     = bins[i];
+      const isFirst = !kerfOnFirstCut && rem === barMm;
       const needed  = piece + (isFirst ? 0 : wastePerCut);
-
       if (needed <= rem) {
         bins[i] -= needed;
         placed = true;
         break;
       }
     }
-
     if (!placed) {
-      // Open a new bar — first piece has no preceding waste
-      bins.push(barMm - piece);
+      bins.push(barMm - piece - (kerfOnFirstCut ? wastePerCut : 0));
     }
   }
 
-  return bins.length;
+  return {
+    count:   bins.length,
+    offcuts: bins.filter(s => s >= MIN_REMNANT_MM),
+  };
 }
 
-// ─── Piece generation per opening ───────────────────────────────────────────
+// ─── Main function ────────────────────────────────────────────────────────────
 
-export function calculateMaterials(openings: Opening[], riattestattura = 25): MaterialsResult {
-  // 45° cut pieces grouped by profile category
+export function calculateMaterials(
+  openings: Opening[],
+  config: MaterialsConfig = {},
+): MaterialsResult {
+  const {
+    riattestattura  = 25,
+    barLength       = DEFAULT_BAR_MM,
+    kerf90          = DEFAULT_KERF_90,
+    safetyMarginPct = 5,
+    slatPitch       = 55,
+    zoccoloH        = 100,
+    fasciaH         = 100,
+    antaReduction   = 0,
+  } = config;
+
   const b45: Record<string, number[]> = {
-    'Profilo telaio': [],
-    'Profilo anta':   [],
+    'Profilo telaio':       [],
+    'Profilo anta':         [],
+    'Profilo controtelaio': [],
   };
-  // 90° cut pieces grouped by profile category
   const b90: Record<string, number[]> = {
     'Soglia ribassata': [],
     'Fascia':           [],
-    'Fermavetro':    [],
-    'Traverso':      [],
-    'Zoccolo':       [],
-    'Mezza lamella': [],
-    'Posizionatore': [],
-    'Lamella':       [],
-    'Riporto':       [],
+    'Fermavetro':       [],
+    'Traverso':         [],
+    'Coppiglia':        [],
+    'Zoccolo':          [],
+    'Mezza lamella':    [],
+    'Posizionatore':    [],
+    'Lamella':          [],
+    'Riporto':          [],
   };
+
+  // Pieces exceeding bar length — collected for warnings
+  const oversized: Record<string, number[]> = {};
+
+  function push45(label: string, ...pieces: number[]) {
+    for (const p of pieces) {
+      if (p > barLength) { oversized[label] = [...(oversized[label] ?? []), p]; }
+      else { b45[label].push(p); }
+    }
+  }
+  function push90(label: string, ...pieces: number[]) {
+    for (const p of pieces) {
+      if (p > barLength) { oversized[label] = [...(oversized[label] ?? []), p]; }
+      else { b90[label].push(p); }
+    }
+  }
 
   for (const o of openings) {
     const W = o.width  ?? 0;
@@ -93,114 +131,160 @@ export function calculateMaterials(openings: Opening[], riattestattura = 25): Ma
     const { style } = o;
 
     if (!style || W <= 0 || H <= 0) continue;
-    if (style === 'roller_blind' || style === 'subframe_window' || style.startsWith('mosquito')) continue;
+    if (style === 'roller_blind' || style.startsWith('mosquito')) continue;
+
+    // ── Controtelaio ──────────────────────────────────────────────────────────
+    if (style === 'subframe_window') {
+      // U shape: 2 montanti + 1 traverso superiore at 45°
+      push45('Profilo controtelaio', W, H, H);
+      // Optional 4th piece (traverso inferiore) if requested
+      if (o.hasBattente) push45('Profilo controtelaio', W);
+      continue;
+    }
+
+    // Fisso: telaio 4 lati + fermavetro sempre (nessuna anta)
+    if (style === 'window_fixed') {
+      const hasSL = (o.sopraluce ?? false) && !!o.sopraluceHeight;
+      const SLH   = hasSL ? (o.sopraluceHeight ?? 0) : 0;
+      const mainH = H - SLH;
+
+      push45('Profilo telaio', W, W, H, H);
+      push90('Fermavetro', W, W, mainH, mainH);
+
+      if (hasSL) {
+        push90('Traverso', Math.max(1, W - 50));
+        push90('Fermavetro', W, W, SLH, SLH);
+      }
+      continue;
+    }
 
     const isWindow  = style.startsWith('window');
     const isDoor    = style.startsWith('door');
     const isShutter = style.startsWith('shutter');
 
+    // ── Finestre ──────────────────────────────────────────────────────────────
     if (isWindow) {
-      // Telaio fisso: 4 lati (rettangolo chiuso) → 2×W + 2×H a 45°
-      b45['Profilo telaio'].push(W, W, H, H);
+      const hasSL = (o.sopraluce ?? false) && !!o.sopraluceHeight;
+      const SLH   = hasSL ? (o.sopraluceHeight ?? 0) : 0;
+      const antaH = H - SLH;
 
-      // Anta: 4 lati per ogni foglio → 2×leafW + 2×H a 45°
-      const leafW = Math.round(W / n);
+      push45('Profilo telaio', W, W, H, H);
+
+      const leafW  = Math.round(W / n);
+      const antaW  = Math.max(1, leafW  - antaReduction);
+      const antaHr = Math.max(1, antaH  - antaReduction);
       for (let i = 0; i < n; i++) {
-        b45['Profilo anta'].push(leafW, leafW, H, H);
+        push45('Profilo anta', antaW, antaW, antaHr, antaHr);
+        if (o.hasFermavetro) push90('Fermavetro', antaW, antaW, antaHr, antaHr);
+        if (style === 'window_sliding') push90('Coppiglia', antaH);
       }
+      for (let i = 0; i < n - 1; i++) push90('Riporto', antaH);
 
-      // Montante intermedio tra le ante (riporto) a 90° — 1 per ogni giunzione
-      for (let i = 0; i < n - 1; i++) {
-        b90['Riporto'].push(H);
-      }
-
-      // Sopraluce: traverso (W − 50) + fermavetro (2×W + 2×SLH) a 90°
-      if ((o.sopraluce ?? false) && o.sopraluceHeight) {
-        const SLH = o.sopraluceHeight;
-        b90['Traverso'].push(Math.max(1, W - 50));
-        b90['Fermavetro'].push(W, W, SLH, SLH);
+      if (hasSL) {
+        push90('Traverso', Math.max(1, W - 50));
+        push90('Fermavetro', W, W, SLH, SLH);
       }
     }
 
+    // ── Porte ─────────────────────────────────────────────────────────────────
     if (isDoor) {
-      if (o.hasSoglia) {
-        // Soglia ribassata ON: telaio 3 lati (traverso + 2 montanti) + soglia a 90°
-        b45['Profilo telaio'].push(W, H, H);
-        b90['Soglia ribassata'].push(W);
+      const hasSL = (o.sopraluce ?? false) && !!o.sopraluceHeight && style !== 'door_sliding';
+      const SLH   = hasSL ? (o.sopraluceHeight ?? 0) : 0;
+      const antaH = H - SLH;
+
+      if (style === 'door_sliding') {
+        push45('Profilo telaio', W, W, H, H);
+      } else if (o.hasSoglia) {
+        push45('Profilo telaio', W, H, H);
+        push90('Soglia ribassata', W);
+      } else if (!o.hasBattente) {
+        push45('Profilo telaio', W, H, H);
       } else {
-        // Soglia ribassata OFF: telaio 4 lati (rettangolo chiuso)
-        b45['Profilo telaio'].push(W, W, H, H);
+        push45('Profilo telaio', W, W, H, H);
       }
-      if (o.hasFascia) b90['Fascia'].push(W);
+      if (o.hasFascia) push90('Fascia', W);
 
-      // Anta: 4 lati per ogni foglio a 45°
-      const leafW = Math.round(W / n);
+      const leafW  = Math.round(W / n);
+      const antaW  = Math.max(1, leafW  - antaReduction);
+      const antaHr = Math.max(1, antaH  - antaReduction);
       for (let i = 0; i < n; i++) {
-        b45['Profilo anta'].push(leafW, leafW, H, H);
+        push45('Profilo anta', antaW, antaW, antaHr, antaHr);
+        if (o.hasFermavetro) push90('Fermavetro', antaW, antaW, antaHr, antaHr);
+        if (style === 'door_sliding') push90('Coppiglia', antaH);
       }
 
-      // Sopraluce: traverso (W − 50) + fermavetro (2×W + 2×SLH) a 90°
-      if ((o.sopraluce ?? false) && o.sopraluceHeight && style !== 'door_sliding') {
-        const SLH = o.sopraluceHeight;
-        b90['Traverso'].push(Math.max(1, W - 50));
-        b90['Fermavetro'].push(W, W, SLH, SLH);
+      if (hasSL) {
+        push90('Traverso', Math.max(1, W - 50));
+        push90('Fermavetro', W, W, SLH, SLH);
       }
     }
 
+    // ── Persiane ──────────────────────────────────────────────────────────────
     if (isShutter) {
-      const isPF  = style === 'shutter_double' || H > PF_THRESHOLD;
-      const leafW = Math.round(W / n);
-      const innerW = Math.max(0, leafW - 50); // misura anta - 5cm
+      const isPF   = style === 'shutter_double' || H > PF_THRESHOLD;
+      const leafW  = Math.round(W / n);
+      const innerW = Math.max(0, leafW - 50);
 
-      // Telaio fisso: traverso superiore (W) + 2 montanti (H) a 45°
-      b45['Profilo telaio'].push(W, H, H);
+      push45('Profilo telaio', W, H, H);
 
       for (let i = 0; i < n; i++) {
-        // Anta: traverso (leafW) + 2 montanti (H) a 45°
-        b45['Profilo anta'].push(leafW, H, H);
+        push45('Profilo anta', leafW, H, H);
+        push90('Zoccolo', innerW);
 
-        // Zoccolo: 1 per anta
-        b90['Zoccolo'].push(innerW);
-
-        // Mezza lamella + Posizionatore: 2 pezzi ciascuno per finestra, 4 per portafinestra
         const mlCount = isPF ? 4 : 2;
         for (let j = 0; j < mlCount; j++) {
-          b90['Mezza lamella'].push(innerW);
-          b90['Posizionatore'].push(innerW);
+          push90('Mezza lamella', innerW);
+          push90('Posizionatore', innerW);
         }
 
-        // Fascia: 1 per anta solo portafinestra
-        if (isPF) b90['Fascia'].push(innerW);
+        if (isPF) push90('Fascia', innerW);
 
-        // Lamelle: riempiono l'altezza netta dell'anta
-        const netH = H - ZOCCOLO_H - (isPF ? FASCIA_H : 0);
-        const slats = Math.max(0, Math.floor(netH / SLAT_PITCH));
-        for (let j = 0; j < slats; j++) {
-          b90['Lamella'].push(innerW);
-        }
+        const netH  = H - zoccoloH - (isPF ? fasciaH : 0);
+        const slats = Math.max(0, Math.floor(netH / slatPitch));
+        for (let j = 0; j < slats; j++) push90('Lamella', innerW);
       }
     }
   }
 
-  function toResult(label: string, pieces: number[], waste: number): ProfileResult | null {
+  // ── Build results ─────────────────────────────────────────────────────────
+
+  function applyMargin(n: number): number {
+    if (safetyMarginPct <= 0) return n;
+    return n + Math.round(n * safetyMarginPct / 100);
+  }
+
+  function toResult45(label: string, pieces: number[]): ProfileResult | null {
     if (!pieces.length) return null;
-    const bars = calcBars(pieces, BAR_MM, waste);
-    if (bars === 0) return null;
-    return { label, bars };
+    const { count, offcuts } = calcBars(pieces, barLength, riattestattura, false);
+    if (count === 0) return null;
+    return { label, bars: applyMargin(count), offcuts };
+  }
+
+  function toResult90(label: string, pieces: number[]): ProfileResult | null {
+    if (!pieces.length) return null;
+    const { count, offcuts } = calcBars(pieces, barLength, kerf90, true);
+    if (count === 0) return null;
+    return { label, bars: applyMargin(count), offcuts };
   }
 
   const profiles45 = Object.entries(b45)
-    .map(([l, p]) => toResult(l, p, riattestattura))
+    .map(([l, p]) => toResult45(l, p))
     .filter(Boolean) as ProfileResult[];
 
   const profiles90 = Object.entries(b90)
-    .map(([l, p]) => toResult(l, p, KERF_90))
+    .map(([l, p]) => toResult90(l, p))
     .filter(Boolean) as ProfileResult[];
+
+  const warnings = Object.entries(oversized).map(
+    ([label, pieces]) =>
+      `${label}: ${pieces.length} pezzo${pieces.length > 1 ? 'i' : ''} supera${pieces.length > 1 ? 'no' : ''} la lunghezza barra (${pieces.map(p => `${p}mm`).join(', ')})`
+  );
 
   return {
     profiles45,
     profiles90,
     totalBars45: profiles45.reduce((s, p) => s + p.bars, 0),
     totalBars90: profiles90.reduce((s, p) => s + p.bars, 0),
+    warnings,
   };
 }

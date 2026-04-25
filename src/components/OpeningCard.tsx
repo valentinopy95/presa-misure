@@ -40,7 +40,23 @@ export default function OpeningCard({ opening, onPress, onDelete }: Props) {
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{opening.name}</Text>
 
-        {opening.style && <StyleLabel style={opening.style} compact/>}
+        {opening.style && (
+          <View style={styles.styleRow}>
+            <StyleLabel style={opening.style} compact/>
+            <View style={styles.infoBadges}>
+              {opening.leafCount != null && opening.leafCount > 0 && (
+                <View style={styles.infoBadge}>
+                  <Text style={styles.infoBadgeText}>{opening.leafCount} ant{opening.leafCount === 1 ? 'a' : 'e'}</Text>
+                </View>
+              )}
+              {opening.width && opening.height && (
+                <View style={styles.infoBadge}>
+                  <Text style={styles.infoBadgeText}>{(opening.width * opening.height / 1_000_000).toFixed(2)} m²</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {hasDims && (
           <View style={styles.dims}>
@@ -129,6 +145,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 2,
   },
   specGlass: { backgroundColor: '#E3F2FD', color: '#1565C0' },
+
+  styleRow:   { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 2 },
+  infoBadges: { flexDirection: 'row', gap: 4 },
+  infoBadge:  { backgroundColor: '#F0F4FF', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  infoBadgeText: { fontSize: 11, color: '#1565C0', fontWeight: '700' },
 
   badges: { flexDirection: 'row', gap: 6, marginTop: 7 },
   badge: {

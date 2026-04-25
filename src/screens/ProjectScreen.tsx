@@ -9,8 +9,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Project, RootStackParamList } from '../types';
-import { getProject, deleteOpening } from '../storage/database';
+import { Asset } from 'expo-asset';
+import { v4 as uuidv4 } from 'uuid';
+import { Project, Opening, OpeningStyle, RootStackParamList } from '../types';
+import { getProject, deleteOpening, saveOpening } from '../storage/database';
 import { getToleranceW, getToleranceH } from '../storage/settings';
 import { generateHTML } from '../utils/pdfExport';
 import OpeningCard from '../components/OpeningCard';
@@ -32,11 +34,21 @@ export default function ProjectScreen() {
     getProject(projectId).then(setProject);
   }, [projectId]);
 
+  const getLogoBase64 = async (): Promise<string | undefined> => {
+    try {
+      const asset = Asset.fromModule(require('../../assets/icon_adaptive.png'));
+      await asset.downloadAsync();
+      if (!asset.localUri) return undefined;
+      return await FileSystem.readAsStringAsync(asset.localUri, { encoding: FileSystem.EncodingType.Base64 as any });
+    } catch { return undefined; }
+  };
+
   const buildPDF = async (): Promise<string> => {
     if (!project) throw new Error('no project');
     const tolW = await getToleranceW();
     const tolH = await getToleranceH();
-    const html = generateHTML(project, tolW, tolH);
+    const logo = await getLogoBase64();
+    const html = generateHTML(project, tolW, tolH, logo);
     const { uri: tmp } = await Print.printToFileAsync({ html, base64: false });
     const safe = project.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim();
     const dest = `${FileSystem.documentDirectory}${safe}.pdf`;
@@ -51,7 +63,7 @@ export default function ProjectScreen() {
       if (Platform.OS === 'web') {
         const tolW = await getToleranceW();
         const tolH = await getToleranceH();
-        const html = generateHTML(project!, tolW, tolH);
+        const html = generateHTML(project!, tolW, tolH, await getLogoBase64());
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const tab = window.open(url, '_blank');
@@ -72,7 +84,7 @@ export default function ProjectScreen() {
       if (Platform.OS === 'web') {
         const tolW = await getToleranceW();
         const tolH = await getToleranceH();
-        const html = generateHTML(project!, tolW, tolH);
+        const html = generateHTML(project!, tolW, tolH, await getLogoBase64());
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -107,15 +119,73 @@ export default function ProjectScreen() {
     navigation.setOptions({
       title: project.name,
       headerRight: () => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Document', { projectId })}
-          style={{ marginRight: 4 }}
-        >
-          <Text style={{ color: '#1565C0', fontSize: 15, fontWeight: '600' }}>PDF</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginRight: 4 }}>
+          <TouchableOpacity onPress={() => navigation.navigate('DuplicateProject', { projectId })}>
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>⧉ Duplica</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Document', { projectId })}>
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>PDF</Text>
+          </TouchableOpacity>
+        </View>
       ),
     });
   }, [project, navigation, projectId]);
+
+  const shutterEquivalent = (style: OpeningStyle | null): OpeningStyle => {
+    if (!style) return 'shutter_single';
+    if (style.startsWith('door')) return 'shutter_double';
+    if (style.startsWith('window')) {
+      // window_double o più ante → shutter_double
+      return style.includes('double') ? 'shutter_double' : 'shutter_single';
+    }
+    return 'shutter_single';
+  };
+
+  const handleDuplicate = (opening: Opening) => {
+    const isWindowOrDoor = opening.style?.startsWith('window') || opening.style?.startsWith('door');
+    if (isWindowOrDoor) {
+      Alert.alert(
+        'Duplica apertura',
+        'Vuoi cambiare la tipologia della copia in persiana?',
+        [
+          {
+            text: 'Sì, cambia in persiana',
+            onPress: async () => {
+              const copy: Opening = {
+                ...opening,
+                id: uuidv4(),
+                name: opening.name + ' (copia)',
+                style: shutterEquivalent(opening.style),
+              };
+              await saveOpening(projectId, copy);
+              reload();
+            },
+          },
+          {
+            text: 'No, copia uguale',
+            onPress: async () => {
+              const copy: Opening = { ...opening, id: uuidv4(), name: opening.name + ' (copia)' };
+              await saveOpening(projectId, copy);
+              reload();
+            },
+          },
+          { text: 'Annulla', style: 'cancel' },
+        ]
+      );
+    } else {
+      Alert.alert('Duplica apertura', 'Vuoi duplicare questa apertura?', [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Duplica',
+          onPress: async () => {
+            const copy: Opening = { ...opening, id: uuidv4(), name: opening.name + ' (copia)' };
+            await saveOpening(projectId, copy);
+            reload();
+          },
+        },
+      ]);
+    }
+  };
 
   const handleDelete = (openingId: string) => {
     Alert.alert('Elimina apertura', 'Vuoi eliminare questa voce?', [

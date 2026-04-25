@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Project, RootStackParamList } from '../types';
-import { getAllProjects } from '../storage/database';
+import { getAllProjectsWithOpenings } from '../storage/database';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'MaterialsProjects'>;
 
@@ -18,7 +18,7 @@ export default function MaterialsProjectsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      getAllProjects().then(all =>
+      getAllProjectsWithOpenings().then(all =>
         setProjects([...all].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
       );
     }, [])

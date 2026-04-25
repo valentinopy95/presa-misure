@@ -2,6 +2,7 @@ export type UserRole = 'builder' | 'sales' | 'surveyor';
 
 export type OpeningStyle =
   // Finestre
+  | 'window_fixed'
   | 'window_single'
   | 'window_double'
   | 'window_sliding'
@@ -48,6 +49,8 @@ export interface Opening {
   openingSide: OpeningSide | null; // lato apertura
   hasFascia: boolean | null;       // fascia centrale (solo porte)
   hasSoglia: boolean | null;       // soglia ribassata (solo porte)
+  hasBattente: boolean | null;     // traverso inferiore telaio (solo porte)
+  hasFermavetro: boolean | null;   // fermavetro anta (finestre/porte con vetro a fermavetro)
   sopraluce: boolean;              // pannello fisso sopra l'infisso
   sopraluceHeight: number | null;  // altezza luce sopraluce (mm)
   blindType: 'cintino' | 'motore' | null; // tipo azionamento (solo monoblocco)
@@ -89,4 +92,8 @@ export type RootStackParamList = {
   Materials: { projectId: string };
   MaterialsProjects: undefined;
   Settings: undefined;
+  Account:  undefined;
+  DuplicateProject: { projectId: string };
+  Tutorial: undefined;
+  Help:     undefined;
 };

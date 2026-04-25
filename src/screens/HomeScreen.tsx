@@ -10,6 +10,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
 import { Project, RootStackParamList } from '../types';
 import { saveProject } from '../storage/database';
+import { getTutorialShown } from '../storage/settings';
+import { listPendingInvites, fetchProfile, supabase } from '../lib/supabase';
 import NewProjectModal from '../components/NewProjectModal';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -52,12 +54,24 @@ const MENU_ITEMS = [
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const { theme: t } = useTheme();
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalVisible,   setModalVisible]   = useState(false);
+  const [pendingInvites, setPendingInvites] = useState(0);
 
   const anims = useRef(MENU_ITEMS.map(() => new Animated.Value(0))).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    getTutorialShown().then(shown => {
+      if (!shown) navigation.replace('Tutorial');
+    });
+    // Carica badge inviti pendenti
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const profile = await fetchProfile(user.id);
+      if (!profile?.company_id) return;
+      const list = await listPendingInvites(profile.company_id);
+      setPendingInvites(list.length);
+    });
     Animated.sequence([
       Animated.timing(headerAnim, {
         toValue: 1, duration: 500,
@@ -107,10 +121,14 @@ export default function HomeScreen() {
           end={{ x: 0.7, y: 1 }}
           style={styles.header}
         >
-          {/* Background blobs */}
-          <View style={[styles.blob, { width: 280, height: 280, top: -100, right: -90 }]} />
-          <View style={[styles.blob, { width: 180, height: 180, bottom: -50, left: -50 }]} />
-          <View style={[styles.blob, { width: 90, height: 90, top: 40, left: 60 }]} />
+          {/* Logo su sfondo bianco */}
+          <View style={styles.logoBox}>
+            <Image
+              source={require('../../assets/icon_adaptive.png')}
+              style={styles.logoImg}
+              resizeMode="contain"
+            />
+          </View>
 
           {/* Settings */}
           <TouchableOpacity
@@ -121,14 +139,28 @@ export default function HomeScreen() {
             <Text style={styles.settingsIcon}>⚙</Text>
           </TouchableOpacity>
 
-          {/* App icon — large, with glow ring */}
-          <View style={styles.iconGlow}>
-            <Image
-              source={require('../../assets/icon_launcher.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
+          {/* Help */}
+          <TouchableOpacity
+            style={styles.helpBtn}
+            onPress={() => navigation.navigate('Help')}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.settingsIcon}>?</Text>
+          </TouchableOpacity>
+
+          {/* Account */}
+          <TouchableOpacity
+            style={styles.accountBtn}
+            onPress={() => { navigation.navigate('Account'); setPendingInvites(0); }}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.accountIcon}>👤</Text>
+            {pendingInvites > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{pendingInvites}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
           <Text style={styles.appName}>MeasureMate</Text>
           <Text style={styles.appSub}>MISURE PROFESSIONALI PER INFISSI</Text>
@@ -137,15 +169,6 @@ export default function HomeScreen() {
 
       {/* ── MENU ── */}
       <View style={styles.menu}>
-        {/* Logo brand nel menu */}
-        <View style={styles.brandCard}>
-          <Image
-            source={require('../../assets/icon_app.png')}
-            style={styles.brandImage}
-            resizeMode="contain"
-          />
-        </View>
-
         {MENU_ITEMS.map((item, i) => {
           const anim = anims[i];
           return (
@@ -215,21 +238,20 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  iconGlow: {
-    marginBottom: 14,
-    borderRadius: 26,
-    borderWidth: 2,
-    borderColor: 'rgba(100,170,255,0.45)',
-    elevation: 18,
-    shadowColor: '#3a80e0',
-    shadowOpacity: 0.65,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 6 },
+  logoBox: {
+    marginBottom: 12,
+    alignSelf: 'center',
+    borderRadius: 22,
     overflow: 'hidden',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-  logoImage: {
-    width: 100, height: 100,
-    borderRadius: 24,
+  logoImg: {
+    width: 90,
+    height: 90,
   },
   appName: {
     color: '#fff',
@@ -277,21 +299,7 @@ const styles = StyleSheet.create({
   },
   arrowChar: { fontSize: 22, fontWeight: '700', lineHeight: 28 },
 
-  // ── Brand card ──
-  brandCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    elevation: 3,
-    shadowColor: '#0c2d75', shadowOpacity: 0.10, shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
-  },
-  brandImage: {
-    width: 90, height: 90,
-  },
-
-  // ── Settings button ──
+  // ── Settings / Help buttons ──
   settingsBtn: {
     position: 'absolute',
     top: 52, right: 18,
@@ -300,5 +308,31 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center', justifyContent: 'center',
   },
+  helpBtn: {
+    position: 'absolute',
+    top: 52, right: 64,
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  accountBtn: {
+    position: 'absolute',
+    top: 52, left: 18,
+    width: 38, height: 38, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  accountIcon: { fontSize: 18 },
+  badge: {
+    position: 'absolute', top: -5, right: -5,
+    minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: '#DC2626',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5, borderColor: '#0b2870',
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   settingsIcon: { fontSize: 17, color: 'rgba(255,255,255,0.85)' },
 });

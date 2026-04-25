@@ -10,6 +10,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { Opening, Photo, RootStackParamList, OpeningStyle, OpeningSide } from '../types';
 import { getProject, saveOpening } from '../storage/database';
 import { getToleranceW, getToleranceH, getDimMode } from '../storage/settings';
+
+const parseMm = (t: string): number | null => {
+  const clean = t.replace(/[^0-9]/g, '');
+  if (!clean) return null;
+  const n = parseInt(clean, 10);
+  return isNaN(n) ? null : n;
+};
 import { LiveDrawing } from '../components/drawings';
 import StyleLabel from '../components/StyleLabel';
 
@@ -55,6 +62,8 @@ const emptyOpening = (): Opening => ({
   openingSide: null,
   hasFascia: null,
   hasSoglia: null,
+  hasBattente: null,
+  hasFermavetro: null,
   sopraluce: false,
   sopraluceHeight: null,
   blindType: null,
@@ -124,7 +133,9 @@ export default function MeasurementScreen() {
   const isWindow        = opening.style?.startsWith('window') ?? false;
   const showFascia      = isDoor && opening.style !== 'door_sliding';
   const showSoglia      = isDoor && opening.style !== 'door_sliding';
+  const showBattente    = showSoglia || isSubframe;
   const showSopraluce   = (isWindow || (isDoor && !isSliding)) && !isMonoblocco && !isSubframe;
+  const showFermavetro  = (isWindow || isDoor) && !isMonoblocco && !isSubframe && !opening.style?.startsWith('mosquito');
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchCameraAsync({
@@ -241,7 +252,7 @@ export default function MeasurementScreen() {
               placeholder="—"
               keyboardType="numeric"
               value={opening.width?.toString() ?? ''}
-              onChangeText={t => update({ width: t ? Number(t) : null })}
+              onChangeText={t => update({ width: parseMm(t) })}
             />
             <Text style={styles.unit}>mm</Text>
           </View>
@@ -273,7 +284,7 @@ export default function MeasurementScreen() {
               placeholder="—"
               keyboardType="numeric"
               value={opening.height?.toString() ?? ''}
-              onChangeText={t => update({ height: t ? Number(t) : null })}
+              onChangeText={t => update({ height: parseMm(t) })}
             />
             <Text style={styles.unit}>mm</Text>
           </View>
@@ -308,7 +319,7 @@ export default function MeasurementScreen() {
                   placeholder="—"
                   keyboardType="numeric"
                   value={opening.boxHeight?.toString() ?? ''}
-                  onChangeText={t => update({ boxHeight: t ? Number(t) : null })}
+                  onChangeText={t => update({ boxHeight: parseMm(t) })}
                 />
                 <Text style={styles.unit}>mm</Text>
               </View>
@@ -388,6 +399,23 @@ export default function MeasurementScreen() {
         </>
       )}
 
+      {/* ── Battente / 4° lato controtelaio ── */}
+      {showBattente && (
+        <>
+          <Text style={styles.label}>{isSubframe ? 'Traverso inferiore (4° lato)' : 'Battente'}</Text>
+          <TouchableOpacity
+            style={[styles.toggleBtn, opening.hasBattente === true && styles.toggleBtnActive]}
+            onPress={() => update({ hasBattente: opening.hasBattente === true ? null : true })}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.toggleDot, opening.hasBattente === true && styles.toggleDotActive]}/>
+            <Text style={[styles.toggleText, opening.hasBattente === true && styles.toggleTextActive]}>
+              {opening.hasBattente === true ? 'Presente' : 'Non presente'}
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
+
 
       {/* ── Sopraluce (pannello fisso sopra l'infisso) ── */}
       {showSopraluce && (
@@ -418,7 +446,7 @@ export default function MeasurementScreen() {
                       placeholder="—"
                       keyboardType="numeric"
                       value={opening.sopraluceHeight?.toString() ?? ''}
-                      onChangeText={t => update({ sopraluceHeight: t ? Number(t) : null })}
+                      onChangeText={t => update({ sopraluceHeight: parseMm(t) })}
                     />
                     <Text style={styles.unit}>mm</Text>
                   </View>
@@ -426,6 +454,23 @@ export default function MeasurementScreen() {
               </View>
             </>
           )}
+        </>
+      )}
+
+      {/* ── Fermavetro ── */}
+      {showFermavetro && (
+        <>
+          <Text style={styles.label}>Fermavetro</Text>
+          <TouchableOpacity
+            style={[styles.toggleBtn, opening.hasFermavetro === true && styles.toggleBtnActive]}
+            onPress={() => update({ hasFermavetro: opening.hasFermavetro === true ? null : true })}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.toggleDot, opening.hasFermavetro === true && styles.toggleDotActive]}/>
+            <Text style={[styles.toggleText, opening.hasFermavetro === true && styles.toggleTextActive]}>
+              {opening.hasFermavetro === true ? 'Presente' : 'Non presente'}
+            </Text>
+          </TouchableOpacity>
         </>
       )}
 

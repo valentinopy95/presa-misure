@@ -9,14 +9,19 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { RootStackParamList, Project, Opening, OpeningStyle } from '../types';
 import { getProject } from '../storage/database';
-import { getToleranceW, getToleranceH } from '../storage/settings';
+import {
+  getToleranceW, getToleranceH,
+  getRiattestattura, getBarLength, getKerf90, getSafetyMargin,
+  getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction,
+} from '../storage/settings';
 import { LiveDrawing } from '../components/drawings';
-import { generateHTML } from '../utils/pdfExport';
+import { generateHTML, PdfMode } from '../utils/pdfExport';
+import { MaterialsConfig } from '../utils/calculateMaterials';
 
 type Route = RouteProp<RootStackParamList, 'Document'>;
 
 const STYLE_LABELS: Record<OpeningStyle, string> = {
-  window_single:        'Battente',
+  window_single:        'Finestra battente',
   window_double:        'Finestra doppia',
   window_sliding:       'Finestra scorrevole',
   window_tilt_turn:     'Vasistas',
@@ -31,11 +36,37 @@ const STYLE_LABELS: Record<OpeningStyle, string> = {
   roller_blind:         'Monoblocco tapparella',
   subframe_window:      'Controtelaio',
   mosquito_fixed:       'Zanzariera fissa',
-  mosquito_rollup:      'Zanzariera sali scendi',
+  mosquito_rollup:      'Zanzariera avvolgibile',
   mosquito_lateral:     'Zanzariera laterale',
 };
 
 const dim = (v: number | null) => v != null ? `${v}` : '—';
+
+async function buildPhotoMap(openings: Opening[]): Promise<Record<string, string[]>> {
+  const map: Record<string, string[]> = {};
+  for (const o of openings) {
+    if (o.photos.length === 0) continue;
+    const b64s: string[] = [];
+    for (const photo of o.photos) {
+      try {
+        const b64 = await FileSystem.readAsStringAsync(photo.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        b64s.push(b64);
+      } catch {
+        // file mancante, salta
+      }
+    }
+    if (b64s.length > 0) map[o.id] = b64s;
+  }
+  return map;
+}
+
+const MODE_OPTIONS: { key: PdfMode; label: string; sub: string }[] = [
+  { key: 'misure',    label: 'Solo rilievo',    sub: 'Aperture e misure' },
+  { key: 'both',      label: 'Completo',         sub: 'Misure + materiale' },
+  { key: 'materiale', label: 'Solo materiale',   sub: 'Sviluppo barre' },
+];
 
 export default function DocumentScreen() {
   const route = useRoute<Route>();
@@ -43,21 +74,40 @@ export default function DocumentScreen() {
   const [project, setProject] = useState<Project | null>(null);
   const [toleranceW, setToleranceW] = useState(10);
   const [toleranceH, setToleranceH] = useState(10);
+  const [matConfig, setMatConfig] = useState<MaterialsConfig>({});
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportMode, setExportMode] = useState<PdfMode>('both');
 
   useEffect(() => {
     getProject(projectId).then(setProject);
-    getToleranceW().then(setToleranceW);
-    getToleranceH().then(setToleranceH);
+    Promise.all([
+      getToleranceW(), getToleranceH(),
+      getRiattestattura(), getBarLength(), getKerf90(),
+      getSafetyMargin(), getSlatPitch(), getZoccoloH(),
+      getFasciaH(), getAntaReduction(),
+    ]).then(([tolW, tolH, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed]) => {
+      setToleranceW(tolW);
+      setToleranceH(tolH);
+      setMatConfig({
+        riattestattura: riatt, barLength: barLen, kerf90: kerf,
+        safetyMarginPct: margin, slatPitch: slatP, zoccoloH: zocH,
+        fasciaH: fasH, antaReduction: antaRed,
+      });
+    });
   }, [projectId]);
 
   const safeName = project?.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim() ?? 'rilievo';
 
-  // Build PDF (native only) and return local URI
-  const buildPDF = async (): Promise<string> => {
+  const buildPDF = async (mode: PdfMode): Promise<string> => {
     if (!project) throw new Error('No project');
-    const html = generateHTML(project, toleranceW, toleranceH);
+    const hasPhotos = project.openings.some(o => o.photos.length > 0);
+    const photoMap = hasPhotos ? await buildPhotoMap(project.openings) : undefined;
+    const html = generateHTML(project, toleranceW, toleranceH, undefined, {
+      mode,
+      photoMap,
+      materialsConfig: matConfig,
+    });
     const { uri: tempUri } = await Print.printToFileAsync({ html, base64: false });
     const destUri = `${FileSystem.documentDirectory}${safeName}.pdf`;
     await FileSystem.copyAsync({ from: tempUri, to: destUri });
@@ -70,22 +120,22 @@ export default function DocumentScreen() {
     setExporting(true);
     try {
       if (Platform.OS === 'web') {
-        // Web: open HTML in new tab — user can print/save as PDF from browser
-        const html = generateHTML(project, toleranceW, toleranceH);
+        const html = generateHTML(project, toleranceW, toleranceH, undefined, {
+          mode: exportMode, materialsConfig: matConfig,
+        });
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const tab = window.open(url, '_blank');
         if (tab) setTimeout(() => URL.revokeObjectURL(url), 2000);
         return;
       }
-      // Android / iOS
-      const uri = await buildPDF();
+      const uri = await buildPDF(exportMode);
       await Sharing.shareAsync(uri, {
         mimeType: 'application/pdf',
         dialogTitle: `Rilievo - ${project.name}`,
         UTI: 'com.adobe.pdf',
       });
-    } catch (e) {
+    } catch {
       Alert.alert('Errore', 'Impossibile generare il PDF. Riprova.');
     } finally {
       setExporting(false);
@@ -98,21 +148,19 @@ export default function DocumentScreen() {
     setExporting(true);
     try {
       if (Platform.OS === 'web') {
-        // Web: download HTML file (user can open in browser and print as PDF)
-        const html = generateHTML(project, toleranceW, toleranceH);
+        const html = generateHTML(project, toleranceW, toleranceH, undefined, {
+          mode: exportMode, materialsConfig: matConfig,
+        });
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `${safeName}_rilievo.html`;
-        a.click();
+        a.href = url; a.download = `${safeName}_rilievo.html`; a.click();
         URL.revokeObjectURL(url);
         return;
       }
-      const srcUri = await buildPDF();
+      const srcUri = await buildPDF(exportMode);
       const fileName = `${safeName}.pdf`;
       if (Platform.OS === 'android') {
-        // Android: use Storage Access Framework to pick destination folder
         const { StorageAccessFramework } = FileSystem;
         const perms = await StorageAccessFramework.requestDirectoryPermissionsAsync();
         if (!perms.granted) { setExporting(false); return; }
@@ -127,14 +175,13 @@ export default function DocumentScreen() {
         });
         Alert.alert('Salvato!', `"${fileName}" salvato nella cartella scelta.`);
       } else {
-        // iOS: share sheet — user can tap "Salva su File"
         await Sharing.shareAsync(srcUri, {
           mimeType: 'application/pdf',
           dialogTitle: `Salva - ${project.name}`,
           UTI: 'com.adobe.pdf',
         });
       }
-    } catch (e) {
+    } catch {
       Alert.alert('Errore', 'Impossibile salvare il PDF. Riprova.');
     } finally {
       setExporting(false);
@@ -159,12 +206,8 @@ export default function DocumentScreen() {
         {/* ── Header progetto ── */}
         <View style={styles.projectHeader}>
           <Text style={styles.projectTitle}>{project.name}</Text>
-          {!!project.clientName && (
-            <Text style={styles.projectClient}>{project.clientName}</Text>
-          )}
-          {!!project.address && (
-            <Text style={styles.projectAddress}>📍 {project.address}</Text>
-          )}
+          {!!project.clientName && <Text style={styles.projectClient}>{project.clientName}</Text>}
+          {!!project.address && <Text style={styles.projectAddress}>📍 {project.address}</Text>}
           <View style={styles.statsRow}>
             <StatBox value={project.openings.length} label="Aperture" />
             <StatBox value={windows}  label="Finestre" />
@@ -239,11 +282,28 @@ export default function DocumentScreen() {
           <Pressable style={styles.modalSheet} onPress={() => {}}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Esporta PDF</Text>
-            {project && (
-              <Text style={styles.modalFilename}>
-                {safeName}{Platform.OS === 'web' ? '_rilievo.html' : '.pdf'}
-              </Text>
-            )}
+
+            {/* Selettore contenuto */}
+            <Text style={styles.modalSectionLabel}>Contenuto</Text>
+            <View style={styles.modeRow}>
+              {MODE_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.modeBtn, exportMode === opt.key && styles.modeBtnActive]}
+                  onPress={() => setExportMode(opt.key)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.modeBtnLabel, exportMode === opt.key && styles.modeBtnLabelActive]}>
+                    {opt.label}
+                  </Text>
+                  <Text style={[styles.modeBtnSub, exportMode === opt.key && styles.modeBtnSubActive]}>
+                    {opt.sub}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Azioni */}
             <TouchableOpacity style={styles.modalBtn} onPress={handleShare} activeOpacity={0.8}>
               <Text style={styles.modalBtnIcon}>📤</Text>
               <View>
@@ -251,7 +311,7 @@ export default function DocumentScreen() {
                   {Platform.OS === 'web' ? 'Apri nel browser' : 'Condividi'}
                 </Text>
                 <Text style={styles.modalBtnSub}>
-                  {Platform.OS === 'web' ? 'Stampa o salva come PDF dal browser' : 'Apri nelle app del dispositivo'}
+                  {Platform.OS === 'web' ? 'Stampa o salva come PDF' : 'Apri nelle app del dispositivo'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -259,10 +319,10 @@ export default function DocumentScreen() {
               <Text style={styles.modalBtnIcon}>💾</Text>
               <View>
                 <Text style={[styles.modalBtnTitle, { color: '#1565C0' }]}>
-                  {Platform.OS === 'web' ? 'Scarica HTML' : Platform.OS === 'ios' ? 'Salva su File' : 'Salva sul dispositivo'}
+                  {Platform.OS === 'ios' ? 'Salva su File' : 'Salva sul dispositivo'}
                 </Text>
                 <Text style={[styles.modalBtnSub, { color: '#7a9cc0' }]}>
-                  {Platform.OS === 'web' ? 'Scarica file HTML, aprilo e stampa come PDF' : Platform.OS === 'ios' ? 'Salva in File tramite share sheet' : 'Scegli una cartella di destinazione'}
+                  {Platform.OS === 'ios' ? 'Salva in File tramite share sheet' : 'Scegli una cartella di destinazione'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -304,15 +364,12 @@ function OpeningCard({
 
   return (
     <View style={cardStyles.card}>
-      {/* Header */}
       <View style={cardStyles.header}>
         <View style={cardStyles.numBadge}>
           <Text style={cardStyles.numText}>{index}</Text>
         </View>
         <Text style={cardStyles.name} numberOfLines={1}>{opening.name}</Text>
       </View>
-
-      {/* Disegno 2D */}
       <View style={cardStyles.drawingArea}>
         {opening.style ? (
           <LiveDrawing
@@ -327,29 +384,19 @@ function OpeningCard({
           </View>
         )}
       </View>
-
-      {/* Dimensioni */}
       <View style={cardStyles.dims}>
         <DimRow label="Largh." luce={opening.width} taglio={tagW} />
         <DimRow label="Altez." luce={opening.height} taglio={tagH} />
-        {isRoller && (
-          <DimRow label="Cass." luce={opening.boxHeight ?? null} taglio={null} />
-        )}
+        {isRoller && <DimRow label="Cass." luce={opening.boxHeight ?? null} taglio={null} />}
       </View>
-
-      {/* Tipologia */}
       {styleLabel && (
         <View style={cardStyles.styleBadge}>
           <Text style={cardStyles.styleText}>{styleLabel}</Text>
         </View>
       )}
-
-      {/* Note */}
       {!!opening.textNote && (
         <Text style={cardStyles.note} numberOfLines={2}>{opening.textNote}</Text>
       )}
-
-      {/* Foto */}
       {opening.photos.length > 0 && (
         <Text style={cardStyles.photos}>📷 {opening.photos.length} foto</Text>
       )}
@@ -435,8 +482,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 11, fontWeight: '800', color: '#1565C0',
-    textTransform: 'uppercase', letterSpacing: 1.5,
-    marginBottom: 12,
+    textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   empty: { alignItems: 'center', padding: 40 },
@@ -457,8 +503,7 @@ const styles = StyleSheet.create({
 
   // Modal
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22,
@@ -468,13 +513,23 @@ const styles = StyleSheet.create({
     width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD',
     alignSelf: 'center', marginBottom: 18,
   },
-  modalTitle: {
-    fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 4,
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 14 },
+  modalSectionLabel: {
+    fontSize: 10, fontWeight: '700', color: '#888',
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8,
   },
-  modalFilename: {
-    fontSize: 12, color: '#888', marginBottom: 20,
-    fontStyle: 'italic',
+  modeRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
+  modeBtn: {
+    flex: 1, paddingVertical: 10, paddingHorizontal: 6,
+    borderRadius: 12, borderWidth: 1.5, borderColor: '#E0E8F0',
+    backgroundColor: '#F5F8FF', alignItems: 'center',
   },
+  modeBtnActive: { borderColor: '#1565C0', backgroundColor: '#EEF4FF' },
+  modeBtnLabel: { fontSize: 11, fontWeight: '700', color: '#8a9ab0', marginBottom: 2 },
+  modeBtnLabelActive: { color: '#1565C0' },
+  modeBtnSub: { fontSize: 9, color: '#aaa', textAlign: 'center' },
+  modeBtnSubActive: { color: '#5a8ac0' },
+
   modalBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     backgroundColor: '#1565C0', borderRadius: 14,
@@ -486,8 +541,6 @@ const styles = StyleSheet.create({
   modalBtnIcon: { fontSize: 24 },
   modalBtnTitle: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 1 },
   modalBtnSub:   { fontSize: 11, color: 'rgba(255,255,255,0.75)' },
-  modalCancel: {
-    alignItems: 'center', paddingVertical: 14, marginTop: 4,
-  },
+  modalCancel: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
   modalCancelText: { fontSize: 15, color: '#888', fontWeight: '600' },
 });

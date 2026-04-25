@@ -12,12 +12,14 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "scheme": "presamisure",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.valen.presamisure"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon_app.png",
+        "foregroundImage": "./assets/icon_adaptive.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,

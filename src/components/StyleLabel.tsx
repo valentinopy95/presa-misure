@@ -4,6 +4,7 @@ import { OpeningStyle } from '../types';
 import { LiveDrawing } from './drawings';
 
 const LABELS: Record<OpeningStyle, string> = {
+  window_fixed:         'Fisso',
   window_single:        'Battente',
   window_double:        'Finestra doppia',
   window_sliding:       'Finestra scorrevole',

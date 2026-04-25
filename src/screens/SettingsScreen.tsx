@@ -5,22 +5,47 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import {
   DEFAULT_TOLERANCE_W, DEFAULT_TOLERANCE_H, DEFAULT_RIATTESTATTURA,
+  DEFAULT_BAR_LENGTH, DEFAULT_KERF_90, DEFAULT_SAFETY_MARGIN,
+  DEFAULT_SLAT_PITCH, DEFAULT_ZOCCOLO_H, DEFAULT_FASCIA_H,
+  DEFAULT_ANTA_REDUCTION,
   getToleranceW, setToleranceW,
   getToleranceH, setToleranceH,
   getRiattestattura, setRiattestattura,
+  getBarLength, setBarLength,
+  getKerf90, setKerf90,
+  getSafetyMargin, setSafetyMargin,
+  getSlatPitch, setSlatPitch,
+  getZoccoloH, setZoccoloH,
+  getFasciaH, setFasciaH,
+  getAntaReduction, setAntaReduction,
 } from '../storage/settings';
 
 export default function SettingsScreen() {
   const { theme, toggleDark } = useTheme();
   const t = theme;
-  const [tolWText, setTolWText] = useState<string>(String(DEFAULT_TOLERANCE_W));
-  const [tolHText, setTolHText] = useState<string>(String(DEFAULT_TOLERANCE_H));
-  const [riattText, setRiattText] = useState<string>(String(DEFAULT_RIATTESTATTURA));
+
+  const [tolWText,   setTolWText]   = useState<string>(String(DEFAULT_TOLERANCE_W));
+  const [tolHText,   setTolHText]   = useState<string>(String(DEFAULT_TOLERANCE_H));
+  const [riattText,  setRiattText]  = useState<string>(String(DEFAULT_RIATTESTATTURA));
+  const [barText,    setBarText]    = useState<string>(String(DEFAULT_BAR_LENGTH));
+  const [kerfText,   setKerfText]   = useState<string>(String(DEFAULT_KERF_90));
+  const [marginText, setMarginText] = useState<string>(String(DEFAULT_SAFETY_MARGIN));
+  const [slatText,   setSlatText]   = useState<string>(String(DEFAULT_SLAT_PITCH));
+  const [zocText,    setZocText]    = useState<string>(String(DEFAULT_ZOCCOLO_H));
+  const [fasText,    setFasText]    = useState<string>(String(DEFAULT_FASCIA_H));
+  const [antaRedText, setAntaRedText] = useState<string>(String(DEFAULT_ANTA_REDUCTION));
 
   useEffect(() => {
     getToleranceW().then(v => setTolWText(String(v)));
     getToleranceH().then(v => setTolHText(String(v)));
     getRiattestattura().then(v => setRiattText(String(v)));
+    getBarLength().then(v => setBarText(String(v)));
+    getKerf90().then(v => setKerfText(String(v)));
+    getSafetyMargin().then(v => setMarginText(String(v)));
+    getSlatPitch().then(v => setSlatText(String(v)));
+    getZoccoloH().then(v => setZocText(String(v)));
+    getFasciaH().then(v => setFasText(String(v)));
+    getAntaReduction().then(v => setAntaRedText(String(v)));
   }, []);
 
   const handleTolWEnd = () => {
@@ -42,6 +67,55 @@ export default function SettingsScreen() {
     const val = isNaN(n) || n < 0 ? DEFAULT_RIATTESTATTURA : Math.min(n, 99);
     setRiattText(String(val));
     setRiattestattura(val);
+  };
+
+  const handleBarEnd = () => {
+    const n = parseInt(barText, 10);
+    const val = isNaN(n) || n <= 0 ? DEFAULT_BAR_LENGTH : Math.min(Math.max(n, 1000), 9999);
+    setBarText(String(val));
+    setBarLength(val);
+  };
+
+  const handleKerfEnd = () => {
+    const n = parseInt(kerfText, 10);
+    const val = isNaN(n) || n < 0 ? DEFAULT_KERF_90 : Math.min(n, 20);
+    setKerfText(String(val));
+    setKerf90(val);
+  };
+
+  const handleMarginEnd = () => {
+    const n = parseInt(marginText, 10);
+    const val = isNaN(n) || n < 0 ? DEFAULT_SAFETY_MARGIN : Math.min(n, 50);
+    setMarginText(String(val));
+    setSafetyMargin(val);
+  };
+
+  const handleSlatEnd = () => {
+    const n = parseInt(slatText, 10);
+    const val = isNaN(n) || n <= 0 ? DEFAULT_SLAT_PITCH : Math.min(Math.max(n, 10), 200);
+    setSlatText(String(val));
+    setSlatPitch(val);
+  };
+
+  const handleZocEnd = () => {
+    const n = parseInt(zocText, 10);
+    const val = isNaN(n) || n <= 0 ? DEFAULT_ZOCCOLO_H : Math.min(Math.max(n, 50), 500);
+    setZocText(String(val));
+    setZoccoloH(val);
+  };
+
+  const handleFasEnd = () => {
+    const n = parseInt(fasText, 10);
+    const val = isNaN(n) || n <= 0 ? DEFAULT_FASCIA_H : Math.min(Math.max(n, 50), 500);
+    setFasText(String(val));
+    setFasciaH(val);
+  };
+
+  const handleAntaRedEnd = () => {
+    const n = parseInt(antaRedText, 10);
+    const val = isNaN(n) || n < 0 ? DEFAULT_ANTA_REDUCTION : Math.min(n, 100);
+    setAntaRedText(String(val));
+    setAntaReduction(val);
   };
 
   const exW = 1200 - (parseInt(tolWText, 10) || 0);
@@ -156,6 +230,195 @@ export default function SettingsScreen() {
               onEndEditing={handleRiattEnd}
               onBlur={handleRiattEnd}
               maxLength={2}
+              selectTextOnFocus
+            />
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Lunghezza barra ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Lunghezza barra (mm)</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
+        Lunghezza utile della barra dopo squadratura (default 6400 mm)
+      </Text>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
+        <View style={styles.toleranceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Lunghezza barra</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 6400 mm</Text>
+          </View>
+          <View style={styles.toleranceInputWrap}>
+            <TextInput
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder, width: 100 }]}
+              keyboardType="numeric"
+              value={barText}
+              onChangeText={setBarText}
+              onEndEditing={handleBarEnd}
+              onBlur={handleBarEnd}
+              maxLength={4}
+              selectTextOnFocus
+            />
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Kerf 90° ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Kerf taglio 90°</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
+        Spessore lama della troncatrice per tagli a 90° (default 4 mm)
+      </Text>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
+        <View style={styles.toleranceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Spessore lama</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 4 mm</Text>
+          </View>
+          <View style={styles.toleranceInputWrap}>
+            <TextInput
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
+              keyboardType="numeric"
+              value={kerfText}
+              onChangeText={setKerfText}
+              onEndEditing={handleKerfEnd}
+              onBlur={handleKerfEnd}
+              maxLength={2}
+              selectTextOnFocus
+            />
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Margine di sicurezza ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Margine di sicurezza</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
+        Percentuale aggiuntiva sul numero di barre calcolate (default 0%)
+      </Text>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
+        <View style={styles.toleranceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Margine aggiuntivo</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 5%</Text>
+          </View>
+          <View style={styles.toleranceInputWrap}>
+            <TextInput
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
+              keyboardType="numeric"
+              value={marginText}
+              onChangeText={setMarginText}
+              onEndEditing={handleMarginEnd}
+              onBlur={handleMarginEnd}
+              maxLength={2}
+              selectTextOnFocus
+            />
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>%</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Riduzione anta ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Riduzione anta</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
+        Riduzione totale telaio → anta (somma dei due lati). Default 0 mm.
+      </Text>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
+        <View style={styles.toleranceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Riduzione anta</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 10 mm</Text>
+          </View>
+          <View style={styles.toleranceInputWrap}>
+            <TextInput
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
+              keyboardType="numeric"
+              value={antaRedText}
+              onChangeText={setAntaRedText}
+              onEndEditing={handleAntaRedEnd}
+              onBlur={handleAntaRedEnd}
+              maxLength={3}
+              selectTextOnFocus
+            />
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Passo lamella persiana ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Passo lamella persiana</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
+        Interasse tra le lamelle della persiana (50 / 55 / 60 / 77 mm)
+      </Text>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
+        <View style={styles.toleranceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Passo lamella</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 55 mm</Text>
+          </View>
+          <View style={styles.toleranceInputWrap}>
+            <TextInput
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
+              keyboardType="numeric"
+              value={slatText}
+              onChangeText={setSlatText}
+              onEndEditing={handleSlatEnd}
+              onBlur={handleSlatEnd}
+              maxLength={3}
+              selectTextOnFocus
+            />
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Altezza zoccolo persiana ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Altezza zoccolo persiana</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
+        Altezza del profilo zoccolo inferiore della persiana (default 100 mm)
+      </Text>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
+        <View style={styles.toleranceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Altezza zoccolo</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 100 mm</Text>
+          </View>
+          <View style={styles.toleranceInputWrap}>
+            <TextInput
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
+              keyboardType="numeric"
+              value={zocText}
+              onChangeText={setZocText}
+              onEndEditing={handleZocEnd}
+              onBlur={handleZocEnd}
+              maxLength={3}
+              selectTextOnFocus
+            />
+            <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Altezza fascia porta-finestra ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Altezza fascia porta-finestra</Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
+        Altezza della fascia superiore per persiane porta-finestra (default 100 mm)
+      </Text>
+      <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
+        <View style={styles.toleranceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Altezza fascia</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 100 mm</Text>
+          </View>
+          <View style={styles.toleranceInputWrap}>
+            <TextInput
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
+              keyboardType="numeric"
+              value={fasText}
+              onChangeText={setFasText}
+              onEndEditing={handleFasEnd}
+              onBlur={handleFasEnd}
+              maxLength={3}
               selectTextOnFocus
             />
             <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
