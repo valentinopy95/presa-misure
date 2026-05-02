@@ -2,71 +2,54 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, Image } from 'react-native';
 
 const NAVY   = '#0c2d75';
-const ACCENT = '#FFC107';
 const MASCOT = require('../../assets/principale.png');
 
 export default function SplashScreen() {
-  const logoScale   = useRef(new Animated.Value(0.7)).current;
+  const logoScale   = useRef(new Animated.Value(0.8)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
-  const glowAnim    = useRef(new Animated.Value(0)).current;
+  const breathScale = useRef(new Animated.Value(1)).current;
+  const breathOpacity = useRef(new Animated.Value(0.25)).current;
 
   useEffect(() => {
+    // Entrata logo
     Animated.parallel([
-      Animated.spring(logoScale, {
-        toValue: 1,
-        tension: 55,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.timing(logoOpacity, {
-        toValue: 1,
-        duration: 380,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
+      Animated.spring(logoScale, { toValue: 1, tension: 55, friction: 7, useNativeDriver: true }),
+      Animated.timing(logoOpacity, { toValue: 1, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start(() => {
-      Animated.timing(textOpacity, {
-        toValue: 1,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(textOpacity, { toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     });
 
-    // Pulsazione del bagliore sotto il logo
-    const glow = Animated.loop(
+    // Respirazione cerchio
+    const breathe = Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 1100,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 1100,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
+        Animated.parallel([
+          Animated.timing(breathScale,   { toValue: 1.18, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(breathOpacity, { toValue: 0.08, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(breathScale,   { toValue: 1,    duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(breathOpacity, { toValue: 0.25, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
       ])
     );
-    const t = setTimeout(() => glow.start(), 600);
-    return () => { clearTimeout(t); glow.stop(); };
+    const t = setTimeout(() => breathe.start(), 500);
+    return () => { clearTimeout(t); breathe.stop(); };
   }, []);
-
-  const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.45] });
-  const glowScale   = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
 
   return (
     <View style={s.root}>
-      {/* Cerchio di bagliore dietro al logo */}
-      <Animated.View style={[s.glow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}/>
+
+      {/* Disco bianco dietro il robot — nasconde il rettangolo bianco */}
+      <Animated.View style={[s.disc, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}/>
 
       {/* Mascotte */}
       <Animated.View style={[s.logoWrap, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
         <Image source={MASCOT} style={s.mascot} resizeMode="contain"/>
       </Animated.View>
+
+      {/* Palla che respira */}
+      <Animated.View style={[s.breathCircle, { opacity: breathOpacity, transform: [{ scale: breathScale }] }]}/>
 
       {/* Testo */}
       <Animated.View style={[s.textWrap, { opacity: textOpacity }]}>
@@ -74,40 +57,44 @@ export default function SplashScreen() {
         <Text style={s.appSub}>Gestione rilievi infissi</Text>
       </Animated.View>
 
-      {/* Barra di loading in basso */}
+      {/* Loading divertente — laser scan */}
       <Animated.View style={[s.loaderWrap, { opacity: textOpacity }]}>
-        <LoadingBar/>
+        <LaserLoader/>
       </Animated.View>
+
     </View>
   );
 }
 
-function LoadingBar() {
-  const progress = useRef(new Animated.Value(0)).current;
+function LaserLoader() {
+  const pos  = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(progress, {
-          toValue: 1,
-          duration: 1200,
-          easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: false,
-        }),
-        Animated.timing(progress, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: false,
-        }),
+        Animated.parallel([
+          Animated.timing(pos, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }),
+          Animated.sequence([
+            Animated.timing(glow, { toValue: 0.4, duration: 450, useNativeDriver: true }),
+            Animated.timing(glow, { toValue: 1,   duration: 450, useNativeDriver: true }),
+          ]),
+        ]),
+        Animated.timing(pos, { toValue: 0, duration: 0, useNativeDriver: false }),
       ])
     ).start();
   }, []);
 
-  const width = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  const left = pos.interpolate({ inputRange: [0, 1], outputRange: ['0%', '88%'] });
 
   return (
-    <View style={s.barTrack}>
-      <Animated.View style={[s.barFill, { width }]}/>
+    <View style={s.laserTrack}>
+      {/* Traccia */}
+      <View style={s.laserLine}/>
+      {/* Punto laser */}
+      <Animated.View style={[s.laserDot, { left, opacity: glow }]}>
+        <View style={s.laserDotInner}/>
+      </Animated.View>
     </View>
   );
 }
@@ -118,34 +105,47 @@ const s = StyleSheet.create({
     backgroundColor: NAVY,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: 140,
   },
 
-  glow: {
+  // Disco bianco dietro mascotte
+  disc: {
     position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: ACCENT,
+    width: 210, height: 210,
+    borderRadius: 105,
+    backgroundColor: '#fff',
+    marginTop: 140,
   },
 
-  logoWrap: { alignItems: 'center', marginBottom: 24, zIndex: 2 },
+  logoWrap: { zIndex: 2 },
   mascot:   { width: 200, height: 200 },
 
-  textWrap:  { alignItems: 'center', marginBottom: 0, zIndex: 2 },
-  appName:   { fontSize: 30, fontWeight: '900', color: '#fff', letterSpacing: 0.4 },
-  appSub:    { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 6, letterSpacing: 0.3 },
-
-  loaderWrap: { position: 'absolute', bottom: 52, width: 120 },
-  barTrack: {
-    height: 3,
-    width: '100%',
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    overflow: 'hidden',
+  // Cerchio che respira
+  breathCircle: {
+    width: 220, height: 220,
+    borderRadius: 110,
+    backgroundColor: '#fff',
+    marginTop: 20,
   },
-  barFill: {
-    height: '100%',
-    borderRadius: 2,
-    backgroundColor: '#FFC107',
+
+  textWrap: { alignItems: 'center', marginTop: 28 },
+  appName:  { fontSize: 36, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
+  appSub:   { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 5, letterSpacing: 0.3 },
+
+  // Laser loader
+  loaderWrap: { marginTop: 40, width: 140 },
+  laserTrack: { height: 20, justifyContent: 'center' },
+  laserLine:  { height: 2, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 1 },
+  laserDot: {
+    position: 'absolute',
+    width: 18, height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 80, 80, 0.25)',
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: -8,
+  },
+  laserDotInner: {
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: '#ff4444',
   },
 });

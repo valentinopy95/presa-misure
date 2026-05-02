@@ -4,7 +4,7 @@
     "slug": "misu",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/principale.png",
+    "icon": "./assets/icona_app.jpeg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -19,8 +19,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/principale.png",
-        "backgroundColor": "#FFC107"
+        "foregroundImage": "./assets/icona_app.jpeg",
+        "backgroundColor": "#0c2d75"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

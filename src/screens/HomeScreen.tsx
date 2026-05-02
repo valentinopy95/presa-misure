@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   StatusBar, Animated, Easing, Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,7 +20,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 const MENU_ITEMS = [
   {
     key: 'create',
-    image: require('../../assets/principale.png'),
+    image: require('../../assets/menu_create.jpeg'),
     title: 'Crea progetto misure',
     subtitle: 'Nuovo rilievo infissi',
     color: '#1565C0',
@@ -175,55 +174,23 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: t.bg }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#05112b" />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* ── HEADER ── */}
+      {/* ── HEADER bianco ── */}
       <Animated.View style={{
         opacity: headerAnim,
         transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) }],
       }}>
-        <LinearGradient
-          colors={['#05112b', '#0b2870', '#1558c8']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.7, y: 1 }}
-          style={styles.header}
-        >
-          {/* Logo su sfondo bianco */}
-          <View style={styles.logoBox}>
-            <Image
-              source={require('../../assets/icon_adaptive.png')}
-              style={styles.logoImg}
-              resizeMode="contain"
-            />
-          </View>
-
-          {/* Settings */}
-          <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() => navigation.navigate('Settings')}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.settingsIcon}>⚙</Text>
-          </TouchableOpacity>
-
-          {/* Help */}
-          <TouchableOpacity
-            style={styles.helpBtn}
-            onPress={openTour}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.settingsIcon}>?</Text>
-          </TouchableOpacity>
-
-          {/* Account */}
+        <View style={styles.header}>
+          {/* Bottoni sinistra/destra */}
           <View ref={accountRef} collapsable={false} style={styles.accountBtn}>
             <TouchableOpacity
               onPress={() => { navigation.navigate('Account'); setPendingInvites(0); }}
               activeOpacity={0.75}
               style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text style={styles.accountIcon}>👤</Text>
+              <Text style={styles.headerIcon}>👤</Text>
               {pendingInvites > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{pendingInvites}</Text>
@@ -231,10 +198,18 @@ export default function HomeScreen() {
               )}
             </TouchableOpacity>
           </View>
+          <TouchableOpacity style={styles.helpBtn} onPress={openTour} activeOpacity={0.75}>
+            <Text style={styles.headerIcon}>?</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.settingsBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.75}>
+            <Text style={styles.headerIcon}>⚙</Text>
+          </TouchableOpacity>
 
+          {/* Mascotte + titolo centrati */}
+          <Image source={require('../../assets/principale.png')} style={styles.logoImg} resizeMode="contain"/>
           <Text style={styles.appName}>Misu</Text>
           <Text style={styles.appSub}>MISURE PROFESSIONALI PER INFISSI</Text>
-        </LinearGradient>
+        </View>
       </Animated.View>
 
       {/* ── MENU ── */}
@@ -252,27 +227,24 @@ export default function HomeScreen() {
             >
               <View ref={cardRef} collapsable={false}>
               <TouchableOpacity
-                style={[styles.card, { backgroundColor: t.card }]}
+                style={styles.card}
                 onPress={() => handlePress(item.key)}
                 activeOpacity={0.72}
               >
-                {/* Left accent stripe */}
-                <View style={[styles.accent, { backgroundColor: item.color }]} />
-
-                {/* Icon box */}
+                {/* Icon */}
                 <View style={styles.iconBox}>
                   <Image source={item.image} style={styles.icon} resizeMode="contain" />
                 </View>
 
                 {/* Text */}
                 <View style={styles.cardText}>
-                  <Text style={[styles.cardTitle, { color: item.color }]}>{item.title}</Text>
-                  <Text style={[styles.cardSub, { color: t.textSecondary }]}>{item.subtitle}</Text>
+                  <Text style={styles.cardTitle}>{item.title}</Text>
+                  <Text style={styles.cardSub}>{item.subtitle}</Text>
                 </View>
 
                 {/* Arrow */}
-                <View style={[styles.arrowBadge, { backgroundColor: item.light }]}>
-                  <Text style={[styles.arrowChar, { color: item.color }]}>›</Text>
+                <View style={styles.arrowBadge}>
+                  <Text style={styles.arrowChar}>›</Text>
                 </View>
               </TouchableOpacity>
               </View>
@@ -295,58 +267,24 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#EEF2F7' },
+const NAVY = '#0c2d75';
 
-  // ── Header ──
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: NAVY },
+
+  // ── Header bianco ──
   header: {
-    paddingTop: 54, paddingBottom: 36, paddingHorizontal: 28,
+    backgroundColor: '#fff',
+    paddingTop: 52, paddingBottom: 24, paddingHorizontal: 28,
     alignItems: 'center',
-    overflow: 'hidden',
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
-    elevation: 10,
-    shadowColor: '#05112b',
-    shadowOpacity: 0.55,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-  },
-  blob: {
-    position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  logoBox: {
-    marginBottom: 12,
-    alignSelf: 'center',
-    borderRadius: 22,
-    overflow: 'hidden',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
     elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
   },
-  logoImg: {
-    width: 90,
-    height: 90,
-  },
-  appName: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    textShadowColor: 'rgba(0,30,120,0.5)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 10,
-  },
-  appSub: {
-    color: 'rgba(140,190,255,0.9)',
-    fontSize: 10,
-    marginTop: 7,
-    letterSpacing: 2.5,
-    fontWeight: '700',
-  },
+  logoImg: { width: 100, height: 100, marginBottom: 8 },
+  appName: { fontSize: 28, fontWeight: '900', color: NAVY, letterSpacing: 1 },
+  appSub:  { fontSize: 10, color: '#aaa', marginTop: 4, letterSpacing: 2, fontWeight: '700' },
 
   // ── Menu ──
   menu: { padding: 18, gap: 11, marginTop: 6 },
@@ -357,60 +295,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     overflow: 'hidden',
     elevation: 3,
-    shadowColor: '#0c2d75', shadowOpacity: 0.10, shadowRadius: 10, shadowOffset: { width: 0, height: 3 },
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
-  accent: { width: 4, alignSelf: 'stretch' },
   iconBox: {
     width: 64, height: 64,
     margin: 12,
     borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
   },
-  icon: { width: 50, height: 50 },
+  icon: { width: 54, height: 54 },
   cardText: { flex: 1, paddingVertical: 14, paddingRight: 4 },
-  cardTitle: { fontSize: 14, fontWeight: '800', marginBottom: 3, letterSpacing: 0.1 },
-  cardSub: { fontSize: 11.5, color: '#8a9ab0', fontWeight: '500', letterSpacing: 0.1 },
+  cardTitle: { fontSize: 14, fontWeight: '800', color: NAVY, marginBottom: 3, letterSpacing: 0.1 },
+  cardSub:   { fontSize: 11.5, color: '#8a9ab0', fontWeight: '500' },
   arrowBadge: {
     width: 30, height: 30, borderRadius: 10,
+    backgroundColor: '#EEF2F7',
     alignItems: 'center', justifyContent: 'center',
     marginRight: 14,
   },
-  arrowChar: { fontSize: 22, fontWeight: '700', lineHeight: 28 },
+  arrowChar: { fontSize: 22, fontWeight: '700', color: NAVY, lineHeight: 28 },
 
-  // ── Settings / Help buttons ──
+  // ── Buttons header ──
   settingsBtn: {
-    position: 'absolute',
-    top: 52, right: 18,
-    width: 38, height: 38, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    position: 'absolute', top: 52, right: 18,
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: '#F0F4F8',
     alignItems: 'center', justifyContent: 'center',
   },
   helpBtn: {
-    position: 'absolute',
-    top: 52, right: 64,
-    width: 38, height: 38, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    position: 'absolute', top: 52, right: 62,
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: '#F0F4F8',
     alignItems: 'center', justifyContent: 'center',
   },
   accountBtn: {
-    position: 'absolute',
-    top: 52, left: 18,
-    width: 38, height: 38, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    position: 'absolute', top: 52, left: 18,
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: '#F0F4F8',
     alignItems: 'center', justifyContent: 'center',
   },
-  accountIcon: { fontSize: 18 },
+  headerIcon: { fontSize: 17 },
   badge: {
     position: 'absolute', top: -5, right: -5,
     minWidth: 18, height: 18, borderRadius: 9,
     backgroundColor: '#DC2626',
     alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 3,
-    borderWidth: 1.5, borderColor: '#0b2870',
   },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  settingsIcon: { fontSize: 17, color: 'rgba(255,255,255,0.85)' },
 });

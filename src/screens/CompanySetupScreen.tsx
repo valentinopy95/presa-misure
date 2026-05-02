@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, Image,
 } from 'react-native';
 import { supabase, createCompany, checkAndAcceptInvite, peekPendingInvite, Company } from '../lib/supabase';
-import AppLogo from '../components/AppLogo';
+
+const MASCOT = require('../../assets/principale.png');
 
 type Step = 'choose' | 'create' | 'waiting';
 
@@ -71,9 +72,9 @@ export default function CompanySetupScreen({ onComplete }: Props) {
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
-        {/* Header */}
+        {/* Header bianco con robot */}
         <View style={s.header}>
-          <AppLogo size="medium"/>
+          <Image source={MASCOT} style={s.mascot} resizeMode="contain"/>
           <Text style={s.title}>La tua azienda</Text>
           <Text style={s.sub}>
             {step === 'choose'
@@ -186,26 +187,25 @@ export default function CompanySetupScreen({ onComplete }: Props) {
 const BLUE = '#0c2d75';
 
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: '#F0F4F8' },
-  scroll: { flexGrow: 1, padding: 20, justifyContent: 'center' },
+  root:   { flex: 1, backgroundColor: '#fff' },
+  scroll: { flexGrow: 1, justifyContent: 'center' },
 
-  header:   { alignItems: 'center', marginBottom: 28 },
-  logoBox:  { width: 56, height: 56, borderRadius: 16, backgroundColor: BLUE, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  logoText: { color: '#fff', fontSize: 28, fontWeight: '900' },
-  title:    { fontSize: 22, fontWeight: '900', color: '#1a2a3a', marginBottom: 8 },
+  header:   { alignItems: 'center', backgroundColor: '#fff', paddingTop: 48, paddingBottom: 24, paddingHorizontal: 20 },
+  mascot:   { width: 120, height: 120, marginBottom: 12 },
+  title:    { fontSize: 22, fontWeight: '900', color: BLUE, marginBottom: 8 },
   sub:      { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 19, paddingHorizontal: 10 },
 
-  choices:       { gap: 12 },
-  choiceCard:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  choiceCardAlt: { borderWidth: 1.5, borderColor: '#e0e7ff' },
-  choiceIcon:    { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  choices:       { gap: 12, padding: 20, backgroundColor: BLUE, paddingBottom: 32 },
+  choiceCard:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  choiceCardAlt: {},
+  choiceIcon:    { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14, backgroundColor: '#F0F4F8' },
   choiceEmoji:   { fontSize: 22 },
   choiceBody:    { flex: 1 },
-  choiceTitle:   { fontSize: 15, fontWeight: '800', color: '#1a2a3a' },
+  choiceTitle:   { fontSize: 15, fontWeight: '800', color: BLUE },
   choiceSub:     { fontSize: 12, color: '#888', marginTop: 2 },
-  choiceArrow:   { fontSize: 22, color: '#ccc', fontWeight: '300' },
+  choiceArrow:   { fontSize: 22, color: BLUE, fontWeight: '700' },
 
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, elevation: 2, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, margin: 20, elevation: 2, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
 
   waitingBox:    { alignItems: 'center', paddingVertical: 12, marginBottom: 20 },
   waitingEmoji:  { fontSize: 40, marginBottom: 12 },
