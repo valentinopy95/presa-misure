@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, Image,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import AppLogo from '../components/AppLogo';
+
+const MASCOT = require('../../assets/principale.png');
 
 type Mode = 'login' | 'register';
 
 export default function AuthScreen() {
-  const [mode,     setMode]     = useState<Mode>('login');
-  const [name,     setName]     = useState('');
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm,  setConfirm]  = useState('');
-  const [loading,  setLoading]  = useState(false);
+  const [mode,      setMode]      = useState<Mode>('login');
+  const [name,      setName]      = useState('');
+  const [email,     setEmail]     = useState('');
+  const [password,  setPassword]  = useState('');
+  const [confirm,   setConfirm]   = useState('');
+  const [loading,   setLoading]   = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -41,22 +45,47 @@ export default function AuthScreen() {
           password,
           options: { data: { full_name: name.trim() } },
         });
-        if (error) Alert.alert('Registrazione non riuscita', error.message);
+        if (error) {
+          Alert.alert('Registrazione non riuscita', error.message);
+        } else {
+          setEmailSent(true);
+        }
       }
     } finally {
       setLoading(false);
     }
   };
 
+  if (emailSent) {
+    return (
+      <View style={s.root}>
+        <View style={s.verifyContainer}>
+          <View style={s.verifyIconBox}>
+            <Image source={MASCOT} style={s.verifyIcon} resizeMode="contain"/>
+          </View>
+          <Text style={s.verifyTitle}>Controlla la tua email</Text>
+          <Text style={s.verifySub}>
+            Abbiamo inviato un link di conferma a{'\n'}
+            <Text style={s.verifyEmail}>{email.trim()}</Text>
+          </Text>
+          <Text style={s.verifyNote}>
+            Apri il link nell'email per attivare il tuo account, poi torna qui ad accedere.
+          </Text>
+          <TouchableOpacity style={s.verifyBtn} onPress={() => { setEmailSent(false); setMode('login'); setPassword(''); setConfirm(''); }}>
+            <Text style={s.verifyBtnText}>Vai al login</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
+        {/* Titolo in alto */}
         <View style={s.header}>
-          <View style={s.logoBox}>
-            <Text style={s.logoText}>M</Text>
-          </View>
-          <Text style={s.appName}>MeasureMate</Text>
+          <Text style={s.appName}>Misu</Text>
           <Text style={s.appSub}>Gestione rilievi infissi</Text>
         </View>
 
@@ -139,6 +168,9 @@ export default function AuthScreen() {
           </View>
         </View>
 
+        {/* Mascotte grande in basso */}
+        <Image source={MASCOT} style={s.mascotBottom} resizeMode="contain"/>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -148,13 +180,12 @@ const BLUE = '#0c2d75';
 
 const s = StyleSheet.create({
   root:   { flex: 1, backgroundColor: '#F0F4F8' },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  scroll: { flexGrow: 1, padding: 20, paddingTop: 48 },
 
-  header:   { alignItems: 'center', marginBottom: 24 },
-  logoBox:  { width: 64, height: 64, borderRadius: 18, backgroundColor: BLUE, alignItems: 'center', justifyContent: 'center', marginBottom: 12, elevation: 6, shadowColor: BLUE, shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
-  logoText: { color: '#fff', fontSize: 34, fontWeight: '900' },
-  appName:  { fontSize: 26, fontWeight: '900', color: BLUE },
-  appSub:   { fontSize: 12, color: '#999', marginTop: 4 },
+  header:    { alignItems: 'center', marginBottom: 28 },
+  appName:   { fontSize: 36, fontWeight: '900', color: BLUE, letterSpacing: 0.5 },
+  appSub:    { fontSize: 13, color: '#999', marginTop: 6 },
+  mascotBottom: { width: 220, height: 220, alignSelf: 'center', marginTop: 16 },
 
   card: { backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', elevation: 3, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
 
@@ -172,4 +203,14 @@ const s = StyleSheet.create({
 
   btnPrimary:     { backgroundColor: BLUE, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4, elevation: 2, shadowColor: BLUE, shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   btnPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+
+  verifyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  verifyIconBox:   { width: 140, height: 140, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  verifyIcon:      { width: 140, height: 140 },
+  verifyTitle:     { fontSize: 24, fontWeight: '900', color: BLUE, textAlign: 'center', marginBottom: 12 },
+  verifySub:       { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 22, marginBottom: 16 },
+  verifyEmail:     { fontWeight: '800', color: BLUE },
+  verifyNote:      { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 20, marginBottom: 36, paddingHorizontal: 8 },
+  verifyBtn:       { backgroundColor: BLUE, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, elevation: 2, shadowColor: BLUE, shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  verifyBtnText:   { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

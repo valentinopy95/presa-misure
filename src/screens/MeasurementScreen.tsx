@@ -19,6 +19,7 @@ const parseMm = (t: string): number | null => {
 };
 import { LiveDrawing } from '../components/drawings';
 import StyleLabel from '../components/StyleLabel';
+import TourModal, { TourStep } from '../components/TourModal';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Measurement'>;
 type Route = RouteProp<RootStackParamList, 'Measurement'>;
@@ -67,6 +68,9 @@ const emptyOpening = (): Opening => ({
   sopraluce: false,
   sopraluceHeight: null,
   blindType: null,
+  outOfSquare: false,
+  heightLeft: null,
+  heightRight: null,
   style: null,
   profileSeries: null,
   glassType: null,
@@ -88,9 +92,58 @@ export default function MeasurementScreen() {
   const [dimMode, setDimMode] = useState<'taglio' | 'luce'>('taglio');
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [tourVisible, setTourVisible] = useState(false);
+
+  const MEASUREMENT_TOUR: TourStep[] = [
+    {
+      icon: '🖼️',
+      title: 'Anteprima disegno',
+      body: 'Il disegno si aggiorna in tempo reale mentre inserisci le misure. Mostra la tipologia, le ante, il sopraluce e la posizione fuori squadra.',
+      spot: null,
+    },
+    {
+      icon: '🔲',
+      title: 'Tipologia apertura',
+      body: 'Premi "Cambia tipo" per scegliere la tipologia: finestra, porta, persiana, zanzariera, monoblocco ecc. La tipologia determina quali misure servono.',
+      spot: null,
+    },
+    {
+      icon: '📏',
+      title: 'Larghezza e altezza',
+      body: `Inserisci le misure del vano in millimetri. L'app calcola automaticamente le misure di taglio sottraendo la tolleranza (attuale: L-${toleranceW}mm / H-${toleranceH}mm).`,
+      spot: null,
+    },
+    {
+      icon: '📐',
+      title: 'Fuori squadra',
+      body: 'Se il vano non è perfettamente rettangolare attiva "Fuori squadra" e inserisci altezza sinistra e destra. Il disegno mostrerà il traverso inclinato.',
+      spot: null,
+    },
+    {
+      icon: '💾',
+      title: 'Salva apertura',
+      body: 'Premi "Salva" per memorizzare questa apertura nel rilievo. Puoi anche scegliere "Salva e sviluppa" per vedere subito il calcolo materiali.',
+      spot: null,
+    },
+  ];
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => setTourVisible(true)} style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
+          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, toleranceW, toleranceH]);
 
   const normalizeOpening = (o: Opening): Opening => ({
-    sopraluce: false, sopraluceHeight: null, ...o,
+    ...o,
+    sopraluce:       o.sopraluce       ?? false,
+    sopraluceHeight: o.sopraluceHeight ?? null,
+    outOfSquare:     o.outOfSquare     ?? false,
+    heightLeft:      o.heightLeft      ?? null,
+    heightRight:     o.heightRight     ?? null,
   });
 
   useEffect(() => {
@@ -126,16 +179,27 @@ export default function MeasurementScreen() {
   const taglioH = opening.height != null ? opening.height - toleranceH : null;
   const isMonoblocco    = opening.style === 'roller_blind';
   const isSubframe      = opening.style === 'subframe_window';
+  const isFixed         = opening.style === 'window_fixed';
   const isSliding       = opening.style === 'door_sliding' || opening.style === 'window_sliding';
   const isMosquitoNoSide = opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup';
-  const hideLeafCount   = isSubframe || opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup' || opening.style === 'mosquito_lateral';
+  const hideLeafCount   = isSubframe || isFixed || isMonoblocco || opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup' || opening.style === 'mosquito_lateral';
+  const hideSide        = isSubframe || isFixed || isMosquitoNoSide;
   const isDoor          = opening.style?.startsWith('door') ?? false;
   const isWindow        = opening.style?.startsWith('window') ?? false;
   const showFascia      = isDoor && opening.style !== 'door_sliding';
   const showSoglia      = isDoor && opening.style !== 'door_sliding';
   const showBattente    = showSoglia || isSubframe;
   const showSopraluce   = (isWindow || (isDoor && !isSliding)) && !isMonoblocco && !isSubframe;
-  const showFermavetro  = (isWindow || isDoor) && !isMonoblocco && !isSubframe && !opening.style?.startsWith('mosquito');
+  const showFermavetro  = (isWindow || isDoor) && !isMonoblocco && !isSubframe && !isFixed && !opening.style?.startsWith('mosquito');
+  const canHaveOutOfSquare = !!opening.style && !isMonoblocco && !isSubframe && !opening.style.startsWith('mosquito');
+
+  const fsLeft     = opening.heightLeft;
+  const fsRight    = opening.heightRight;
+  const fsDelta    = fsLeft != null && fsRight != null ? Math.abs(fsLeft - fsRight) : null;
+  // Lunghezza del traverso superiore inclinato: ipotenusa di ΔH e larghezza
+  const fsDiagonal = fsDelta != null && opening.width != null
+    ? Math.round(Math.sqrt(opening.width ** 2 + fsDelta ** 2))
+    : null;
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchCameraAsync({
@@ -191,6 +255,11 @@ export default function MeasurementScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <TourModal
+        visible={tourVisible}
+        steps={MEASUREMENT_TOUR}
+        onClose={() => setTourVisible(false)}
+      />
 
       {/* ── Disegno 2D live (sempre visibile) ── */}
       <View style={styles.drawingCard}>
@@ -207,9 +276,13 @@ export default function MeasurementScreen() {
           dimMode={dimMode}
           hasFascia={opening.hasFascia}
           hasSoglia={opening.hasSoglia}
+          hasBattente={opening.hasBattente}
           blindType={opening.blindType}
           sopraluce={opening.sopraluce}
           sopraluceHeight={opening.sopraluceHeight}
+          outOfSquare={opening.outOfSquare}
+          heightLeft={opening.heightLeft}
+          heightRight={opening.heightRight}
         />
         {!opening.style && (
           <Text style={styles.drawingPlaceholder}>
@@ -270,38 +343,142 @@ export default function MeasurementScreen() {
         </View>
       </View>
 
-      {/* ── Altezza ── */}
-      <Text style={styles.label}>Altezza</Text>
-      <View style={styles.dimCard}>
-        <View style={styles.dimRow}>
-          <View style={styles.dimLabelCol}>
-            <Text style={styles.dimType}>LUCE</Text>
-            <Text style={styles.dimDesc}>misurata sul posto</Text>
+      {/* ── Altezza (nascosta quando fuori squadra è attivo, ma sempre visibile per stili che non lo supportano) ── */}
+      {(!opening.outOfSquare || !canHaveOutOfSquare) && (
+        <>
+          <Text style={styles.label}>Altezza</Text>
+          <View style={styles.dimCard}>
+            <View style={styles.dimRow}>
+              <View style={styles.dimLabelCol}>
+                <Text style={styles.dimType}>LUCE</Text>
+                <Text style={styles.dimDesc}>misurata sul posto</Text>
+              </View>
+              <View style={styles.dimInputWrap}>
+                <TextInput
+                  style={styles.dimField}
+                  placeholder="—"
+                  keyboardType="numeric"
+                  value={opening.height?.toString() ?? ''}
+                  onChangeText={t => update({ height: parseMm(t) })}
+                />
+                <Text style={styles.unit}>mm</Text>
+              </View>
+            </View>
+            <View style={styles.dimDivider}/>
+            <View style={styles.dimRow}>
+              <View style={styles.dimLabelCol}>
+                <Text style={[styles.dimType, styles.dimTypeTaglio]}>TAGLIO</Text>
+                <Text style={styles.dimDesc}>luce − {toleranceH} mm</Text>
+              </View>
+              <View style={styles.dimInputWrap}>
+                <Text style={styles.taglioValue}>{taglioH ?? '—'}</Text>
+                <Text style={styles.unit}>mm</Text>
+              </View>
+            </View>
           </View>
-          <View style={styles.dimInputWrap}>
-            <TextInput
-              style={styles.dimField}
-              placeholder="—"
-              keyboardType="numeric"
-              value={opening.height?.toString() ?? ''}
-              onChangeText={t => update({ height: parseMm(t) })}
-            />
-            <Text style={styles.unit}>mm</Text>
-          </View>
-        </View>
-        <View style={styles.dimDivider}/>
-        <View style={styles.dimRow}>
-          <View style={styles.dimLabelCol}>
-            <Text style={[styles.dimType, styles.dimTypeTaglio]}>TAGLIO</Text>
-            <Text style={styles.dimDesc}>luce − {toleranceH} mm</Text>
-          </View>
-          <View style={styles.dimInputWrap}>
-            <Text style={styles.taglioValue}>{taglioH ?? '—'}</Text>
-            <Text style={styles.unit}>mm</Text>
-          </View>
-        </View>
-      </View>
-      <Text style={styles.toleranceHint}>Tolleranze modificabili in Impostazioni ⚙️</Text>
+          <Text style={styles.toleranceHint}>Tolleranze modificabili in Impostazioni ⚙️</Text>
+        </>
+      )}
+
+      {/* ── Fuori squadra ── */}
+      {canHaveOutOfSquare && (
+        <>
+          <Text style={styles.label}>Fuori squadra</Text>
+          <TouchableOpacity
+            style={[styles.toggleBtn, opening.outOfSquare && styles.toggleBtnActive]}
+            onPress={() => {
+              const next = !opening.outOfSquare;
+              const updates: Partial<Opening> = {
+                outOfSquare: next,
+                heightLeft: next ? opening.heightLeft : null,
+                heightRight: next ? opening.heightRight : null,
+              };
+              // Scorrevole: sopraluce obbligatorio per compensare il dislivello
+              if (next && isSliding) updates.sopraluce = true;
+              update(updates);
+            }}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.toggleDot, opening.outOfSquare && styles.toggleDotActive]}/>
+            <Text style={[styles.toggleText, opening.outOfSquare && styles.toggleTextActive]}>
+              {opening.outOfSquare ? 'Attivo' : 'Non presente'}
+            </Text>
+          </TouchableOpacity>
+
+          {opening.outOfSquare && (
+            <View style={styles.fsCard}>
+              {isSliding && (
+                <Text style={styles.fsNote}>
+                  Scorrevole: il sopraluce viene attivato per compensare il dislivello
+                </Text>
+              )}
+              <View style={styles.fsRow}>
+                <View style={styles.fsLabelCol}>
+                  <Text style={styles.fsDimType}>ALTEZZA SX</Text>
+                  <Text style={styles.fsDimDesc}>lato sinistro</Text>
+                </View>
+                <View style={styles.dimInputWrap}>
+                  <TextInput
+                    style={styles.dimField}
+                    placeholder="—"
+                    keyboardType="numeric"
+                    value={opening.heightLeft?.toString() ?? ''}
+                    onChangeText={t => update({ heightLeft: parseMm(t) })}
+                  />
+                  <Text style={styles.unit}>mm</Text>
+                </View>
+              </View>
+              <View style={styles.dimDivider}/>
+              <View style={styles.fsRow}>
+                <View style={styles.fsLabelCol}>
+                  <Text style={styles.fsDimType}>ALTEZZA DX</Text>
+                  <Text style={styles.fsDimDesc}>lato destro</Text>
+                </View>
+                <View style={styles.dimInputWrap}>
+                  <TextInput
+                    style={styles.dimField}
+                    placeholder="—"
+                    keyboardType="numeric"
+                    value={opening.heightRight?.toString() ?? ''}
+                    onChangeText={t => update({ heightRight: parseMm(t) })}
+                  />
+                  <Text style={styles.unit}>mm</Text>
+                </View>
+              </View>
+              {fsDelta != null && (
+                <>
+                  <View style={styles.dimDivider}/>
+                  <View style={styles.fsRow}>
+                    <View style={styles.fsLabelCol}>
+                      <Text style={[styles.fsDimType, { color: '#E53935' }]}>ΔH DISLIVELLO</Text>
+                      <Text style={styles.fsDimDesc}>differenza altezze</Text>
+                    </View>
+                    <View style={styles.dimInputWrap}>
+                      <Text style={[styles.taglioValue, { color: '#E53935' }]}>{fsDelta}</Text>
+                      <Text style={styles.unit}>mm</Text>
+                    </View>
+                  </View>
+                  {fsDiagonal != null && (
+                    <>
+                      <View style={styles.dimDivider}/>
+                      <View style={styles.fsRow}>
+                        <View style={styles.fsLabelCol}>
+                          <Text style={[styles.fsDimType, { color: '#6A1B9A' }]}>TRAVERSO SUPERIORE</Text>
+                          <Text style={styles.fsDimDesc}>√(L² + ΔH²) — lunghezza pezzo inclinato</Text>
+                        </View>
+                        <View style={styles.dimInputWrap}>
+                          <Text style={[styles.taglioValue, { color: '#6A1B9A' }]}>{fsDiagonal}</Text>
+                          <Text style={styles.unit}>mm</Text>
+                        </View>
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+          )}
+        </>
+      )}
 
       {/* ── Altezza cassonetto + azionamento (solo monoblocco) ── */}
       {isMonoblocco && (
@@ -362,8 +539,8 @@ export default function MeasurementScreen() {
         </>
       )}
 
-      {/* ── Lato apertura (non per controtelai o zanzariere fissa/sali-scendi) ── */}
-      {!isSubframe && !isMosquitoNoSide && (
+      {/* ── Lato apertura (non per controtelai, fisso, zanzariere fissa/sali-scendi) ── */}
+      {!hideSide && (
         <>
           <Text style={styles.label}>Lato apertura</Text>
           <View style={styles.sideRow}>
@@ -683,6 +860,24 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: { opacity: 0.6 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  // Fuori squadra
+  fsCard: {
+    backgroundColor: '#fff', borderRadius: 12,
+    borderWidth: 1.5, borderColor: '#E53935',
+    overflow: 'hidden', marginTop: 10,
+  },
+  fsRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', padding: 14,
+  },
+  fsLabelCol: { flex: 1 },
+  fsDimType: { fontSize: 11, fontWeight: '800', color: '#333', letterSpacing: 1 },
+  fsDimDesc: { fontSize: 11, color: '#AAA', marginTop: 1 },
+  fsNote: {
+    fontSize: 11, color: '#E65100', fontWeight: '600',
+    paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4,
+  },
 
   // Save modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },

@@ -153,8 +153,8 @@ function FrameBase({ leafCount = 1 }: { leafCount?: number }) {
   );
 }
 
-// ─── SubframeBase: U-shape (3 sides, no bottom) ──────────────────────────────
-function SubframeBase({ woodPatternId }: { woodPatternId: string }) {
+// ─── SubframeBase: U-shape (3 sides) or closed rectangle (4 sides) ──────────
+function SubframeBase({ woodPatternId, showBottom = false }: { woodPatternId: string; showBottom?: boolean }) {
   return (
     <G>
       {/* Left bar */}
@@ -163,16 +163,39 @@ function SubframeBase({ woodPatternId }: { woodPatternId: string }) {
       <Rect x={FX+FW-FT} y={FY} width={FT} height={FH} fill={`url(#${woodPatternId})`} stroke={C_SUBFRAME_F} strokeWidth={2}/>
       {/* Top bar */}
       <Rect x={FX} y={FY} width={FW} height={FT} fill={`url(#${woodPatternId})`} stroke={C_SUBFRAME_F} strokeWidth={2}/>
-      {/* Interior white (covers joint areas) */}
-      <Rect x={GX} y={GY} width={GW} height={GH+FT+4} fill="white"/>
-      {/* Inner dashed border (U-shape: top + two sides, open at bottom) */}
-      <Path
-        d={`M ${GX+4} ${FY+FH+2} L ${GX+4} ${GY+4} L ${GX2-4} ${GY+4} L ${GX2-4} ${FY+FH+2}`}
-        fill="none" stroke={C_SUBFRAME_B} strokeWidth={1} strokeDasharray="4,2"
-      />
-      {/* Corner marks */}
+      {/* Bottom bar (traverso inferiore) — visible only when hasBattente */}
+      {showBottom && (
+        <>
+          <Rect x={FX} y={FY+FH-FT} width={FW} height={FT}
+                fill={`url(#${woodPatternId})`} stroke={C_SUBFRAME_F} strokeWidth={2}/>
+          {/* thin threshold strip at very bottom, like soglia */}
+          <Rect x={FX+2} y={FY+FH-5} width={FW-4} height={5}
+                fill={C_SUBFRAME_B} opacity={0.55}/>
+        </>
+      )}
+      {/* Interior white (covers joint areas; height stops at bottom bar when present) */}
+      <Rect x={GX} y={GY} width={GW} height={showBottom ? GH : GH+FT+4} fill="white"/>
+      {/* Inner dashed border */}
+      {showBottom ? (
+        // Closed rectangle — 4 sides
+        <Rect x={GX+4} y={GY+4} width={GW-8} height={GH-8}
+              fill="none" stroke={C_SUBFRAME_B} strokeWidth={1} strokeDasharray="4,2" rx={1}/>
+      ) : (
+        // U-shape: top + two sides, open at bottom
+        <Path
+          d={`M ${GX+4} ${FY+FH+2} L ${GX+4} ${GY+4} L ${GX2-4} ${GY+4} L ${GX2-4} ${FY+FH+2}`}
+          fill="none" stroke={C_SUBFRAME_B} strokeWidth={1} strokeDasharray="4,2"
+        />
+      )}
+      {/* Corner marks — always top; add bottom corners when 4-sided */}
       <CornerMarks x={FX}    y={FY} dx={1}  dy={1}  color={C_SUBFRAME_F}/>
       <CornerMarks x={FX+FW} y={FY} dx={-1} dy={1}  color={C_SUBFRAME_F}/>
+      {showBottom && (
+        <>
+          <CornerMarks x={FX}    y={FY+FH} dx={1}  dy={-1} color={C_SUBFRAME_F}/>
+          <CornerMarks x={FX+FW} y={FY+FH} dx={-1} dy={-1} color={C_SUBFRAME_F}/>
+        </>
+      )}
     </G>
   );
 }
@@ -500,10 +523,19 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
 
   switch (style) {
     case 'window_fixed':
-      // Solo telaio, nessuna anta — vetro fisso
+      // Fisso: vetro incassato direttamente nel telaio, badge FISSO, nessuna maniglia
       return <G>
-        <Line x1={GX+8} y1={GY+8} x2={GX2-8} y2={GY2-8} stroke={c} strokeWidth={1} opacity={0.3}/>
-        <Line x1={GX2-8} y1={GY+8} x2={GX+8} y2={GY2-8} stroke={c} strokeWidth={1} opacity={0.3}/>
+        {/* Fermavetro strips (4 thin bars around glass edge) */}
+        <Rect x={GX} y={GY} width={GW} height={5} fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={0.8}/>
+        <Rect x={GX} y={GY2-5} width={GW} height={5} fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={0.8}/>
+        <Rect x={GX} y={GY} width={5} height={GH} fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={0.8}/>
+        <Rect x={GX2-5} y={GY} width={5} height={GH} fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={0.8}/>
+        {/* FISSO badge */}
+        <Rect x={CX-24} y={CY-13} width={48} height={26} rx={6}
+              fill="rgba(21,101,192,0.10)" stroke={C_IND} strokeWidth={1.4}/>
+        <G transform={`translate(${CX}, ${CY+5})`}>
+          <Text textAnchor="middle" fontSize={11} fill={C_IND} fontWeight="800">FISSO</Text>
+        </G>
       </G>;
 
     case 'window_single':
@@ -1026,6 +1058,7 @@ function DefaultIndicator({ style, woodId, leafCount = 1, openingSide, boxHeight
   }
 }
 
+
 // ─── Dimension lines ──────────────────────────────────────────────────────────
 interface DimLinesProps {
   luceW: number | null; luceH: number | null;
@@ -1033,14 +1066,18 @@ interface DimLinesProps {
   boxHeight?: number | null;
   totalHeight?: number | null;
   dimMode?: 'taglio' | 'luce';
+  outOfSquare?: boolean;
+  heightLeft?: number | null;
+  heightRight?: number | null;
+  /** When sopraluce is active, offset the top of the vertical arrow by this amount upward */
+  slTotal?: number;
 }
 
-function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight, totalHeight, dimMode = 'taglio' }: DimLinesProps) {
+function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight, totalHeight, dimMode = 'taglio', outOfSquare, heightLeft, heightRight, slTotal = 0 }: DimLinesProps) {
   const showTaglio = dimMode === 'taglio';
   const wVal  = showTaglio ? taglioW : luceW;
   const hVal  = showTaglio ? taglioH : luceH;
   const wLbl  = wVal != null ? `L ${wVal} mm` : 'L — mm';
-  const hLbl  = hVal != null ? `H ${hVal} mm` : 'H — mm';
   const dimY  = showTaglio ? DIM_TAGLIO_Y : DIM_LUCE_Y;
   const dimX  = showTaglio ? DIM_TAGLIO_X : DIM_LUCE_X;
   const arrowSz = showTaglio ? 3.5 : 5;
@@ -1048,13 +1085,19 @@ function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight, totalHeight, dimM
   const fs    = showTaglio ? 8 : 9;
   const fw    = showTaglio ? '600' : '700';
   const c     = showTaglio ? C_DIM_TAG : C_DIM_LUCE;
+  const cFS   = '#E53935';
+
+  const showFS  = outOfSquare && (heightLeft != null || heightRight != null);
+  // When sopraluce is present, the vertical arrow spans the full height (sopraluce + main frame)
+  const vtTopY  = FY - slTotal;
+  const vtMid   = (vtTopY + FY + FH) / 2;
 
   return <G>
     {/* Leader lines from frame corners to dim line */}
     <Line x1={FX}    y1={FY+FH} x2={FX}    y2={dimY+6} stroke={c} strokeWidth={0.8}/>
     <Line x1={FX+FW} y1={FY+FH} x2={FX+FW} y2={dimY+6} stroke={c} strokeWidth={0.8}/>
-    <Line x1={FX}    y1={FY}    x2={dimX-6} y2={FY}    stroke={c} strokeWidth={0.8}/>
-    <Line x1={FX}    y1={FY+FH} x2={dimX-6} y2={FY+FH} stroke={c} strokeWidth={0.8}/>
+    <Line x1={FX}    y1={vtTopY} x2={dimX-6} y2={vtTopY} stroke={c} strokeWidth={0.8}/>
+    <Line x1={FX}    y1={FY+FH}  x2={dimX-6} y2={FY+FH}  stroke={c} strokeWidth={0.8}/>
 
     {/* Horizontal dim line — width */}
     <Line x1={FX} y1={dimY} x2={FX+FW} y2={dimY} stroke={c} strokeWidth={sw}/>
@@ -1064,13 +1107,31 @@ function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight, totalHeight, dimM
       <Text textAnchor="middle" fontSize={fs} fontWeight={fw} fill={c}>{wLbl}</Text>
     </G>
 
-    {/* Vertical dim line — height */}
-    <Line x1={dimX} y1={FY} x2={dimX} y2={FY+FH} stroke={c} strokeWidth={sw}/>
-    <Path d={arrow(dimX, FY,    Math.PI/2,  arrowSz)} fill={c}/>
-    <Path d={arrow(dimX, FY+FH, -Math.PI/2, arrowSz)} fill={c}/>
-    <G transform={`translate(${dimX}, ${FY+FH/2}) rotate(-90)`}>
-      <Text textAnchor="middle" fontSize={fs} fontWeight={fw} fill={c}>{hLbl}</Text>
-    </G>
+    {/* Vertical dim line — spans full height (including sopraluce when present) */}
+    <Line x1={dimX} y1={vtTopY} x2={dimX} y2={FY+FH} stroke={showFS ? cFS : c} strokeWidth={sw}/>
+    <Path d={arrow(dimX, vtTopY, Math.PI/2,  arrowSz)} fill={showFS ? cFS : c}/>
+    <Path d={arrow(dimX, FY+FH, -Math.PI/2, arrowSz)} fill={showFS ? cFS : c}/>
+    {showFS ? (
+      // Two annotations: SX / DX along the full-height arrow
+      <>
+        <G transform={`translate(${dimX}, ${vtMid - 9}) rotate(-90)`}>
+          <Text textAnchor="middle" fontSize={7.5} fontWeight="800" fill={cFS}>
+            {`SX ${heightLeft ?? '—'} mm`}
+          </Text>
+        </G>
+        <G transform={`translate(${dimX}, ${vtMid + 9}) rotate(-90)`}>
+          <Text textAnchor="middle" fontSize={7.5} fontWeight="800" fill={cFS}>
+            {`DX ${heightRight ?? '—'} mm`}
+          </Text>
+        </G>
+      </>
+    ) : (
+      <G transform={`translate(${dimX}, ${vtMid}) rotate(-90)`}>
+        <Text textAnchor="middle" fontSize={fs} fontWeight={fw} fill={c}>
+          {hVal != null ? `H ${hVal} mm` : 'H — mm'}
+        </Text>
+      </G>
+    )}
 
     {/* Cassonetto height annotation */}
     {boxHeight != null && (
@@ -1081,7 +1142,7 @@ function DimLines({ luceW, luceH, taglioW, taglioH, boxHeight, totalHeight, dimM
             : 0.22;
           const boxBotY = FY + FH * ratio;
           const midY    = FY + FH * ratio / 2;
-          const bx = 8; // bracket x (left side, inside viewBox)
+          const bx = 8;
           return <>
             <Line x1={4}  y1={FY}      x2={12} y2={FY}      stroke="#FF6F00" strokeWidth={1}/>
             <Line x1={4}  y1={boxBotY} x2={12} y2={boxBotY} stroke="#FF6F00" strokeWidth={1}/>
@@ -1117,9 +1178,13 @@ interface LiveDrawingProps {
   dimMode?: 'taglio' | 'luce';
   hasFascia?: boolean | null;
   hasSoglia?: boolean | null;
+  hasBattente?: boolean | null;
   blindType?: 'cintino' | 'motore' | null;
   sopraluce?: boolean | null;
   sopraluceHeight?: number | null;
+  outOfSquare?: boolean;
+  heightLeft?: number | null;
+  heightRight?: number | null;
 }
 
 export default function LiveDrawing({
@@ -1138,9 +1203,13 @@ export default function LiveDrawing({
   dimMode = 'taglio',
   hasFascia = null,
   hasSoglia = null,
+  hasBattente = null,
   blindType = null,
   sopraluce = null,
   sopraluceHeight = null,
+  outOfSquare = false,
+  heightLeft = null,
+  heightRight = null,
 }: LiveDrawingProps) {
   const tW = toleranceW ?? tolerance;
   const tH = toleranceH ?? tolerance;
@@ -1150,6 +1219,7 @@ export default function LiveDrawing({
   const woodId = `wood_${style ?? 'none'}`;
 
   const isSubframe    = style === 'subframe_window';
+  const isFixed       = style === 'window_fixed';
   const isShutter     = style === 'shutter_single' || style === 'shutter_double';
   const isMonoblocco  = style === 'roller_blind';
   const isSlidingType = style === 'window_sliding' || style === 'door_sliding';
@@ -1175,13 +1245,26 @@ export default function LiveDrawing({
     return () => animRef.current.removeListener(id);
   }, [openingSide, resolvedLeaf, style, previewMode]);
 
+  // ── Sopraluce geometry (needed early for outOfSquare overlay placement) ─────
+  // Sliding windows allow sopraluce only when outOfSquare compensates the slope
+  const hasSL = sopraluce === true && (style?.startsWith('window') || style?.startsWith('door'))
+                && !isSubframe && !isMonoblocco && !isZanzariera
+                && (!isSlidingType || outOfSquare);
+
+  const slRatio  = hasSL && sopraluceHeight != null && height != null && height > 0
+    ? sopraluceHeight / height : 0.25;
+  const SL_H_SVG = hasSL ? Math.max(44, Math.min(82, Math.round(FH * slRatio))) : 0;
+  const TR_SVG_H = hasSL ? 12 : 0;
+  const SL_TOTAL = SL_H_SVG + TR_SVG_H;
+  const adjVB_H  = VB_H + SL_TOTAL;
+
   // ── Frame layer ────────────────────────────────────────────────────────────
   let frameLayer: React.ReactNode;
   if (isSubframe) {
     frameLayer = (
       <>
         <WoodPattern id={woodId}/>
-        <SubframeBase woodPatternId={woodId}/>
+        <SubframeBase woodPatternId={woodId} showBottom={hasBattente === true}/>
       </>
     );
   } else if (isShutter) {
@@ -1230,8 +1313,31 @@ export default function LiveDrawing({
         </G>
       </>
     );
+  } else if (isFixed) {
+    // Fisso: telaio esterno + vetro diretto (nessun sash interno)
+    frameLayer = (
+      <>
+        <AlumPatterns/>
+        <GlassDefs/>
+        <G>
+          {/* Outer frame — più spesso per evidenziare l'assenza di anta */}
+          <Rect x={FX} y={FY} width={FW} height={FH} fill="url(#frame_grad)" stroke={C_FRAME} strokeWidth={2.5}/>
+          {/* Glass pane directly in frame */}
+          <Rect x={GX} y={GY} width={GW} height={GH} fill="url(#glass_grad)" stroke="#7AAFC8" strokeWidth={0.8}/>
+          {/* Glass reflections */}
+          <Line x1={GX+7} y1={GY+8} x2={GX+7} y2={GY+GH*0.65}
+                stroke="rgba(255,255,255,0.88)" strokeWidth={3.5} strokeLinecap="round"/>
+          <Line x1={GX+17} y1={GY+8} x2={GX+17} y2={GY+GH*0.42}
+                stroke="rgba(255,255,255,0.55)" strokeWidth={1.8} strokeLinecap="round"/>
+          <CornerMarks x={FX}    y={FY}    dx={1}  dy={1}/>
+          <CornerMarks x={FX+FW} y={FY}    dx={-1} dy={1}/>
+          <CornerMarks x={FX}    y={FY+FH} dx={1}  dy={-1}/>
+          <CornerMarks x={FX+FW} y={FY+FH} dx={-1} dy={-1}/>
+        </G>
+      </>
+    );
   } else {
-    // Casement / fixed: draw one visible sash frame per leaf
+    // Casement: draw one visible sash frame per leaf
     frameLayer = (
       <>
         <AlumPatterns/>
@@ -1324,7 +1430,87 @@ export default function LiveDrawing({
     );
   })() : null;
 
-  const svgContent = (
+  // OutOfSquare on the main frame — only when no sopraluce takes it
+  const showFsOnFrame = outOfSquare && !hasSL && !isSlidingType && !isSubframe && !isMonoblocco && !isZanzariera;
+  const fsHasData     = showFsOnFrame && (heightLeft ?? 0) > 0 && (heightRight ?? 0) > 0;
+  const fsMaxH        = fsHasData ? Math.max(heightLeft!, heightRight!) : 1;
+  const fsLeftTopY    = fsHasData ? FY + FH * (1 - heightLeft!  / fsMaxH) : FY;
+  const fsRightTopY   = fsHasData ? FY + FH * (1 - heightRight! / fsMaxH) : FY;
+  const fsDeltaH      = fsHasData ? Math.abs(heightLeft! - heightRight!) : 0;
+  const fsMidDiagY    = (fsLeftTopY + fsRightTopY) / 2;
+  // Inner top corners (frame thickness below slanted top)
+  const fsInnerLeftY  = fsHasData ? Math.min(GY2 - 8, Math.max(GY, fsLeftTopY  + FT)) : GY;
+  const fsInnerRightY = fsHasData ? Math.min(GY2 - 8, Math.max(GY, fsRightTopY + FT)) : GY;
+  // Trapezoidal frame ring drawn with evenodd — outer trapezoid minus inner glass area
+  const fsRingPath = fsHasData ? [
+    // Outer trapezoid (clockwise)
+    `M ${FX} ${fsLeftTopY}`,
+    `L ${FX+FW} ${fsRightTopY}`,
+    `L ${FX+FW} ${FY+FH}`,
+    `L ${FX} ${FY+FH}`,
+    'Z',
+    // Inner glass hole (clockwise → evenodd punches through)
+    `M ${GX} ${fsInnerLeftY}`,
+    `L ${GX2} ${fsInnerRightY}`,
+    `L ${GX2} ${GY2}`,
+    `L ${GX} ${GY2}`,
+    'Z',
+  ].join(' ') : '';
+
+  const svgContent = fsHasData ? (
+    <>
+      {/* Defs only — no visible rectangular frame drawn */}
+      <AlumPatterns/>
+      <GlassDefs/>
+      {/* Trapezoidal glass pane */}
+      <Path
+        d={`M ${GX} ${fsInnerLeftY} L ${GX2} ${fsInnerRightY} L ${GX2} ${GY2} L ${GX} ${GY2} Z`}
+        fill="url(#glass_grad)"
+      />
+      {/* Glass reflections (ring will cover any that leak into aluminum area) */}
+      <Line x1={GX+7} y1={GY+8} x2={GX+7} y2={GY+GH*0.65}
+            stroke="rgba(255,255,255,0.88)" strokeWidth={3.5} strokeLinecap="round"/>
+      <Line x1={GX+17} y1={GY+8} x2={GX+17} y2={GY+GH*0.42}
+            stroke="rgba(255,255,255,0.55)" strokeWidth={1.8} strokeLinecap="round"/>
+      {fasciaBar}
+      {indicatorLayer}
+      {/* Aluminum ring — evenodd punches glass hole; rendered after indicator so ring
+          covers any indicator content that leaks into the aluminum zone */}
+      <Path d={fsRingPath} fill="url(#frame_grad)" fillRule="evenodd"/>
+      {/* Outer trapezoid border */}
+      <Path
+        d={`M ${FX} ${fsLeftTopY} L ${FX+FW} ${fsRightTopY} L ${FX+FW} ${FY+FH} L ${FX} ${FY+FH} Z`}
+        fill="none" stroke={C_FRAME} strokeWidth={2.5}
+      />
+      {/* Inner glass border */}
+      <Path
+        d={`M ${GX} ${fsInnerLeftY} L ${GX2} ${fsInnerRightY} L ${GX2} ${GY2} L ${GX} ${GY2} Z`}
+        fill="none" stroke={C_FRAME} strokeWidth={0.8} opacity={0.5}
+      />
+      {/* Corner marks at slanted top corners + bottom corners */}
+      <CornerMarks x={FX}      y={fsLeftTopY}  dx={1}  dy={1}/>
+      <CornerMarks x={FX + FW} y={fsRightTopY} dx={-1} dy={1}/>
+      <CornerMarks x={FX}      y={FY+FH}       dx={1}  dy={-1}/>
+      <CornerMarks x={FX+FW}   y={FY+FH}       dx={-1} dy={-1}/>
+      {/* ΔH badge */}
+      {fsDeltaH > 0 && (
+        <G>
+          <Rect
+            x={FX + FW / 2 - 24} y={fsMidDiagY - 20}
+            width={48} height={14} rx={3}
+            fill={C_FRAME} opacity={0.88}
+          />
+          <Text
+            x={FX + FW / 2} y={fsMidDiagY - 9.5}
+            textAnchor="middle" fontSize={7.5}
+            fill="white" fontWeight="800"
+          >
+            {`Δ ${fsDeltaH} mm`}
+          </Text>
+        </G>
+      )}
+    </>
+  ) : (
     <>
       {frameLayer}
       {fasciaBar}
@@ -1332,25 +1518,48 @@ export default function LiveDrawing({
     </>
   );
 
-  // ── Sopraluce overlay ──────────────────────────────────────────────────────
-  const hasSL = sopraluce === true && (style?.startsWith('window') || style?.startsWith('door'))
-                && !isSubframe && !isMonoblocco && !isZanzariera && !isSlidingType;
-
-  const slRatio = hasSL && sopraluceHeight != null && height != null && height > 0
-    ? sopraluceHeight / height : 0.25;
-  const SL_H_SVG = hasSL ? Math.max(44, Math.min(82, Math.round(FH * slRatio))) : 0;
-  const TR_SVG_H = hasSL ? 12 : 0;
-  const SL_TOTAL = SL_H_SVG + TR_SVG_H;
-
-  const adjVB_H = VB_H + SL_TOTAL;
+  // ── Sopraluce panel ────────────────────────────────────────────────────────
+  // Fuori squadra slant on the sopraluce top edge (when both FS and SL are active)
+  const showFsOnSopraluce = outOfSquare && hasSL && (heightLeft ?? 0) > 0 && (heightRight ?? 0) > 0;
+  const slMaxH     = showFsOnSopraluce ? Math.max(heightLeft!, heightRight!) : 1;
+  const slLeftTopY = showFsOnSopraluce ? MT + SL_H_SVG * (1 - heightLeft!  / slMaxH) : MT;
+  const slRightTopY= showFsOnSopraluce ? MT + SL_H_SVG * (1 - heightRight! / slMaxH) : MT;
+  const slMidY     = (slLeftTopY + slRightTopY) / 2;
+  const slDeltaH   = showFsOnSopraluce ? Math.abs(heightLeft! - heightRight!) : 0;
+  // Inner glass corners for sopraluce FS trapezoid
+  const slInnerLeftY  = showFsOnSopraluce ? Math.min(MT+SL_H_SVG-4, slLeftTopY  + FT) : MT + FT;
+  const slInnerRightY = showFsOnSopraluce ? Math.min(MT+SL_H_SVG-4, slRightTopY + FT) : MT + FT;
+  // Aluminum ring for sopraluce FS: outer slanted trapezoid minus inner glass hole
+  const slRingPath = showFsOnSopraluce ? [
+    `M ${FX} ${slLeftTopY}`,
+    `L ${FX+FW} ${slRightTopY}`,
+    `L ${FX+FW} ${MT+SL_H_SVG}`,
+    `L ${FX} ${MT+SL_H_SVG}`,
+    'Z',
+    `M ${GX} ${slInnerLeftY}`,
+    `L ${GX2} ${slInnerRightY}`,
+    `L ${GX2} ${MT+SL_H_SVG}`,
+    `L ${GX} ${MT+SL_H_SVG}`,
+    'Z',
+  ].join(' ') : '';
 
   const sopralucePanel = hasSL ? (
     <G>
-      {/* Glass panel */}
-      <Rect x={FX} y={MT} width={FW} height={SL_H_SVG}
-            fill="url(#glass_grad)" stroke={C_FRAME} strokeWidth={2.5}/>
-      <CornerMarks x={FX}    y={MT} dx={1}  dy={1}/>
-      <CornerMarks x={FX+FW} y={MT} dx={-1} dy={1}/>
+      {showFsOnSopraluce ? (
+        // FS active: trapezoid glass pane (no rectangular rect)
+        <Path
+          d={`M ${GX} ${slInnerLeftY} L ${GX2} ${slInnerRightY} L ${GX2} ${MT+SL_H_SVG} L ${GX} ${MT+SL_H_SVG} Z`}
+          fill="url(#glass_grad)"
+        />
+      ) : (
+        // Normal: rectangular glass panel
+        <>
+          <Rect x={FX} y={MT} width={FW} height={SL_H_SVG}
+                fill="url(#glass_grad)" stroke={C_FRAME} strokeWidth={2.5}/>
+          <CornerMarks x={FX}    y={MT} dx={1}  dy={1}/>
+          <CornerMarks x={FX+FW} y={MT} dx={-1} dy={1}/>
+        </>
+      )}
       {/* Glass reflections */}
       <Line x1={GX+5} y1={MT+6} x2={GX+5} y2={MT+SL_H_SVG-6}
             stroke="rgba(255,255,255,0.75)" strokeWidth={3} strokeLinecap="round"/>
@@ -1374,6 +1583,28 @@ export default function LiveDrawing({
       <G transform={`translate(${FX+FW/2}, ${MT+SL_H_SVG+TR_SVG_H/2+2})`}>
         <Text textAnchor="middle" fontSize={6} fill="rgba(40,60,80,0.6)" fontWeight="700">TRAVERSO</Text>
       </G>
+      {/* Trapezoidal frame ring for FS on sopraluce — drawn last to cover any leakage */}
+      {showFsOnSopraluce && (
+        <G>
+          <Path d={slRingPath} fill="url(#frame_grad)" fillRule="evenodd"/>
+          <Path
+            d={`M ${FX} ${slLeftTopY} L ${FX+FW} ${slRightTopY} L ${FX+FW} ${MT+SL_H_SVG} L ${FX} ${MT+SL_H_SVG} Z`}
+            fill="none" stroke={C_FRAME} strokeWidth={2.5}
+          />
+          <CornerMarks x={FX}      y={slLeftTopY}  dx={1}  dy={1}/>
+          <CornerMarks x={FX + FW} y={slRightTopY} dx={-1} dy={1}/>
+          {slDeltaH > 0 && (
+            <G>
+              <Rect x={FX+FW/2-24} y={slMidY-20} width={48} height={14} rx={3}
+                    fill={C_FRAME} opacity={0.88}/>
+              <Text x={FX+FW/2} y={slMidY-9.5}
+                    textAnchor="middle" fontSize={7.5} fill="white" fontWeight="800">
+                {`Δ ${slDeltaH} mm`}
+              </Text>
+            </G>
+          )}
+        </G>
+      )}
     </G>
   ) : null;
 
@@ -1405,6 +1636,10 @@ export default function LiveDrawing({
             boxHeight={isMonoblocco ? boxHeight : undefined}
             totalHeight={isMonoblocco ? height : undefined}
             dimMode={dimMode}
+            outOfSquare={outOfSquare}
+            heightLeft={heightLeft}
+            heightRight={heightRight}
+            slTotal={SL_TOTAL}
           />
         </G>
       ) : (
@@ -1416,6 +1651,9 @@ export default function LiveDrawing({
             boxHeight={isMonoblocco ? boxHeight : undefined}
             totalHeight={isMonoblocco ? height : undefined}
             dimMode={dimMode}
+            outOfSquare={outOfSquare}
+            heightLeft={heightLeft}
+            heightRight={heightRight}
           />
         </>
       )}

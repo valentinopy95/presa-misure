@@ -54,6 +54,9 @@ export interface Opening {
   sopraluce: boolean;              // pannello fisso sopra l'infisso
   sopraluceHeight: number | null;  // altezza luce sopraluce (mm)
   blindType: 'cintino' | 'motore' | null; // tipo azionamento (solo monoblocco)
+  outOfSquare: boolean;                   // vano fuori squadra
+  heightLeft: number | null;              // altezza lato sinistro (mm)
+  heightRight: number | null;             // altezza lato destro (mm)
   style: OpeningStyle | null;
   profileSeries: string | null;   // serie profilo (es. EKOS 100, EKU 66 TT)
   glassType: string | null;        // tipo vetro (es. Doppio 4/16/4 Ar)
@@ -77,6 +80,7 @@ export interface Project {
   address: string;
   gps: GpsCoords | null;
   openings: Opening[];
+  parentId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,16 +88,16 @@ export interface Project {
 export type RootStackParamList = {
   Home: undefined;
   SavedProjects: undefined;
-  Catalog: undefined;
   Project: { projectId: string };
   Measurement: { projectId: string; openingId?: string };
   StylePicker: { projectId: string; openingId: string };
   Document: { projectId: string };
   Materials: { projectId: string };
   MaterialsProjects: undefined;
+  CuttingProjects: undefined;
+  CuttingList: { projectId: string };
   Settings: undefined;
   Account:  undefined;
   DuplicateProject: { projectId: string };
-  Tutorial: undefined;
   Help:     undefined;
 };

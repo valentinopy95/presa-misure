@@ -12,7 +12,7 @@ import { getProject } from '../storage/database';
 import {
   getToleranceW, getToleranceH,
   getRiattestattura, getBarLength, getKerf90, getSafetyMargin,
-  getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction,
+  getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail,
 } from '../storage/settings';
 import { LiveDrawing } from '../components/drawings';
 import { generateHTML, PdfMode } from '../utils/pdfExport';
@@ -21,6 +21,7 @@ import { MaterialsConfig } from '../utils/calculateMaterials';
 type Route = RouteProp<RootStackParamList, 'Document'>;
 
 const STYLE_LABELS: Record<OpeningStyle, string> = {
+  window_fixed:         'Fisso',
   window_single:        'Finestra battente',
   window_double:        'Finestra doppia',
   window_sliding:       'Finestra scorrevole',
@@ -85,14 +86,14 @@ export default function DocumentScreen() {
       getToleranceW(), getToleranceH(),
       getRiattestattura(), getBarLength(), getKerf90(),
       getSafetyMargin(), getSlatPitch(), getZoccoloH(),
-      getFasciaH(), getAntaReduction(),
-    ]).then(([tolW, tolH, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed]) => {
+      getFasciaH(), getAntaReduction(), getAntaTopRail(),
+    ]).then(([tolW, tolH, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop]) => {
       setToleranceW(tolW);
       setToleranceH(tolH);
       setMatConfig({
         riattestattura: riatt, barLength: barLen, kerf90: kerf,
         safetyMarginPct: margin, slatPitch: slatP, zoccoloH: zocH,
-        fasciaH: fasH, antaReduction: antaRed,
+        fasciaH: fasH, antaReduction: antaRed, antaTopRail: antaTop,
       });
     });
   }, [projectId]);

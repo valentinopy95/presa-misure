@@ -1,5 +1,5 @@
 import { Project, Opening, OpeningStyle } from '../types';
-import { calculateMaterials, MaterialsResult, MaterialsConfig } from './calculateMaterials';
+import { calculateMaterials, MaterialsResult, MaterialsConfig, CuttingListResult, CuttingProfile } from './calculateMaterials';
 
 export type PdfMode = 'both' | 'misure' | 'materiale';
 
@@ -554,11 +554,11 @@ export function generateHTML(
   <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
     <div style="display:inline-flex; align-items:center; gap:10px;">
       ${logoBase64
-        ? `<img src="data:image/png;base64,${logoBase64}" style="width:44px;height:44px;border-radius:8px;object-fit:contain;"/>`
-        : `<div style="width:44px;height:44px;background:#1565C0;border-radius:8px;display:flex;align-items:center;justify-content:center;"><span style="color:white;font-size:16px;font-weight:900;">MM</span></div>`
+        ? `<img src="data:image/jpeg;base64,${logoBase64}" style="width:52px;height:52px;object-fit:contain;"/>`
+        : `<div style="width:44px;height:44px;background:#FFC107;border-radius:8px;display:flex;align-items:center;justify-content:center;"><span style="color:white;font-size:16px;font-weight:900;">M</span></div>`
       }
       <div>
-        <div style="font-size:15px;font-weight:900;color:#1565C0;">MeasureMate</div>
+        <div style="font-size:15px;font-weight:900;color:#0c2d75;">Misu</div>
         <div style="font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:1px;">${modeLabel}</div>
       </div>
     </div>
@@ -632,8 +632,210 @@ export function generateHTML(
   <!-- ── FOOTER ── -->
   <hr style="border:none;border-top:1px solid #e0e0e0;margin-top:24px;"/>
   <div style="display:flex;justify-content:space-between;padding-top:8px;">
-    <div style="font-size:8px;color:#bbb;">Generato con MeasureMate &mdash; ${new Date().toLocaleString('it-IT')}</div>
+    <div style="font-size:8px;color:#bbb;">Generato con Misu &mdash; ${new Date().toLocaleString('it-IT')}</div>
     <div style="font-size:8px;color:#bbb;">Tol.: L ${toleranceW} mm / H ${toleranceH} mm</div>
+  </div>
+
+</div>
+</body>
+</html>`;
+}
+
+// ─── Cutting list HTML ────────────────────────────────────────────────────────
+
+const CUTTING_COLORS = [
+  '#1565C0','#2E7D32','#6A1B9A','#E65100',
+  '#00796B','#C62828','#37474F','#F57F17',
+  '#0277BD','#558B2F',
+];
+
+function cuttingProfileHTML(profile: CuttingProfile, barLength: number): string {
+  const angleColor = profile.cutAngle === 45 ? '#1565C0' : '#2E7D32';
+  const totalBars  = profile.bins.length;
+
+  const barsHtml = profile.bins.map((bin, binIdx) => {
+    const segmentsHtml = bin.pieces.map((piece, pi) => {
+      const widthPct = ((piece / barLength) * 100).toFixed(2);
+      const color    = CUTTING_COLORS[pi % CUTTING_COLORS.length];
+      return `<div style="width:${widthPct}%;height:100%;background:${color};display:inline-block;"></div>`;
+    }).join('');
+
+    const remPct = ((bin.remaining / barLength) * 100).toFixed(2);
+    const remSeg = bin.remaining > 0
+      ? `<div style="width:${remPct}%;height:100%;background:#E0E8F0;display:inline-block;"></div>`
+      : '';
+
+    const tagsHtml = bin.pieces.map((piece, pi) => {
+      const color = CUTTING_COLORS[pi % CUTTING_COLORS.length];
+      return `<span style="display:inline-flex;align-items:center;gap:4px;background:#F0F4F8;border-radius:5px;padding:3px 8px;margin:2px;">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color};"></span>
+        <span style="font-size:10px;font-weight:700;color:#1a2a3a;">${piece} mm</span>
+      </span>`;
+    }).join('');
+
+    const remTag = bin.remaining > 0
+      ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#F0F4F8;border-radius:5px;padding:3px 8px;margin:2px;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#C8D4E0;"></span>
+          <span style="font-size:10px;font-weight:600;color:#8A9AB0;">${Math.round(bin.remaining)} mm avanzo</span>
+        </span>`
+      : '';
+
+    const usedMm = barLength - bin.remaining;
+
+    return `
+    <tr style="border-bottom:1px solid #F0F4F8;page-break-inside:avoid;">
+      <td style="padding:10px 12px;vertical-align:top;text-align:center;width:40px;">
+        <div style="font-size:13px;font-weight:900;color:#1a2a3a;">B${binIdx + 1}</div>
+        <div style="font-size:9px;color:#aaa;">/${totalBars}</div>
+      </td>
+      <td style="padding:10px 12px;vertical-align:top;">
+        <!-- Visual bar -->
+        <div style="height:18px;border-radius:5px;overflow:hidden;border:1px solid #DDE4EF;background:#EEF2F7;font-size:0;margin-bottom:8px;">
+          ${segmentsHtml}${remSeg}
+        </div>
+        <!-- Tags -->
+        <div style="display:flex;flex-wrap:wrap;">${tagsHtml}${remTag}</div>
+        <div style="font-size:9px;color:#A0B0C8;margin-top:5px;">
+          Usata: ${Math.round(usedMm)} / ${barLength} mm${bin.remaining === 0 ? ' — barra piena' : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div style="margin-bottom:20px;page-break-inside:avoid;">
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;
+                background:#F7FAFF;border-left:4px solid ${angleColor};
+                border-radius:8px 8px 0 0;border:1px solid #E0E8F0;">
+      <span style="flex:1;font-size:13px;font-weight:800;color:#1a2a3a;">${profile.label}</span>
+      <span style="background:${angleColor};color:#fff;font-size:9px;font-weight:800;
+                   padding:3px 8px;border-radius:6px;">${profile.cutAngle}°</span>
+      <span style="font-size:11px;color:#7090C0;font-weight:600;">${totalBars} barr${totalBars !== 1 ? 'e' : 'a'}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #E0E8F0;border-top:none;
+                  border-radius:0 0 8px 8px;overflow:hidden;">
+      ${barsHtml}
+    </table>
+  </div>`;
+}
+
+export function generateCuttingListHTML(
+  project: Project,
+  result: CuttingListResult,
+  logoBase64?: string,
+): string {
+  const { profiles45, profiles90, warnings, barLength } = result;
+
+  const date        = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+  const createdDate = new Date(project.createdAt).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const section45 = profiles45.length > 0 ? `
+    <div style="margin-bottom:24px;">
+      <div style="border-left:4px solid #1565C0;padding-left:10px;margin-bottom:14px;">
+        <span style="font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#1565C0;">Tagli a 45°</span>
+      </div>
+      ${profiles45.map(p => cuttingProfileHTML(p, barLength)).join('')}
+    </div>` : '';
+
+  const section90 = profiles90.length > 0 ? `
+    <div style="margin-bottom:24px;">
+      <div style="border-left:4px solid #2E7D32;padding-left:10px;margin-bottom:14px;">
+        <span style="font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#2E7D32;">Tagli a 90°</span>
+      </div>
+      ${profiles90.map(p => cuttingProfileHTML(p, barLength)).join('')}
+    </div>` : '';
+
+  const warningsHtml = warnings.length > 0 ? `
+    <div style="margin-top:10px;padding:10px 14px;background:#fff3e0;border-left:3px solid #E65100;border-radius:4px;">
+      <div style="font-size:9px;font-weight:700;color:#E65100;text-transform:uppercase;margin-bottom:6px;">Avvisi</div>
+      ${warnings.map(w => `<div style="font-size:9px;color:#bf360c;margin-bottom:3px;">⚠ ${w}</div>`).join('')}
+    </div>` : '';
+
+  const totalBars = profiles45.reduce((s, p) => s + p.bins.length, 0)
+                  + profiles90.reduce((s, p) => s + p.bins.length, 0);
+
+  return `<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,Helvetica,sans-serif; background:#fff; color:#1a1a1a; font-size:11px; }
+  @media print { body { background:white; } }
+</style>
+</head>
+<body>
+<div style="max-width:860px;margin:0 auto;padding:28px 32px;background:white;">
+
+  <!-- HEADER -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+    <div style="display:inline-flex;align-items:center;gap:10px;">
+      ${logoBase64
+        ? `<img src="data:image/jpeg;base64,${logoBase64}" style="width:52px;height:52px;object-fit:contain;"/>`
+        : `<div style="width:44px;height:44px;background:#FFC107;border-radius:8px;display:flex;align-items:center;justify-content:center;"><span style="color:white;font-size:16px;font-weight:900;">M</span></div>`}
+      <div>
+        <div style="font-size:15px;font-weight:900;color:#0c2d75;">Misu</div>
+        <div style="font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:1px;">Distinta di taglio</div>
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:9px;color:#aaa;">${date}</div>
+      <div style="font-size:9px;color:#aaa;margin-top:2px;">Barre da <strong style="color:#1a1a1a;">${barLength} mm</strong></div>
+    </div>
+  </div>
+  <hr style="border:none;border-top:2px solid #1565C0;margin-bottom:16px;"/>
+
+  <!-- PROJECT INFO -->
+  <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:10px;">
+    <tr>
+      <td style="width:50%;padding-bottom:6px;vertical-align:top;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="width:90px;padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;">Progetto</td>
+            <td style="padding:3px 0;font-weight:700;font-size:12px;color:#1a1a1a;border-bottom:1px solid #ddd;">${project.name}</td>
+          </tr>
+          ${project.clientName ? `<tr>
+            <td style="padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;">Cliente</td>
+            <td style="padding:3px 0;font-weight:600;border-bottom:1px solid #ddd;">${project.clientName}</td>
+          </tr>` : ''}
+          ${project.address ? `<tr>
+            <td style="padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;">Indirizzo</td>
+            <td style="padding:3px 0;border-bottom:1px solid #ddd;">${project.address}</td>
+          </tr>` : ''}
+          <tr>
+            <td style="padding:3px 0;color:#888;font-weight:700;text-transform:uppercase;font-size:9px;">Data rilievo</td>
+            <td style="padding:3px 0;border-bottom:1px solid #ddd;">${createdDate}</td>
+          </tr>
+        </table>
+      </td>
+      <td style="width:50%;padding-left:28px;vertical-align:top;">
+        <div style="background:#1a2a3a;border-radius:8px;padding:12px 16px;text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.5px;">Totale barre</div>
+          <div style="font-size:32px;font-weight:900;color:#fff;line-height:1.1;">${totalBars}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.5);margin-top:2px;">da ${barLength} mm</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- LEGENDA -->
+  <div style="background:#EBF3FF;border-radius:8px;padding:10px 14px;margin-bottom:20px;border:1px solid #BBDEFB;">
+    <div style="font-size:10px;font-weight:800;color:#1565C0;margin-bottom:4px;">Come leggere la distinta</div>
+    <div style="font-size:9px;color:#455A64;line-height:15px;">
+      Ogni barra (B1, B2, …) mostra i pezzi nell'ordine in cui conviene tagliarli, dal più lungo al più corto.
+      La lunghezza in grigio è l'avanzo di barra. Il grafico colorato mostra la proporzione di ogni pezzo rispetto alla barra intera.
+    </div>
+  </div>
+
+  ${section45}
+  ${section90}
+  ${warningsHtml}
+
+  <!-- FOOTER -->
+  <hr style="border:none;border-top:1px solid #e0e0e0;margin-top:24px;"/>
+  <div style="display:flex;justify-content:space-between;padding-top:8px;">
+    <div style="font-size:8px;color:#bbb;">Generato con Misu &mdash; ${new Date().toLocaleString('it-IT')}</div>
+    <div style="font-size:8px;color:#bbb;">Barre da ${barLength} mm</div>
   </div>
 
 </div>

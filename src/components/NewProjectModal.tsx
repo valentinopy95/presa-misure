@@ -18,8 +18,8 @@ export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
   const [address, setAddress] = useState('');
 
   const handleCreate = () => {
-    if (!name.trim()) return;
-    onCreate(name.trim(), clientName.trim(), clientPhone.trim(), address.trim());
+    if (!clientName.trim()) return;
+    onCreate(name.trim() || clientName.trim(), clientName.trim(), clientPhone.trim(), address.trim());
     setName('');
     setClientName('');
     setClientPhone('');
@@ -48,23 +48,23 @@ export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
           </LinearGradient>
 
           <View style={styles.form}>
-            <Text style={styles.label}>Nome progetto *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="es. Villa Rossi - Piano terra"
-              placeholderTextColor="#aab"
-              value={name}
-              onChangeText={setName}
-              autoFocus
-            />
-
-            <Text style={styles.label}>Cliente</Text>
+            <Text style={styles.label}>Cliente *</Text>
             <TextInput
               style={styles.input}
               placeholder="Nome del cliente"
               placeholderTextColor="#aab"
               value={clientName}
               onChangeText={setClientName}
+              autoFocus
+            />
+
+            <Text style={styles.label}>Nome progetto</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="es. Piano terra (lascia vuoto per usare il nome cliente)"
+              placeholderTextColor="#aab"
+              value={name}
+              onChangeText={setName}
             />
 
             <Text style={styles.label}>Telefono</Text>
@@ -92,13 +92,13 @@ export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
               <Text style={styles.cancelText}>Annulla</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.createBtn, !name.trim() && styles.createBtnDisabled]}
+              style={[styles.createBtn, !clientName.trim() && styles.createBtnDisabled]}
               onPress={handleCreate}
-              disabled={!name.trim()}
+              disabled={!clientName.trim()}
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={name.trim() ? ['#1976d2', '#0d47a1'] : ['#aaa', '#888']}
+                colors={clientName.trim() ? ['#FFC107', '#F59E0B'] : ['#aaa', '#888']}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={styles.createBtnGrad}
               >
@@ -151,5 +151,5 @@ const styles = StyleSheet.create({
   createBtn: { flex: 2, borderRadius: 14, overflow: 'hidden' },
   createBtnDisabled: { opacity: 0.5 },
   createBtnGrad: { paddingVertical: 15, alignItems: 'center' },
-  createText: { fontSize: 15, color: '#fff', fontWeight: '800', letterSpacing: 0.3 },
+  createText: { fontSize: 15, color: '#0c2d75', fontWeight: '800', letterSpacing: 0.3 },
 });

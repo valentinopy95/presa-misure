@@ -10,11 +10,36 @@ const MIGRATED_KEY = '@measure_migrated_v1';
 let _cachedIds: { userId: string; companyId: string } | null = null;
 let _projectCache: Map<string, Project> = new Map();
 let _listCache: Project[] | null = null;
+// null = non ancora verificato; true/false = verificato
+let _hasParentId: boolean | null = null;
 
 export function clearDbCache() {
   _cachedIds    = null;
   _projectCache = new Map();
   _listCache    = null;
+}
+
+// ─── Helper: upsert robusto con fallback se parent_id non esiste ─────────────
+
+async function upsertProject(payload: Record<string, unknown>): Promise<void> {
+  // Prima prova con parent_id
+  if (_hasParentId !== false) {
+    const { error } = await supabase.from('projects').upsert(payload);
+    if (!error) { _hasParentId = true; return; }
+    // Se l'errore è sulla colonna parent_id, segna come non supportata e riprova
+    const msg = (error as { message?: string }).message ?? '';
+    if (msg.includes('parent_id') || msg.includes('column')) {
+      _hasParentId = false;
+    } else {
+      // Errore reale non legato a parent_id: log e ritorna
+      console.warn('upsertProject error:', error);
+      return;
+    }
+  }
+  // Fallback senza parent_id
+  const { parent_id: _drop, ...rest } = payload as Record<string, unknown> & { parent_id?: unknown };
+  const { error: e2 } = await supabase.from('projects').upsert(rest);
+  if (e2) console.warn('upsertProject fallback error:', e2);
 }
 
 // ─── Helpers interni ──────────────────────────────────────────────────────────
@@ -44,6 +69,7 @@ function rowToProject(row: Record<string, unknown>): Project {
     address:     row.address      as string,
     gps:         row.gps          as Project['gps'],
     openings:   (row.openings     as Opening[]) ?? [],
+    parentId:   (row.parent_id    as string | null) ?? null,
     createdAt:   row.created_at   as string,
     updatedAt:   row.updated_at   as string,
   };
@@ -72,6 +98,7 @@ export async function migrateLocalToSupabase(): Promise<void> {
         address:      p.address,
         gps:          p.gps,
         openings:     p.openings,
+        parent_id:    null,
         created_at:   p.createdAt,
         updated_at:   p.updatedAt,
       });
@@ -83,33 +110,45 @@ export async function migrateLocalToSupabase(): Promise<void> {
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
 
-/** Lista progetti senza openings — mostra cache subito, poi aggiorna in background */
+/** Lista progetti — mostra cache subito, poi aggiorna in background */
 export async function getAllProjects(): Promise<Project[]> {
   const ids = await getCurrentIds();
   if (!ids) return [];
 
-  // Aggiorna in background senza bloccare
-  supabase
-    .from('projects')
-    .select('id, name, client_name, client_phone, address, gps, created_at, updated_at')
-    .eq('company_id', ids.companyId)
-    .order('updated_at', { ascending: false })
-    .then(({ data }) => {
-      if (data) _listCache = data.map(row => rowToProject({ ...row, openings: [] }));
-    });
+  async function fetch() {
+    // Prova prima con parent_id incluso
+    if (_hasParentId !== false) {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, client_name, client_phone, address, gps, openings, parent_id, created_at, updated_at')
+        .eq('company_id', ids!.companyId)
+        .order('updated_at', { ascending: false });
+      if (!error && data) {
+        _hasParentId = true;
+        return data.map(row => rowToProject(row as Record<string, unknown>));
+      }
+      // Colonna mancante — fallback
+      _hasParentId = false;
+    }
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, client_name, client_phone, address, gps, openings, created_at, updated_at')
+      .eq('company_id', ids!.companyId)
+      .order('updated_at', { ascending: false });
+    if (error || !data) return null;
+    return data.map(row => rowToProject(row as Record<string, unknown>));
+  }
+
+  // Aggiorna cache in background
+  fetch().then(list => { if (list) _listCache = list; }).catch(() => {});
 
   // Restituisce la cache subito se disponibile
   if (_listCache) return _listCache;
 
   // Prima volta: aspetta il risultato
-  const { data, error } = await supabase
-    .from('projects')
-    .select('id, name, client_name, client_phone, address, gps, created_at, updated_at')
-    .eq('company_id', ids.companyId)
-    .order('updated_at', { ascending: false });
-
-  if (error || !data) return [];
-  _listCache = data.map(row => rowToProject({ ...row, openings: [] }));
+  const list = await fetch();
+  if (!list) return [];
+  _listCache = list;
   return _listCache;
 }
 
@@ -148,7 +187,7 @@ export async function saveProject(project: Project): Promise<void> {
   const ids = await getCurrentIds();
   if (!ids) return;
 
-  await supabase.from('projects').upsert({
+  await upsertProject({
     id:           project.id,
     company_id:   ids.companyId,
     user_id:      ids.userId,
@@ -158,6 +197,7 @@ export async function saveProject(project: Project): Promise<void> {
     address:      project.address,
     gps:          project.gps,
     openings:     project.openings,
+    parent_id:    project.parentId ?? null,
     created_at:   project.createdAt,
     updated_at:   project.updatedAt,
   });
@@ -168,6 +208,8 @@ export async function saveProject(project: Project): Promise<void> {
 }
 
 export async function deleteProject(id: string): Promise<void> {
+  // Elimina prima i sub-progetti figli
+  await supabase.from('projects').delete().eq('parent_id', id);
   await supabase.from('projects').delete().eq('id', id);
   _projectCache.delete(id);
   _listCache = null;
@@ -188,7 +230,7 @@ export async function saveOpening(projectId: string, opening: Opening): Promise<
   // Salva senza invalidare _listCache (le aperture non compaiono nella lista)
   const ids = await getCurrentIds();
   if (!ids) return;
-  await supabase.from('projects').upsert({
+  await upsertProject({
     id:           project.id,
     company_id:   ids.companyId,
     user_id:      ids.userId,
@@ -198,10 +240,27 @@ export async function saveOpening(projectId: string, opening: Opening): Promise<
     address:      project.address,
     gps:          project.gps,
     openings:     project.openings,
+    parent_id:    project.parentId ?? null,
     created_at:   project.createdAt,
     updated_at:   project.updatedAt,
   });
   _projectCache.set(project.id, project);
+}
+
+/** Ritorna il progetto aperto + tutti i suoi fratelli/figli (la "famiglia") */
+export async function getProjectFamily(projectId: string): Promise<Project[]> {
+  const p = await getProject(projectId);
+  if (!p) return [];
+  const parentId = p.parentId ?? p.id;
+  const all = await getAllProjects();
+  const family = all.filter(x => x.id === parentId || x.parentId === parentId);
+  // Fetch fresco per avere le openings aggiornate
+  const fresh = await Promise.all(family.map(x => getProject(x.id).then(r => r ?? x)));
+  return fresh.sort((a, b) => {
+    if (!a.parentId && b.parentId) return -1;
+    if (a.parentId && !b.parentId) return 1;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
 }
 
 export async function deleteOpening(projectId: string, openingId: string): Promise<void> {
@@ -213,7 +272,7 @@ export async function deleteOpening(projectId: string, openingId: string): Promi
 
   const ids = await getCurrentIds();
   if (!ids) return;
-  await supabase.from('projects').upsert({
+  await upsertProject({
     id:           project.id,
     company_id:   ids.companyId,
     user_id:      ids.userId,
@@ -223,6 +282,7 @@ export async function deleteOpening(projectId: string, openingId: string): Promi
     address:      project.address,
     gps:          project.gps,
     openings:     project.openings,
+    parent_id:    project.parentId ?? null,
     created_at:   project.createdAt,
     updated_at:   project.updatedAt,
   });

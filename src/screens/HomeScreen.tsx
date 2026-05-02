@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   StatusBar, Animated, Easing, Image,
@@ -10,32 +10,26 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
 import { Project, RootStackParamList } from '../types';
 import { saveProject } from '../storage/database';
-import { getTutorialShown } from '../storage/settings';
 import { listPendingInvites, fetchProfile, supabase } from '../lib/supabase';
 import NewProjectModal from '../components/NewProjectModal';
+import TourModal, { TourStep, SpotRect } from '../components/TourModal';
+import { getTourSeen, setTourSeen } from '../storage/settings';
+
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
 const MENU_ITEMS = [
   {
     key: 'create',
-    image: require('../../assets/menu_create.gif'),
+    image: require('../../assets/principale.png'),
     title: 'Crea progetto misure',
     subtitle: 'Nuovo rilievo infissi',
     color: '#1565C0',
     light: '#E3F2FD',
   },
   {
-    key: 'catalog',
-    image: require('../../assets/menu_catalog.gif'),
-    title: 'Catalogo profili',
-    subtitle: 'Tipologie e disegni tecnici',
-    color: '#2E7D32',
-    light: '#E8F5E9',
-  },
-  {
     key: 'saved',
-    image: require('../../assets/menu_saved.gif'),
+    image: require('../../assets/menu_saved.png'),
     title: 'Rilievi salvati',
     subtitle: 'Apri un progetto esistente',
     color: '#6A1B9A',
@@ -43,11 +37,19 @@ const MENU_ITEMS = [
   },
   {
     key: 'materials',
-    image: require('../../assets/menu_materials.gif'),
+    image: require('../../assets/menu_materials.png'),
     title: 'Sviluppo materiale',
     subtitle: 'Calcola il materiale per un progetto',
     color: '#E65100',
     light: '#FFF3E0',
+  },
+  {
+    key: 'cutting',
+    image: require('../../assets/menu_cutting.png'),
+    title: 'Distinta di taglio',
+    subtitle: 'Piano di taglio barra per barra',
+    color: '#37474F',
+    light: '#ECEFF1',
   },
 ];
 
@@ -56,14 +58,80 @@ export default function HomeScreen() {
   const { theme: t } = useTheme();
   const [modalVisible,   setModalVisible]   = useState(false);
   const [pendingInvites, setPendingInvites] = useState(0);
+  const [tourVisible,    setTourVisible]    = useState(false);
+  const [tourSteps,      setTourSteps]      = useState<TourStep[]>([]);
 
-  const anims = useRef(MENU_ITEMS.map(() => new Animated.Value(0))).current;
+  const anims      = useRef(MENU_ITEMS.map(() => new Animated.Value(0))).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
+  const accountRef = useRef<View>(null);
+  const card0Ref   = useRef<View>(null);
+  const card1Ref   = useRef<View>(null);
+  const card2Ref   = useRef<View>(null);
+  const card3Ref   = useRef<View>(null);
+
+  const measureEl = (ref: React.RefObject<View>): Promise<SpotRect | null> =>
+    new Promise(resolve => {
+      if (!ref.current) { resolve(null); return; }
+      setTimeout(() => {
+        if (typeof (ref.current as any)?.measureInWindow !== 'function') { resolve(null); return; }
+        (ref.current as any).measureInWindow((x: number, y: number, w: number, h: number) => {
+          resolve(w > 0 && h > 0 ? { x, y, w, h } : null);
+        });
+      }, 100);
+    });
+
+  const openTour = useCallback(async () => {
+    const [acct, c0, c1, c2] = await Promise.all([
+      measureEl(accountRef),
+      measureEl(card0Ref),
+      measureEl(card1Ref),
+      measureEl(card2Ref),
+    ]);
+    setTourSteps([
+      {
+        icon: '👋',
+        title: 'Benvenuto in Misu!',
+        body: 'Questa è la schermata principale. Qui puoi creare nuovi rilievi, aprire quelli salvati e calcolare il materiale necessario.',
+      },
+      {
+        icon: '📐',
+        image: require('../../assets/principale.png'),
+        iconBg: '#E3F2FD',
+        title: 'Crea progetto misure',
+        body: 'Premi qui per iniziare un nuovo rilievo. Inserisci il nome del cantiere, il cliente e l\'indirizzo. Poi aggiungi le aperture una per una.',
+      },
+      {
+        icon: '🗂️',
+        image: require('../../assets/menu_saved.png'),
+        iconBg: '#F3E5F5',
+        title: 'Rilievi salvati',
+        body: 'Tutti i rilievi già creati sono qui. Puoi aprirli, modificarli, duplicarli o eliminarli. I sotto-progetti appaiono sotto il progetto madre.',
+      },
+      {
+        icon: '📦',
+        image: require('../../assets/menu_materials.png'),
+        iconBg: '#FFF3E0',
+        title: 'Sviluppo materiale',
+        body: 'Seleziona un rilievo e l\'app calcola automaticamente quante barre di profilo ordinare, ottimizzando i tagli per ridurre gli scarti.',
+      },
+      {
+        icon: '✂️',
+        iconBg: '#ECEFF1',
+        title: 'Distinta di taglio',
+        body: 'Mostra come tagliare ogni barra profilo: pezzi nell\'ordine ottimale, con avanzi e grafico proporzionale. Esportabile in PDF da consegnare al serramentista.',
+      },
+      {
+        icon: '👤',
+        title: 'Account e azienda',
+        body: 'In alto a sinistra trovi il tuo account. Puoi gestire la tua azienda, invitare collaboratori e sincronizzare i dati.',
+      },
+    ]);
+    setTourVisible(true);
+  }, []);
 
   useEffect(() => {
-    getTutorialShown().then(shown => {
-      if (!shown) navigation.replace('Tutorial');
-    });
+    // Auto-mostra tour alla prima apertura (dopo animazioni ~1s)
+    getTourSeen('home').then(seen => { if (!seen) setTimeout(openTour, 1100); });
     // Carica badge inviti pendenti
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
@@ -91,7 +159,7 @@ export default function HomeScreen() {
     const now = new Date().toISOString();
     const project: Project = {
       id: uuidv4(), name, clientName, clientPhone, address,
-      gps: null, openings: [],
+      gps: null, openings: [], parentId: null,
       createdAt: now, updatedAt: now,
     };
     await saveProject(project);
@@ -101,9 +169,9 @@ export default function HomeScreen() {
 
   const handlePress = (key: string) => {
     if (key === 'create') setModalVisible(true);
-    else if (key === 'catalog') navigation.navigate('Catalog');
     else if (key === 'saved') navigation.navigate('SavedProjects');
     else if (key === 'materials') navigation.navigate('MaterialsProjects');
+    else if (key === 'cutting') navigation.navigate('CuttingProjects');
   };
 
   return (
@@ -142,27 +210,29 @@ export default function HomeScreen() {
           {/* Help */}
           <TouchableOpacity
             style={styles.helpBtn}
-            onPress={() => navigation.navigate('Help')}
+            onPress={openTour}
             activeOpacity={0.75}
           >
             <Text style={styles.settingsIcon}>?</Text>
           </TouchableOpacity>
 
           {/* Account */}
-          <TouchableOpacity
-            style={styles.accountBtn}
-            onPress={() => { navigation.navigate('Account'); setPendingInvites(0); }}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.accountIcon}>👤</Text>
-            {pendingInvites > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{pendingInvites}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View ref={accountRef} collapsable={false} style={styles.accountBtn}>
+            <TouchableOpacity
+              onPress={() => { navigation.navigate('Account'); setPendingInvites(0); }}
+              activeOpacity={0.75}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={styles.accountIcon}>👤</Text>
+              {pendingInvites > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{pendingInvites}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
 
-          <Text style={styles.appName}>MeasureMate</Text>
+          <Text style={styles.appName}>Misu</Text>
           <Text style={styles.appSub}>MISURE PROFESSIONALI PER INFISSI</Text>
         </LinearGradient>
       </Animated.View>
@@ -171,6 +241,7 @@ export default function HomeScreen() {
       <View style={styles.menu}>
         {MENU_ITEMS.map((item, i) => {
           const anim = anims[i];
+          const cardRef = i === 0 ? card0Ref : i === 1 ? card1Ref : i === 2 ? card2Ref : card3Ref;
           return (
             <Animated.View
               key={item.key}
@@ -179,6 +250,7 @@ export default function HomeScreen() {
                 transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
               }}
             >
+              <View ref={cardRef} collapsable={false}>
               <TouchableOpacity
                 style={[styles.card, { backgroundColor: t.card }]}
                 onPress={() => handlePress(item.key)}
@@ -188,7 +260,7 @@ export default function HomeScreen() {
                 <View style={[styles.accent, { backgroundColor: item.color }]} />
 
                 {/* Icon box */}
-                <View style={[styles.iconBox, { backgroundColor: item.light }]}>
+                <View style={styles.iconBox}>
                   <Image source={item.image} style={styles.icon} resizeMode="contain" />
                 </View>
 
@@ -203,6 +275,7 @@ export default function HomeScreen() {
                   <Text style={[styles.arrowChar, { color: item.color }]}>›</Text>
                 </View>
               </TouchableOpacity>
+              </View>
             </Animated.View>
           );
         })}
@@ -212,6 +285,11 @@ export default function HomeScreen() {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onCreate={handleCreate}
+      />
+      <TourModal
+        visible={tourVisible}
+        steps={tourSteps}
+        onClose={() => { setTourVisible(false); setTourSeen('home'); }}
       />
     </View>
   );

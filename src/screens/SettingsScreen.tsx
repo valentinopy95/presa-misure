@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Switch,
+  Alert, Modal, Platform,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   DEFAULT_TOLERANCE_W, DEFAULT_TOLERANCE_H, DEFAULT_RIATTESTATTURA,
   DEFAULT_BAR_LENGTH, DEFAULT_KERF_90, DEFAULT_SAFETY_MARGIN,
   DEFAULT_SLAT_PITCH, DEFAULT_ZOCCOLO_H, DEFAULT_FASCIA_H,
-  DEFAULT_ANTA_REDUCTION,
+  DEFAULT_ANTA_REDUCTION, DEFAULT_ANTA_TOP_RAIL,
   getToleranceW, setToleranceW,
   getToleranceH, setToleranceH,
   getRiattestattura, setRiattestattura,
@@ -18,6 +19,8 @@ import {
   getZoccoloH, setZoccoloH,
   getFasciaH, setFasciaH,
   getAntaReduction, setAntaReduction,
+  getAntaTopRail, setAntaTopRail,
+  SettingsPreset, getPresets, addPreset, deletePreset, renamePreset, applyPreset,
 } from '../storage/settings';
 
 export default function SettingsScreen() {
@@ -33,7 +36,14 @@ export default function SettingsScreen() {
   const [slatText,   setSlatText]   = useState<string>(String(DEFAULT_SLAT_PITCH));
   const [zocText,    setZocText]    = useState<string>(String(DEFAULT_ZOCCOLO_H));
   const [fasText,    setFasText]    = useState<string>(String(DEFAULT_FASCIA_H));
-  const [antaRedText, setAntaRedText] = useState<string>(String(DEFAULT_ANTA_REDUCTION));
+  const [antaRedText,  setAntaRedText]  = useState<string>(String(DEFAULT_ANTA_REDUCTION));
+  const [antaTopText,  setAntaTopText]  = useState<string>(String(DEFAULT_ANTA_TOP_RAIL));
+  const [presets,       setPresets]       = useState<SettingsPreset[]>([]);
+  const [activeId,      setActiveId]      = useState<string | null>(null);
+  // modale nome preset (Android non ha Alert.prompt)
+  const [promptVisible, setPromptVisible] = useState(false);
+  const [promptValue,   setPromptValue]   = useState('');
+  const [promptMode,    setPromptMode]    = useState<'add' | { id: string; current: string }>('add');
 
   useEffect(() => {
     getToleranceW().then(v => setTolWText(String(v)));
@@ -46,6 +56,8 @@ export default function SettingsScreen() {
     getZoccoloH().then(v => setZocText(String(v)));
     getFasciaH().then(v => setFasText(String(v)));
     getAntaReduction().then(v => setAntaRedText(String(v)));
+    getAntaTopRail().then(v => setAntaTopText(String(v)));
+    getPresets().then(setPresets);
   }, []);
 
   const handleTolWEnd = () => {
@@ -106,7 +118,7 @@ export default function SettingsScreen() {
 
   const handleFasEnd = () => {
     const n = parseInt(fasText, 10);
-    const val = isNaN(n) || n <= 0 ? DEFAULT_FASCIA_H : Math.min(Math.max(n, 50), 500);
+    const val = isNaN(n) || n <= 0 ? DEFAULT_FASCIA_H : Math.min(Math.max(n, 500), 1500);
     setFasText(String(val));
     setFasciaH(val);
   };
@@ -118,11 +130,147 @@ export default function SettingsScreen() {
     setAntaReduction(val);
   };
 
+  const handleAntaTopEnd = () => {
+    const n = parseInt(antaTopText, 10);
+    const val = isNaN(n) || n <= 0 ? DEFAULT_ANTA_TOP_RAIL : Math.min(Math.max(n, 30), 200);
+    setAntaTopText(String(val));
+    setAntaTopRail(val);
+  };
+
+  // ── Preset handlers ──────────────────────────────────────────────────────────
+
+  const getCurrentValues = (): Omit<SettingsPreset, 'id' | 'name'> => ({
+    toleranceW:      parseInt(tolWText,    10) || DEFAULT_TOLERANCE_W,
+    toleranceH:      parseInt(tolHText,    10) || DEFAULT_TOLERANCE_H,
+    riattestattura:  parseInt(riattText,   10) || DEFAULT_RIATTESTATTURA,
+    barLength:       parseInt(barText,     10) || DEFAULT_BAR_LENGTH,
+    kerf90:          parseInt(kerfText,    10) || DEFAULT_KERF_90,
+    safetyMarginPct: parseInt(marginText,  10) || DEFAULT_SAFETY_MARGIN,
+    slatPitch:       parseInt(slatText,    10) || DEFAULT_SLAT_PITCH,
+    zoccoloH:        parseInt(zocText,     10) || DEFAULT_ZOCCOLO_H,
+    fasciaH:         parseInt(fasText,     10) || DEFAULT_FASCIA_H,
+    antaTopRail:     parseInt(antaTopText, 10) || DEFAULT_ANTA_TOP_RAIL,
+    antaReduction:   parseInt(antaRedText, 10) || DEFAULT_ANTA_REDUCTION,
+  });
+
+  const openAddPrompt = () => {
+    setPromptMode('add');
+    setPromptValue('');
+    setPromptVisible(true);
+  };
+
+  const openRenamePrompt = (preset: SettingsPreset) => {
+    setPromptMode({ id: preset.id, current: preset.name });
+    setPromptValue(preset.name);
+    setPromptVisible(true);
+  };
+
+  const handlePromptConfirm = async () => {
+    const name = promptValue.trim();
+    if (!name) { setPromptVisible(false); return; }
+    setPromptVisible(false);
+    if (promptMode === 'add') {
+      const preset: SettingsPreset = { id: Date.now().toString(), name, ...getCurrentValues() };
+      await addPreset(preset);
+      setPresets(prev => [...prev, preset]);
+      setActiveId(preset.id);
+    } else {
+      const updated = await renamePreset(promptMode.id, name);
+      setPresets(updated);
+    }
+  };
+
+  const handleSelectPreset = async (preset: SettingsPreset) => {
+    await applyPreset(preset);
+    setTolWText(String(preset.toleranceW));
+    setTolHText(String(preset.toleranceH));
+    setRiattText(String(preset.riattestattura));
+    setBarText(String(preset.barLength));
+    setKerfText(String(preset.kerf90));
+    setMarginText(String(preset.safetyMarginPct));
+    setSlatText(String(preset.slatPitch));
+    setZocText(String(preset.zoccoloH));
+    setFasText(String(preset.fasciaH));
+    setAntaTopText(String(preset.antaTopRail ?? DEFAULT_ANTA_TOP_RAIL));
+    setAntaRedText(String(preset.antaReduction));
+    setActiveId(preset.id);
+  };
+
+  const handleLongPressPreset = (preset: SettingsPreset) => {
+    Alert.alert(preset.name, 'Cosa vuoi fare?', [
+      { text: 'Rinomina', onPress: () => openRenamePrompt(preset) },
+      {
+        text: 'Elimina', style: 'destructive', onPress: async () => {
+          const updated = await deletePreset(preset.id);
+          setPresets(updated);
+          if (activeId === preset.id) setActiveId(null);
+        },
+      },
+      { text: 'Annulla', style: 'cancel' },
+    ]);
+  };
+
   const exW = 1200 - (parseInt(tolWText, 10) || 0);
   const exH = 2200 - (parseInt(tolHText, 10) || 0);
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: t.bg }]} contentContainerStyle={styles.content}>
+
+      {/* ── Modal nome preset ── */}
+      <Modal visible={promptVisible} transparent animationType="fade" onRequestClose={() => setPromptVisible(false)}>
+        <View style={pm.overlay}>
+          <View style={pm.box}>
+            <Text style={pm.title}>{promptMode === 'add' ? 'Nuovo preset' : 'Rinomina preset'}</Text>
+            <Text style={pm.sub}>{promptMode === 'add' ? 'Salva i valori attuali come preset richiamabile.' : ''}</Text>
+            <TextInput
+              style={pm.input}
+              value={promptValue}
+              onChangeText={setPromptValue}
+              placeholder="Es. Profilo 60, Serramenti esterno..."
+              placeholderTextColor="#aaa"
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handlePromptConfirm}
+            />
+            <View style={pm.btnRow}>
+              <TouchableOpacity style={pm.btnCancel} onPress={() => setPromptVisible(false)}>
+                <Text style={pm.btnCancelText}>Annulla</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={pm.btnOk} onPress={handlePromptConfirm}>
+                <Text style={pm.btnOkText}>{promptMode === 'add' ? 'Salva preset' : 'Rinomina'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Striscia preset ── */}
+      <View style={[styles.presetBar, { backgroundColor: t.card }]}>
+        <Text style={[styles.presetTitle, { color: t.textSecondary }]}>PRESET IMPOSTAZIONI</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetScroll}>
+          {presets.map(p => (
+            <TouchableOpacity
+              key={p.id}
+              style={[styles.presetChip, activeId === p.id && styles.presetChipActive]}
+              onPress={() => handleSelectPreset(p)}
+              onLongPress={() => handleLongPressPreset(p)}
+              delayLongPress={500}
+            >
+              <Text style={[styles.presetChipText, activeId === p.id && styles.presetChipTextActive]}>
+                {p.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={styles.presetAddBtn} onPress={openAddPrompt}>
+            <Text style={styles.presetAddText}>＋</Text>
+          </TouchableOpacity>
+        </ScrollView>
+        {presets.length === 0 && (
+          <Text style={[styles.presetEmpty, { color: t.textSecondary }]}>
+            Configura i valori e premi ＋ per salvare il primo preset
+          </Text>
+        )}
+      </View>
 
       {/* ── Modalità scura ── */}
       <Text style={[styles.sectionTitle, { color: t.textPrimary, borderLeftColor: '#1565C0' }]}>Modalità scura</Text>
@@ -372,26 +520,26 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* ── Altezza zoccolo persiana ── */}
-      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Altezza zoccolo persiana</Text>
+      {/* ── Posizione fascia porta-finestra ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Posizione fascia porta-finestra</Text>
       <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
-        Altezza del profilo zoccolo inferiore della persiana (default 100 mm)
+        Distanza dal basso al centro della fascia intermedia (default 994 mm)
       </Text>
       <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
         <View style={styles.toleranceRow}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.toleranceLabel, { color: t.label }]}>Altezza zoccolo</Text>
-            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 100 mm</Text>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Centro fascia</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 994 mm</Text>
           </View>
           <View style={styles.toleranceInputWrap}>
             <TextInput
-              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
+              style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder, width: 100 }]}
               keyboardType="numeric"
-              value={zocText}
-              onChangeText={setZocText}
-              onEndEditing={handleZocEnd}
-              onBlur={handleZocEnd}
-              maxLength={3}
+              value={fasText}
+              onChangeText={setFasText}
+              onEndEditing={handleFasEnd}
+              onBlur={handleFasEnd}
+              maxLength={4}
               selectTextOnFocus
             />
             <Text style={[styles.toleranceUnit, { color: t.label }]}>mm</Text>
@@ -399,25 +547,25 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* ── Altezza fascia porta-finestra ── */}
-      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Altezza fascia porta-finestra</Text>
+      {/* ── Traverso superiore anta persiana ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Traverso superiore anta persiana</Text>
       <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
-        Altezza della fascia superiore per persiane porta-finestra (default 100 mm)
+        Altezza del profilo anta in cima alla persiana — viene sottratta per calcolare le lamelle (default 68 mm)
       </Text>
       <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
         <View style={styles.toleranceRow}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.toleranceLabel, { color: t.label }]}>Altezza fascia</Text>
-            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 100 mm</Text>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Traverso superiore</Text>
+            <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 68 mm</Text>
           </View>
           <View style={styles.toleranceInputWrap}>
             <TextInput
               style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputBorder }]}
               keyboardType="numeric"
-              value={fasText}
-              onChangeText={setFasText}
-              onEndEditing={handleFasEnd}
-              onBlur={handleFasEnd}
+              value={antaTopText}
+              onChangeText={setAntaTopText}
+              onEndEditing={handleAntaTopEnd}
+              onBlur={handleAntaTopEnd}
               maxLength={3}
               selectTextOnFocus
             />
@@ -484,4 +632,45 @@ const styles = StyleSheet.create({
   toggleBtnActive: { borderColor: '#1565C0', backgroundColor: '#EEF5FF' },
   toggleBtnText: { fontSize: 13, fontWeight: '700', color: '#8a9ab0' },
   toggleBtnTextActive: { color: '#1565C0' },
+
+  // Preset strip
+  presetBar: {
+    borderRadius: 16, padding: 16, marginBottom: 20,
+    elevation: 2, shadowColor: '#1a3a5c', shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+  },
+  presetTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 },
+  presetScroll: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  presetChip: {
+    paddingHorizontal: 16, paddingVertical: 9, borderRadius: 22,
+    backgroundColor: '#EEF2F7', borderWidth: 1.5, borderColor: 'transparent',
+  },
+  presetChipActive: { backgroundColor: '#EEF5FF', borderColor: '#1565C0' },
+  presetChipText:   { fontSize: 13, fontWeight: '600', color: '#5a7a9a' },
+  presetChipTextActive: { color: '#1565C0', fontWeight: '800' },
+  presetAddBtn: {
+    width: 38, height: 38, borderRadius: 19, backgroundColor: '#1565C0',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  presetAddText: { color: '#fff', fontSize: 20, lineHeight: 26, fontWeight: '700' },
+  presetEmpty:   { fontSize: 12, marginTop: 8, fontStyle: 'italic' },
+});
+
+const pm = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  box: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '85%',
+    elevation: 20, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
+  },
+  title:  { fontSize: 18, fontWeight: '900', color: '#0c2d75', marginBottom: 4 },
+  sub:    { fontSize: 12, color: '#8a9ab0', marginBottom: 16 },
+  input: {
+    backgroundColor: '#F0F4FF', borderRadius: 12, borderWidth: 2, borderColor: '#1565C0',
+    paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, fontWeight: '700', color: '#1a2a3a',
+    marginBottom: 18,
+  },
+  btnRow:       { flexDirection: 'row', gap: 10 },
+  btnCancel:    { flex: 1, paddingVertical: 13, borderRadius: 12, borderWidth: 1.5, borderColor: '#DDE3ED', alignItems: 'center' },
+  btnCancelText:{ fontSize: 14, fontWeight: '700', color: '#667' },
+  btnOk:        { flex: 2, paddingVertical: 13, borderRadius: 12, backgroundColor: '#1565C0', alignItems: 'center', elevation: 2 },
+  btnOkText:    { fontSize: 14, fontWeight: '800', color: '#fff' },
 });

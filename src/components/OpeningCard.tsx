@@ -7,6 +7,7 @@ interface Props {
   opening: Opening;
   onPress: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }
 
 const formatDim = (v: number | null) => (v ? `${v}` : '—');
@@ -22,7 +23,7 @@ function accentColor(style: OpeningStyle | null): string {
   return '#455A64';
 }
 
-export default function OpeningCard({ opening, onPress, onDelete }: Props) {
+export default function OpeningCard({ opening, onPress, onDelete, onDuplicate }: Props) {
   const hasDims = opening.width || opening.height;
   const color = accentColor(opening.style);
 
@@ -101,16 +102,27 @@ export default function OpeningCard({ opening, onPress, onDelete }: Props) {
         )}
       </View>
 
-      {/* Delete */}
-      <TouchableOpacity
-        style={styles.delete}
-        onPress={onDelete}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <View style={styles.deleteBox}>
-          <Text style={styles.deleteIcon}>✕</Text>
-        </View>
-      </TouchableOpacity>
+      {/* Actions: duplica + elimina */}
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={onDuplicate}
+          hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+        >
+          <View style={styles.dupBox}>
+            <Text style={styles.dupIcon}>⧉</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={onDelete}
+          hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+        >
+          <View style={styles.deleteBox}>
+            <Text style={styles.deleteIcon}>✕</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -157,7 +169,13 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 11, color: '#1565C0', fontWeight: '600' },
 
-  delete: { justifyContent: 'center', paddingHorizontal: 14 },
+  actions: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
+  actionBtn: {},
+  dupBox: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: '#E8F0FE', alignItems: 'center', justifyContent: 'center',
+  },
+  dupIcon: { fontSize: 13, color: '#1565C0', fontWeight: '800' },
   deleteBox: {
     width: 28, height: 28, borderRadius: 8,
     backgroundColor: '#FEE8E8', alignItems: 'center', justifyContent: 'center',

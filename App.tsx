@@ -17,7 +17,6 @@ import AuthScreen              from './src/screens/AuthScreen';
 import CompanySetupScreen      from './src/screens/CompanySetupScreen';
 import HomeScreen              from './src/screens/HomeScreen';
 import SavedProjectsScreen     from './src/screens/SavedProjectsScreen';
-import CatalogScreen           from './src/screens/CatalogScreen';
 import ProjectScreen           from './src/screens/ProjectScreen';
 import MeasurementScreen       from './src/screens/MeasurementScreen';
 import StylePickerScreen       from './src/screens/StylePickerScreen';
@@ -27,8 +26,9 @@ import MaterialsProjectsScreen from './src/screens/MaterialsProjectsScreen';
 import SettingsScreen          from './src/screens/SettingsScreen';
 import AccountScreen           from './src/screens/AccountScreen';
 import DuplicateProjectScreen  from './src/screens/DuplicateProjectScreen';
-import TutorialScreen          from './src/screens/TutorialScreen';
 import HelpScreen              from './src/screens/HelpScreen';
+import CuttingListScreen        from './src/screens/CuttingListScreen';
+import CuttingProjectsScreen   from './src/screens/CuttingProjectsScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -61,7 +61,6 @@ function AppNavigator() {
       >
         <Stack.Screen name="Home"              component={HomeScreen}             options={{ headerShown: false }}/>
         <Stack.Screen name="SavedProjects"     component={SavedProjectsScreen}    options={{ title: 'Rilievi salvati', ...helpRight }}/>
-        <Stack.Screen name="Catalog"           component={CatalogScreen}          options={{ title: 'Catalogo profili', ...helpRight }}/>
         <Stack.Screen name="Project"           component={ProjectScreen}          options={{ title: 'Progetto', ...helpRight }}/>
         <Stack.Screen name="Measurement"       component={MeasurementScreen}      options={({ route }) => ({ title: route.params.openingId ? 'Modifica apertura' : 'Nuova apertura', headerRight: () => <HelpButton /> })}/>
         <Stack.Screen name="StylePicker"       component={StylePickerScreen}      options={{ title: 'Seleziona tipologia', ...helpRight }}/>
@@ -71,8 +70,9 @@ function AppNavigator() {
         <Stack.Screen name="Settings"          component={SettingsScreen}         options={{ title: 'Impostazioni', ...helpRight }}/>
         <Stack.Screen name="Account"           component={AccountScreen}          options={{ title: 'Account' }}/>
         <Stack.Screen name="DuplicateProject" component={DuplicateProjectScreen} options={{ title: 'Duplica progetto' }}/>
-        <Stack.Screen name="Tutorial"          component={TutorialScreen}         options={{ headerShown: false }}/>
         <Stack.Screen name="Help"              component={HelpScreen}             options={{ title: 'Guida' }}/>
+        <Stack.Screen name="CuttingProjects"    component={CuttingProjectsScreen}  options={{ title: 'Distinta di taglio', ...helpRight }}/>
+        <Stack.Screen name="CuttingList"       component={CuttingListScreen}      options={{ title: 'Distinta di taglio' }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -83,27 +83,24 @@ function AppContent() {
   const [profile,  setProfile]  = useState<Profile | null>(null);
   const [loading,  setLoading]  = useState(true);
 
-  const loadProfile = useCallback(async (userId: string) => {
-    // getUser() valida il JWT con il server (forza refresh se scaduto)
-    // così la query RLS su profiles non fallisce mai per token stale
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setProfile(null); return; }
-
-    let p = await fetchProfile(user.id);
-
-    // Se l'utente è loggato ma senza azienda, controlla inviti pendenti
-    if (p && !p.company_id) {
-      await checkAndAcceptInvite(user.id);
-      p = await fetchProfile(user.id); // ricarica dopo eventuale accettazione
+  /** Carica il profilo e lo restituisce (senza aggiornare lo stato). */
+  const fetchAndResolveProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+    let p = await fetchProfile(userId);
+    // Controlla inviti anche se il profilo è null (utente appena registrato senza profilo ancora)
+    if (!p || !p.company_id) {
+      await checkAndAcceptInvite(userId);
+      p = await fetchProfile(userId);
     }
+    return p;
+  }, []);
 
-    // Non sovrascrivere un profilo valido con null a causa di errori di rete transienti.
-    // Se fetchProfile restituisce null ma avevamo già un profilo con azienda, lo manteniamo.
+  const loadProfile = useCallback(async (userId: string) => {
+    const p = await fetchAndResolveProfile(userId);
     setProfile(prev => {
       if (p === null && prev?.company_id != null) return prev;
       return p;
     });
-  }, []);
+  }, [fetchAndResolveProfile]);
 
   const refreshProfile = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -111,22 +108,32 @@ function AppContent() {
   }, [loadProfile]);
 
   useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 10000);
+    // Fallback di sicurezza: se INITIAL_SESSION non arriva entro 8s, sblocca comunque il loading
+    const timeout = setTimeout(() => setLoading(false), 8000);
 
     // Pattern Supabase v2: onAuthStateChange gestisce sia il caricamento iniziale
     // (evento INITIAL_SESSION) che i cambi successivi di sessione
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'INITIAL_SESSION') {
+        // Carica il profilo PRIMA di aggiornare qualsiasi stato, così session+profile+loading
+        // vengono impostati in un unico batch React → nessun flash di CompanySetupScreen.
+        let p: Profile | null = null;
+        if (session) {
+          try { p = await fetchAndResolveProfile(session.user.id); } catch { }
+        }
+        clearTimeout(timeout);
+        setSession(session);
+        setProfile(p);
+        setLoading(false);
+        return;
+      }
+
       setSession(session);
       if (session) {
         try { await loadProfile(session.user.id); } catch { /* mantieni profilo esistente su errori di rete */ }
       } else {
         setProfile(null);
         clearDbCache();
-      }
-      // INITIAL_SESSION è il primo evento: segna la fine del loading
-      if (event === 'INITIAL_SESSION') {
-        clearTimeout(timeout);
-        setLoading(false);
       }
     });
 

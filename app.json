@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "MeasureMate",
-    "slug": "measuremate",
+    "name": "Misu",
+    "slug": "misu",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon_app.png",
+    "icon": "./assets/principale.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -19,8 +19,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon_adaptive.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/principale.png",
+        "backgroundColor": "#FFC107"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

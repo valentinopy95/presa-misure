@@ -38,15 +38,25 @@ export function generateCompanyCode(): string {
   return `${part(4)}-${part(4)}`;
 }
 
-/** Carica il profilo dell'utente corrente */
-export async function fetchProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, company_id')
-    .eq('id', userId)
-    .single();
-  if (error) return null;
-  return data as Profile;
+/** Carica il profilo dell'utente corrente.
+ *  Si risolve con null se la richiesta non arriva entro TIMEOUT_MS
+ *  (evita loading infinito su rete assente/lenta all'avvio). */
+export async function fetchProfile(userId: string, timeoutMs = 10000): Promise<Profile | null> {
+  try {
+    const timeoutPromise = new Promise<null>(resolve =>
+      setTimeout(() => resolve(null), timeoutMs)
+    );
+    const fetchPromise = supabase
+      .from('profiles')
+      .select('id, full_name, company_id')
+      .eq('id', userId)
+      .single()
+      .then(({ data, error }) => (error ? null : (data as Profile)));
+
+    return await Promise.race([fetchPromise, timeoutPromise]);
+  } catch {
+    return null;
+  }
 }
 
 /** Carica l'azienda tramite ID */
@@ -109,26 +119,34 @@ export interface CompanyInvite {
 
 /** Invia un invito via email a un collaboratore */
 export async function inviteToCompany(companyId: string, invitedBy: string, email: string): Promise<'ok' | 'already_member' | 'already_invited' | 'error'> {
-  // Verifica che l'email non sia già membro
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('id, company_id')
-    .eq('id', (await supabase.auth.getUser()).data.user?.id ?? '')
-    .single();
-  if (existingProfile) {
-    // Controlla se esiste già un utente con quell'email nella stessa azienda
-    // (non possiamo cercare per email direttamente — RLS non lo permette)
-  }
-
   const { error } = await supabase.from('company_invites').insert({
     company_id:    companyId,
     invited_by:    invitedBy,
     invited_email: email.toLowerCase().trim(),
   });
 
-  if (!error) return 'ok';
-  if (error.code === '23505') return 'already_invited'; // unique violation
-  return 'error';
+  if (error) {
+    if (error.code === '23505') return 'already_invited';
+    return 'error';
+  }
+
+  // Recupera dati per l'email
+  try {
+    const [companyRes, profileRes] = await Promise.all([
+      supabase.from('companies').select('name').eq('id', companyId).single(),
+      supabase.from('profiles').select('full_name').eq('id', invitedBy).single(),
+    ]);
+    const companyName    = companyRes.data?.name    ?? 'Azienda';
+    const invitedByName  = profileRes.data?.full_name ?? '';
+
+    await supabase.functions.invoke('send-invite-email', {
+      body: { invitedEmail: email.toLowerCase().trim(), companyName, invitedByName },
+    });
+  } catch {
+    // Email fallita non blocca l'invito — il record DB è già salvato
+  }
+
+  return 'ok';
 }
 
 /** Controlla se c'è un invito pendente senza accettarlo — ritorna l'azienda o null */

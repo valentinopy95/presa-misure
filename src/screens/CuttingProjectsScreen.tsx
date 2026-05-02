@@ -8,36 +8,36 @@ import { getAllProjectsWithOpenings } from '../storage/database';
 import TourModal, { TourStep } from '../components/TourModal';
 import { getTourSeen, setTourSeen } from '../storage/settings';
 
-type Nav = NativeStackNavigationProp<RootStackParamList, 'MaterialsProjects'>;
+type Nav = NativeStackNavigationProp<RootStackParamList, 'CuttingProjects'>;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const MATERIALS_PROJECTS_TOUR: TourStep[] = [
+const CUTTING_PROJECTS_TOUR: TourStep[] = [
   {
-    icon: '📦',
-    title: 'Sviluppo materiale',
-    body: 'Qui selezioni il progetto di cui vuoi calcolare i materiali. L\'app legge tutte le aperture e calcola quante barre di profilo ordinare.',
+    icon: '✂️',
+    title: 'Distinta di taglio',
+    body: 'Seleziona un progetto per vedere come tagliare ogni barra di profilo. La distinta mostra l\'ordine ottimale dei tagli barra per barra.',
     spot: null,
   },
   {
-    icon: '🔢',
-    title: 'Scegli il progetto',
-    body: 'Tocca un rilievo per vedere il calcolo materiali. Vengono elaborate solo le aperture con tipologia e misure complete.',
+    icon: '📊',
+    title: 'Ottimizzazione tagli',
+    body: 'L\'algoritmo FFD (First Fit Decreasing) assegna i pezzi più lunghi per primi, riducendo al minimo gli scarti.',
     spot: null,
   },
   {
-    icon: '⚙️',
-    title: 'Impostazioni calcolo',
-    body: 'I parametri del calcolo (lunghezza barre, tolleranze, riattestattura...) si cambiano nelle Impostazioni dalla Home. Prima di calcolare verifica che siano corretti.',
+    icon: '📄',
+    title: 'Esporta PDF',
+    body: 'Dalla distinta puoi esportare un PDF da consegnare al serramentista: ogni barra mostra lunghezze e ordine di taglio.',
     spot: null,
   },
 ];
 
-export default function MaterialsProjectsScreen() {
-  const navigation = useNavigation<Nav>();
-  const [projects, setProjects] = useState<Project[]>([]);
+export default function CuttingProjectsScreen() {
+  const navigation  = useNavigation<Nav>();
+  const [projects,    setProjects]    = useState<Project[]>([]);
   const [tourVisible, setTourVisible] = useState(false);
 
   useFocusEffect(
@@ -49,7 +49,7 @@ export default function MaterialsProjectsScreen() {
   );
 
   useEffect(() => {
-    getTourSeen('materials_projects').then(seen => { if (!seen) setTourVisible(true); });
+    getTourSeen('cutting_projects').then(seen => { if (!seen) setTourVisible(true); });
   }, []);
 
   useEffect(() => {
@@ -66,8 +66,8 @@ export default function MaterialsProjectsScreen() {
     <View style={styles.container}>
       <TourModal
         visible={tourVisible}
-        steps={MATERIALS_PROJECTS_TOUR}
-        onClose={() => { setTourVisible(false); setTourSeen('materials_projects'); }}
+        steps={CUTTING_PROJECTS_TOUR}
+        onClose={() => { setTourVisible(false); setTourSeen('cutting_projects'); }}
       />
       <FlatList
         data={projects}
@@ -75,7 +75,7 @@ export default function MaterialsProjectsScreen() {
         contentContainerStyle={projects.length === 0 ? styles.emptyContainer : styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📦</Text>
+            <Text style={styles.emptyIcon}>✂️</Text>
             <Text style={styles.emptyTitle}>Nessun progetto salvato</Text>
             <Text style={styles.emptySubtitle}>Crea prima un progetto con le misure</Text>
           </View>
@@ -83,17 +83,14 @@ export default function MaterialsProjectsScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('Materials', { projectId: item.id })}
+            onPress={() => navigation.navigate('CuttingList', { projectId: item.id })}
             activeOpacity={0.75}
           >
-            {/* Left accent */}
             <LinearGradient
-              colors={['#ff7043', '#E65100']}
+              colors={['#37474F', '#263238']}
               start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
               style={styles.accent}
             />
-
-            {/* Body */}
             <View style={styles.cardBody}>
               <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
               {!!item.clientName && (
@@ -108,8 +105,6 @@ export default function MaterialsProjectsScreen() {
                 <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
               </View>
             </View>
-
-            {/* Arrow badge */}
             <View style={styles.arrowBadge}>
               <Text style={styles.arrowChar}>›</Text>
             </View>
@@ -121,13 +116,13 @@ export default function MaterialsProjectsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#EEF2F7' },
-  list: { padding: 16, gap: 12 },
+  container:      { flex: 1, backgroundColor: '#EEF2F7' },
+  list:           { padding: 16, gap: 12 },
   emptyContainer: { flex: 1 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, marginTop: 80 },
-  emptyIcon: { fontSize: 52, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#1a2a3a', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, color: '#8a9ab0', textAlign: 'center' },
+  empty:          { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, marginTop: 80 },
+  emptyIcon:      { fontSize: 52, marginBottom: 16 },
+  emptyTitle:     { fontSize: 20, fontWeight: '800', color: '#1a2a3a', marginBottom: 8 },
+  emptySubtitle:  { fontSize: 14, color: '#8a9ab0', textAlign: 'center' },
 
   card: {
     flexDirection: 'row', alignItems: 'center',
@@ -135,20 +130,20 @@ const styles = StyleSheet.create({
     elevation: 3,
     shadowColor: '#1a3a5c', shadowOpacity: 0.10, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
   },
-  accent: { width: 4, alignSelf: 'stretch' },
+  accent:   { width: 4, alignSelf: 'stretch' },
   cardBody: { flex: 1, paddingVertical: 14, paddingLeft: 14, paddingRight: 4 },
-  name: { fontSize: 15, fontWeight: '800', color: '#1a2a3a', marginBottom: 3 },
-  client: { fontSize: 12, color: '#556070', marginBottom: 7, fontWeight: '500' },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  name:     { fontSize: 15, fontWeight: '800', color: '#1a2a3a', marginBottom: 3 },
+  client:   { fontSize: 12, color: '#556070', marginBottom: 7, fontWeight: '500' },
+  meta:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
   countBadge: {
-    backgroundColor: '#FFF3E0', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20,
+    backgroundColor: '#ECEFF1', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20,
   },
-  countText: { fontSize: 11, fontWeight: '700', color: '#E65100' },
-  date: { fontSize: 11, color: '#aab0ba', fontWeight: '500' },
+  countText:  { fontSize: 11, fontWeight: '700', color: '#37474F' },
+  date:       { fontSize: 11, color: '#aab0ba', fontWeight: '500' },
   arrowBadge: {
     width: 30, height: 30, borderRadius: 10,
-    backgroundColor: '#FFF3E0', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#ECEFF1', alignItems: 'center', justifyContent: 'center',
     marginRight: 14,
   },
-  arrowChar: { fontSize: 22, fontWeight: '700', color: '#E65100', lineHeight: 28 },
+  arrowChar:  { fontSize: 22, fontWeight: '700', color: '#37474F', lineHeight: 28 },
 });

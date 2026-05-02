@@ -1,148 +1,151 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Image } from 'react-native';
+
+const NAVY   = '#0c2d75';
+const ACCENT = '#FFC107';
+const MASCOT = require('../../assets/principale.png');
 
 export default function SplashScreen() {
-  const logoScale  = useRef(new Animated.Value(0.6)).current;
+  const logoScale   = useRef(new Animated.Value(0.7)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
-  const dotScale   = useRef(new Animated.Value(1)).current;
+  const glowAnim    = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // 1. Logo entra con scala + fade
     Animated.parallel([
       Animated.spring(logoScale, {
         toValue: 1,
-        tension: 60,
+        tension: 55,
         friction: 7,
         useNativeDriver: true,
       }),
       Animated.timing(logoOpacity, {
         toValue: 1,
-        duration: 350,
+        duration: 380,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start(() => {
-      // 2. Testo appare dopo il logo
       Animated.timing(textOpacity, {
         toValue: 1,
-        duration: 300,
+        duration: 320,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
     });
 
-    // 3. Pulsazione continua sul logo
-    const pulse = Animated.loop(
+    // Pulsazione del bagliore sotto il logo
+    const glow = Animated.loop(
       Animated.sequence([
-        Animated.timing(dotScale, {
-          toValue: 1.08,
-          duration: 900,
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1100,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
-        Animated.timing(dotScale, {
-          toValue: 1,
-          duration: 900,
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1100,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ])
     );
-    const pulseTimeout = setTimeout(() => pulse.start(), 700);
-    return () => {
-      clearTimeout(pulseTimeout);
-      pulse.stop();
-    };
+    const t = setTimeout(() => glow.start(), 600);
+    return () => { clearTimeout(t); glow.stop(); };
   }, []);
+
+  const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.45] });
+  const glowScale   = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
 
   return (
     <View style={s.root}>
+      {/* Cerchio di bagliore dietro al logo */}
+      <Animated.View style={[s.glow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}/>
+
+      {/* Mascotte */}
       <Animated.View style={[s.logoWrap, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
-        <Animated.View style={[s.logoBox, { transform: [{ scale: dotScale }] }]}>
-          <Text style={s.logoText}>M</Text>
-        </Animated.View>
+        <Image source={MASCOT} style={s.mascot} resizeMode="contain"/>
       </Animated.View>
 
+      {/* Testo */}
       <Animated.View style={[s.textWrap, { opacity: textOpacity }]}>
-        <Text style={s.appName}>MeasureMate</Text>
+        <Text style={s.appName}>Misu</Text>
         <Text style={s.appSub}>Gestione rilievi infissi</Text>
       </Animated.View>
 
-      <Animated.View style={[s.dotsWrap, { opacity: textOpacity }]}>
-        <LoadingDots />
+      {/* Barra di loading in basso */}
+      <Animated.View style={[s.loaderWrap, { opacity: textOpacity }]}>
+        <LoadingBar/>
       </Animated.View>
     </View>
   );
 }
 
-function LoadingDots() {
-  const dots = [
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-  ];
+function LoadingBar() {
+  const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const anims = dots.map((dot, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(i * 160),
-          Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
-          Animated.delay((dots.length - i - 1) * 160),
-        ])
-      )
-    );
-    anims.forEach(a => a.start());
-    return () => anims.forEach(a => a.stop());
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(progress, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(progress, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
   }, []);
 
+  const width = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+
   return (
-    <View style={s.dots}>
-      {dots.map((dot, i) => (
-        <Animated.View
-          key={i}
-          style={[s.dot, {
-            opacity: dot,
-            transform: [{ scale: dot.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
-          }]}
-        />
-      ))}
+    <View style={s.barTrack}>
+      <Animated.View style={[s.barFill, { width }]}/>
     </View>
   );
 }
-
-const BLUE = '#0c2d75';
 
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: NAVY,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoWrap: { alignItems: 'center', marginBottom: 24 },
-  logoBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 22,
-    backgroundColor: BLUE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 10,
-    shadowColor: BLUE,
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
+
+  glow: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: ACCENT,
   },
-  logoText: { color: '#fff', fontSize: 42, fontWeight: '900' },
 
-  textWrap: { alignItems: 'center', marginBottom: 48 },
-  appName:  { fontSize: 28, fontWeight: '900', color: BLUE, letterSpacing: 0.5 },
-  appSub:   { fontSize: 13, color: '#999', marginTop: 5 },
+  logoWrap: { alignItems: 'center', marginBottom: 24, zIndex: 2 },
+  mascot:   { width: 200, height: 200 },
 
-  dotsWrap: { position: 'absolute', bottom: 60 },
-  dots:     { flexDirection: 'row', gap: 8 },
-  dot:      { width: 7, height: 7, borderRadius: 4, backgroundColor: BLUE, opacity: 0.7 },
+  textWrap:  { alignItems: 'center', marginBottom: 0, zIndex: 2 },
+  appName:   { fontSize: 30, fontWeight: '900', color: '#fff', letterSpacing: 0.4 },
+  appSub:    { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 6, letterSpacing: 0.3 },
+
+  loaderWrap: { position: 'absolute', bottom: 52, width: 120 },
+  barTrack: {
+    height: 3,
+    width: '100%',
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#FFC107',
+  },
 });

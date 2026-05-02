@@ -7,19 +7,20 @@ interface Props {
   project: Project;
   onPress: () => void;
   onDelete: () => void;
+  isSubProject?: boolean;
 }
 
-export default function ProjectCard({ project, onPress, onDelete }: Props) {
+export default function ProjectCard({ project, onPress, onDelete, isSubProject = false }: Props) {
   const date = new Date(project.updatedAt).toLocaleDateString('it-IT', {
     day: '2-digit', month: 'short', year: 'numeric',
   });
   const count = project.openings.length;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.78}>
+    <TouchableOpacity style={[styles.card, isSubProject && styles.cardSub]} onPress={onPress} activeOpacity={0.78}>
       {/* Left accent */}
       <LinearGradient
-        colors={['#1976d2', '#0d47a1']}
+        colors={isSubProject ? ['#42a5f5', '#1565C0'] : ['#1976d2', '#0d47a1']}
         start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
         style={styles.accent}
       />
@@ -61,6 +62,11 @@ const styles = StyleSheet.create({
     borderRadius: 18, overflow: 'hidden',
     elevation: 3,
     shadowColor: '#1a3a5c', shadowOpacity: 0.10, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+  },
+  cardSub: {
+    elevation: 1,
+    shadowOpacity: 0.06,
+    backgroundColor: '#F8FBFF',
   },
   accent: { width: 5 },
   body: { flex: 1, paddingVertical: 16, paddingHorizontal: 16 },

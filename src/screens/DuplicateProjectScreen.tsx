@@ -100,10 +100,14 @@ export default function DuplicateProjectScreen() {
       const original = await getProject(projectId);
       if (!original) return;
       const now = new Date().toISOString();
+      // Se l'originale è già un figlio → la copia diventa fratello (stesso parent).
+      // Se l'originale è un progetto madre → la copia diventa figlio (parent = originale).
+      const parentId = original.parentId ?? original.id;
       const newProject = {
         ...original,
         id:        uuidv4(),
         name:      projectName.trim(),
+        parentId,
         openings:  drafts.map(({ _category, ...o }) => ({ ...o, updatedAt: now })),
         createdAt: now,
         updatedAt: now,

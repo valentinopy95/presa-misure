@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import { supabase, createCompany, checkAndAcceptInvite, peekPendingInvite, Company } from '../lib/supabase';
+import AppLogo from '../components/AppLogo';
 
 type Step = 'choose' | 'create' | 'waiting';
 
@@ -72,7 +73,7 @@ export default function CompanySetupScreen({ onComplete }: Props) {
 
         {/* Header */}
         <View style={s.header}>
-          <View style={s.logoBox}><Text style={s.logoText}>M</Text></View>
+          <AppLogo size="medium"/>
           <Text style={s.title}>La tua azienda</Text>
           <Text style={s.sub}>
             {step === 'choose'
