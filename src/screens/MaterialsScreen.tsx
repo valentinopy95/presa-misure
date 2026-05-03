@@ -91,7 +91,7 @@ export default function MaterialsScreen() {
 
   const validCount = project.openings.filter(
     o => o.style && o.width && o.height &&
-         o.style !== 'roller_blind' && !o.style.startsWith('mosquito'),
+         o.style !== 'roller_blind' && !o.style.startsWith('mosquito') && o.style !== 'custom',
   ).length;
 
   const allOffcuts = [...result.profiles45, ...result.profiles90].filter(p => p.offcuts.length > 0);

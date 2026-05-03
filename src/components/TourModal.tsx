@@ -79,15 +79,9 @@ export default function TourModal({ visible, steps, onClose }: Props) {
 
           {/* Body */}
           <View style={s.body}>
-            {/* Icona step + chiudi */}
+            {/* Chiudi */}
             <View style={s.rowHeader}>
-              {step.image ? (
-                <View style={[s.iconBox, { backgroundColor: step.iconBg ?? '#FFF8E1' }]}>
-                  <Image source={step.image} style={s.iconImg} resizeMode="contain"/>
-                </View>
-              ) : (
-                <Text style={s.stepIcon}>{step.icon}</Text>
-              )}
+              <View/>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Text style={s.close}>✕</Text>
               </TouchableOpacity>

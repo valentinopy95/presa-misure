@@ -27,6 +27,7 @@ import SettingsScreen          from './src/screens/SettingsScreen';
 import AccountScreen           from './src/screens/AccountScreen';
 import DuplicateProjectScreen  from './src/screens/DuplicateProjectScreen';
 import HelpScreen              from './src/screens/HelpScreen';
+import StatsScreen             from './src/screens/StatsScreen';
 import CuttingListScreen        from './src/screens/CuttingListScreen';
 import CuttingProjectsScreen   from './src/screens/CuttingProjectsScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -71,6 +72,7 @@ function AppNavigator() {
         <Stack.Screen name="Account"           component={AccountScreen}          options={{ title: 'Account' }}/>
         <Stack.Screen name="DuplicateProject" component={DuplicateProjectScreen} options={{ title: 'Duplica progetto' }}/>
         <Stack.Screen name="Help"              component={HelpScreen}             options={{ title: 'Guida' }}/>
+        <Stack.Screen name="Stats"             component={StatsScreen}            options={{ title: 'Statistiche' }}/>
         <Stack.Screen name="CuttingProjects"    component={CuttingProjectsScreen}  options={{ title: 'Distinta di taglio', ...helpRight }}/>
         <Stack.Screen name="CuttingList"       component={CuttingListScreen}      options={{ title: 'Distinta di taglio' }}/>
       </Stack.Navigator>
@@ -82,6 +84,7 @@ function AppContent() {
   const [session,  setSession]  = useState<Session | null>(null);
   const [profile,  setProfile]  = useState<Profile | null>(null);
   const [loading,  setLoading]  = useState(true);
+  const [retrying, setRetrying] = useState(false);
 
   /** Carica il profilo e lo restituisce (senza aggiornare lo stato). */
   const fetchAndResolveProfile = useCallback(async (userId: string): Promise<Profile | null> => {
@@ -97,7 +100,8 @@ function AppContent() {
   const loadProfile = useCallback(async (userId: string) => {
     const p = await fetchAndResolveProfile(userId);
     setProfile(prev => {
-      if (p === null && prev?.company_id != null) return prev;
+      // Non sovrascrivere un profilo valido con uno senza company_id (rete lenta/dati parziali)
+      if (!p?.company_id && prev?.company_id) return prev;
       return p;
     });
   }, [fetchAndResolveProfile]);
@@ -115,16 +119,29 @@ function AppContent() {
     // (evento INITIAL_SESSION) che i cambi successivi di sessione
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
-        // Carica il profilo PRIMA di aggiornare qualsiasi stato, così session+profile+loading
-        // vengono impostati in un unico batch React → nessun flash di CompanySetupScreen.
         let p: Profile | null = null;
         if (session) {
           try { p = await fetchAndResolveProfile(session.user.id); } catch { }
         }
         clearTimeout(timeout);
-        setSession(session);
-        setProfile(p);
-        setLoading(false);
+
+        // Se abbiamo una sessione valida ma il profilo è null (rete lenta all'avvio),
+        // mostriamo lo splash e riproviamo una volta prima di arrenderci.
+        if (session && !p?.company_id) {
+          setSession(session);
+          setLoading(false);
+          setRetrying(true);
+          try {
+            const retried = await fetchAndResolveProfile(session.user.id);
+            if (retried?.company_id) p = retried;
+          } catch { }
+          setProfile(p);
+          setRetrying(false);
+        } else {
+          setSession(session);
+          setProfile(p);
+          setLoading(false);
+        }
         return;
       }
 
@@ -147,7 +164,7 @@ function AppContent() {
     }
   }, [session, profile?.company_id]);
 
-  if (loading) return <SplashScreen />;
+  if (loading || retrying) return <SplashScreen />;
 
   if (!session)             return <AuthScreen />;
   if (!profile?.company_id) return <CompanySetupScreen onComplete={refreshProfile} />;

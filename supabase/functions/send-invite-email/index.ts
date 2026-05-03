@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
-const FROM = 'Misu <noreply@resend.dev>'; // sostituisci con il tuo dominio verificato su Resend
+const FROM = 'Misu <onboarding@resend.dev>';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {

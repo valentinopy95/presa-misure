@@ -9,7 +9,7 @@ import { LiveDrawing } from '../components/drawings';
 type Nav = NativeStackNavigationProp<RootStackParamList, 'StylePicker'>;
 type Route = RouteProp<RootStackParamList, 'StylePicker'>;
 
-type Category = 'Finestre' | 'Porte' | 'Persiane' | 'Monoblocchi' | 'Controtelai' | 'Zanzariere';
+type Category = 'Finestre' | 'Porte' | 'Persiane' | 'Monoblocchi' | 'Controtelai' | 'Zanzariere' | 'Altro';
 
 interface StyleOption {
   value: OpeningStyle;
@@ -38,9 +38,11 @@ const STYLES: StyleOption[] = [
   { value: 'mosquito_fixed',   label: 'Fissa',           category: 'Zanzariere'  },
   { value: 'mosquito_rollup',  label: 'Sali scendi',     category: 'Zanzariere'  },
   { value: 'mosquito_lateral', label: 'Laterale',        category: 'Zanzariere'  },
+  // Personalizzata
+  { value: 'custom',           label: 'Personalizzata',  category: 'Altro'       },
 ];
 
-const CATEGORIES: Category[] = ['Finestre', 'Porte', 'Persiane', 'Monoblocchi', 'Controtelai', 'Zanzariere'];
+const CATEGORIES: Category[] = ['Finestre', 'Porte', 'Persiane', 'Monoblocchi', 'Controtelai', 'Zanzariere', 'Altro'];
 
 const CATEGORY_COLORS: Record<Category, string> = {
   Finestre:    '#1565C0',
@@ -49,13 +51,16 @@ const CATEGORY_COLORS: Record<Category, string> = {
   Monoblocchi: '#E65100',
   Controtelai: '#795548',
   Zanzariere:  '#00838F',
+  Altro:       '#455A64',
 };
 
 // Card con memo — LiveDrawing non si ridisegna se le props non cambiano
 const StyleCard = React.memo(({ option, onPress }: { option: StyleOption; onPress: () => void }) => (
   <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
     <View style={styles.drawingWrap}>
-      <LiveDrawing style={option.value} previewMode previewSize={82} />
+      {option.value === 'custom'
+        ? <Text style={styles.customIcon}>✏️</Text>
+        : <LiveDrawing style={option.value} previewMode previewSize={82} />}
     </View>
     <Text style={styles.cardLabel}>{option.label}</Text>
   </TouchableOpacity>
@@ -144,4 +149,5 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: '700', color: '#333', textAlign: 'center',
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
+  customIcon: { fontSize: 48 },
 });

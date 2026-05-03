@@ -357,7 +357,7 @@ export default function ProjectScreen() {
       <View style={[styles.toolbar, { backgroundColor: t.card, borderBottomColor: '#e0e6ef' }]}>
         <TouchableOpacity
           ref={pdfBtnRef}
-          style={[styles.toolbarBtn, styles.toolbarBtnPDF, exporting && { opacity: 0.55 }]}
+          style={[styles.toolbarBtn, exporting && { opacity: 0.55 }]}
           onPress={() => !exporting && setShowExportModal(true)}
           disabled={exporting}
           activeOpacity={0.75}
@@ -370,20 +370,19 @@ export default function ProjectScreen() {
 
         <TouchableOpacity
           ref={addBtnRef}
-          style={[styles.toolbarBtn, styles.toolbarBtnAdd]}
+          style={styles.toolbarBtn}
           onPress={() => navigation.navigate('Measurement', { projectId: activeProjectId })}
           activeOpacity={0.75}
         >
-          <Text style={styles.toolbarAddIcon}>+</Text>
-          <Text style={[styles.toolbarBtnLabel, { color: '#0c2d75' }]}>Aggiungi</Text>
+          <Text style={styles.toolbarBtnIcon}>＋</Text>
+          <Text style={styles.toolbarBtnLabel}>Aggiungi</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.toolbarBtn, styles.toolbarBtnMat]}
+          style={styles.toolbarBtn}
           onPress={() => navigation.navigate('Materials', { projectId: activeProjectId })}
           activeOpacity={0.75}
         >
-          <Text style={styles.toolbarBtnIcon}>📦</Text>
           <Text style={styles.toolbarBtnLabel}>Materiale</Text>
         </TouchableOpacity>
       </View>
@@ -457,16 +456,16 @@ export default function ProjectScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: '#EEF2F7' },
+  container:   { flex: 1, backgroundColor: '#0c2d75' },
   projectInfo: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14 },
   client:      { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.1 },
   address:     { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 3 },
   countBadge:  {
     marginTop: 12, alignSelf: 'flex-start',
-    backgroundColor: '#FFC107', borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20,
     paddingHorizontal: 12, paddingVertical: 4,
   },
-  count: { color: '#0c2d75', fontSize: 12, fontWeight: '800' },
+  count: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
   // ── Tab strip ──
   tabStrip:   { marginTop: 14 },
@@ -494,13 +493,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     elevation: 2,
   },
-  toolbarBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, elevation: 1, flex: 1 },
-  toolbarBtnPDF:  { backgroundColor: '#0d47a1' },
-  toolbarBtnAdd:  { backgroundColor: '#FFC107', flex: 1.4 },
-  toolbarBtnMat:  { backgroundColor: '#E65100' },
-  toolbarBtnIcon:  { fontSize: 14 },
+  toolbarBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, elevation: 1, flex: 1, backgroundColor: '#0c2d75' },
+  toolbarBtnIcon:  { fontSize: 14, color: '#fff' },
   toolbarBtnLabel: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  toolbarAddIcon:  { color: '#0c2d75', fontSize: 20, fontWeight: '700', lineHeight: 22 },
 
   list:           { padding: 16, gap: 10 },
   emptyContainer: { flex: 1 },

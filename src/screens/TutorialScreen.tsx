@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Dimensions, FlatList, ViewToken,
+  View, Text, StyleSheet, TouchableOpacity,
+  Dimensions, FlatList, ViewToken, Image, ImageSourcePropType,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,25 +13,26 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'Tutorial'>;
 const { width: SCREEN_W } = Dimensions.get('window');
 
 interface Step {
-  icon: string;
+  icon?: string;
+  image?: ImageSourcePropType;
   title: string;
   body: string;
 }
 
 const STEPS: Step[] = [
   {
-    icon: '📐',
-    title: 'Benvenuto in\nPresa Misure',
+    image: require('../../assets/principale.png'),
+    title: 'Benvenuto in\nMisu',
     body: 'App professionale per serramentisti.\nRileva misure, gestisci aperture e calcola il materiale necessario per ogni commessa.',
   },
   {
-    icon: '📁',
+    image: require('../../assets/menu_create.jpeg'),
     title: 'Crea un rilievo',
-    body: 'Dalla schermata principale premi "Nuovo rilievo".\nInserisci nome cliente, indirizzo e salva.\nOgni rilievo contiene tutte le aperture del cantiere.',
+    body: 'Dalla schermata principale premi "Crea progetto misure".\nInserisci nome cliente, indirizzo e salva.\nOgni rilievo contiene tutte le aperture del cantiere.',
   },
   {
-    icon: '🪟',
-    title: 'Aggiungi aperture',
+    image: require('../../assets/menu_saved.png'),
+    title: 'Rilievi salvati',
     body: 'All\'interno del rilievo premi "+" per aggiungere un\'apertura.\nScegli la tipologia (finestra, porta, persiana…), inserisci larghezza e altezza e configura le opzioni aggiuntive.',
   },
   {
@@ -45,9 +46,14 @@ const STEPS: Step[] = [
     body: 'Per ogni apertura puoi specificare:\n• Numero ante\n• Sopraluce con altezza\n• Fermavetro\n• Soglia ribassata / Battente\n• Fascia\n• Note e foto',
   },
   {
-    icon: '🔩',
+    image: require('../../assets/menu_materials.png'),
     title: 'Sviluppo materiale',
     body: 'Dal rilievo premi "Sviluppo materiale".\nL\'app calcola automaticamente il numero di barre necessarie per ogni profilo (telaio, anta, fermavetro, lamelle…) con l\'algoritmo di taglio ottimizzato.',
+  },
+  {
+    image: require('../../assets/menu_cutting.png'),
+    title: 'Distinta di taglio',
+    body: 'La distinta mostra barra per barra come tagliare i profili.\nL\'algoritmo FFD assegna i pezzi più lunghi per primi, riducendo al minimo gli scarti.',
   },
   {
     icon: '🛠️',
@@ -57,7 +63,7 @@ const STEPS: Step[] = [
   {
     icon: '❓',
     title: 'Hai bisogno di aiuto?',
-    body: 'Premi il pulsante "?" in alto a destra in qualsiasi schermata per riaprire la guida completa.\n\nBuon lavoro!',
+    body: 'Premi il pulsante "?" in alto a destra in qualsiasi schermata per riaprire la guida di quella sezione.\n\nBuon lavoro!',
   },
 ];
 
@@ -101,7 +107,9 @@ export default function TutorialScreen() {
         viewabilityConfig={viewConfig.current}
         renderItem={({ item }: { item: Step }) => (
           <View style={[s.slide, { width: SCREEN_W }]}>
-            <Text style={s.icon}>{item.icon}</Text>
+            {item.image
+              ? <Image source={item.image} style={s.slideImg} resizeMode="contain"/>
+              : <Text style={s.icon}>{item.icon}</Text>}
             <Text style={s.title}>{item.title}</Text>
             <Text style={s.body}>{item.body}</Text>
           </View>
@@ -142,6 +150,7 @@ const s = StyleSheet.create({
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 36, paddingBottom: 60,
   },
+  slideImg: { width: 120, height: 120, marginBottom: 28, borderRadius: 24 },
   icon:     { fontSize: 72, marginBottom: 28 },
   title:    {
     fontSize: 26, fontWeight: '900', color: '#fff',

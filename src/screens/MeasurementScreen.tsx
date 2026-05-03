@@ -20,6 +20,7 @@ const parseMm = (t: string): number | null => {
 import { LiveDrawing } from '../components/drawings';
 import StyleLabel from '../components/StyleLabel';
 import TourModal, { TourStep } from '../components/TourModal';
+import SketchCanvas from '../components/SketchCanvas';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Measurement'>;
 type Route = RouteProp<RootStackParamList, 'Measurement'>;
@@ -77,6 +78,7 @@ const emptyOpening = (): Opening => ({
   photos: [],
   textNote: '',
   audioNote: null,
+  sketchData: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 });
@@ -660,6 +662,15 @@ export default function MeasurementScreen() {
         numberOfLines={3}
         value={opening.textNote}
         onChangeText={t => update({ textNote: t })}
+      />
+
+      {/* ── Schizzo ── */}
+      <Text style={styles.label}>Schizzo</Text>
+      <SketchCanvas
+        value={opening.sketchData ?? null}
+        onChange={data => update({ sketchData: data })}
+        width={SCREEN_W - 40}
+        height={260}
       />
 
       {/* ── Foto ── */}

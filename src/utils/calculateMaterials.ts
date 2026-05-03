@@ -175,7 +175,7 @@ function gatherPieces(
     const useFS  = !!(o.outOfSquare && o.heightLeft && o.heightRight);
     const hL     = useFS ? (o.heightLeft ?? H) : H;
     const hR     = useFS ? (o.heightRight ?? H) : H;
-    if (style === 'roller_blind' || style.startsWith('mosquito')) continue;
+    if (style === 'roller_blind' || style.startsWith('mosquito') || style === 'custom') continue;
 
     const isSliding = style === 'window_sliding' || style === 'door_sliding';
     const hasBattenteStyle = style === 'window_single' || style === 'window_double' ||

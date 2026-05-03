@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, FlatList, StyleSheet, Alert, Text, TouchableOpacity } from 'react-native';
+import { View, FlatList, StyleSheet, Alert, Text, TouchableOpacity, TextInput } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +14,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'SavedProjects'>;
 const SAVED_TOUR: TourStep[] = [
   {
     icon: '🗂️',
+    image: require('../../assets/menu_saved.png'),
     title: 'I tuoi rilievi',
     body: 'Qui trovi tutti i progetti salvati. Tocca un progetto per aprirlo. Se ha sotto-progetti (duplicati), li trovi dentro con le schede in alto.',
     spot: null,
@@ -36,7 +37,15 @@ export default function SavedProjectsScreen() {
   const navigation = useNavigation<Nav>();
   const { theme: t } = useTheme();
   const [projects,    setProjects]    = useState<Project[]>([]);
+  const [query,       setQuery]       = useState('');
   const [tourVisible, setTourVisible] = useState(false);
+
+  const filtered = query.trim()
+    ? projects.filter(p =>
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        (p.clientName ?? '').toLowerCase().includes(query.toLowerCase())
+      )
+    : projects;
 
   const reload = useCallback(() => {
     getAllProjects().then(all => {
@@ -81,21 +90,31 @@ export default function SavedProjectsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: t.bg }]}>
+    <View style={styles.container}>
       <TourModal
         visible={tourVisible}
         steps={SAVED_TOUR}
         onClose={() => { setTourVisible(false); setTourSeen('saved'); }}
       />
+      <View style={styles.searchBox}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Cerca per nome o cliente…"
+          placeholderTextColor="rgba(255,255,255,0.4)"
+          value={query}
+          onChangeText={setQuery}
+          clearButtonMode="while-editing"
+        />
+      </View>
       <FlatList
-        data={projects}
+        data={filtered}
         keyExtractor={item => item.id}
-        contentContainerStyle={projects.length === 0 ? styles.emptyContainer : styles.list}
+        contentContainerStyle={filtered.length === 0 ? styles.emptyContainer : styles.list}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>🗂️</Text>
-            <Text style={[styles.emptyTitle, { color: t.textPrimary }]}>Nessun rilievo salvato</Text>
-            <Text style={[styles.emptySubtitle, { color: t.textSecondary }]}>Torna alla home e crea un nuovo progetto</Text>
+            <Text style={styles.emptyTitle}>Nessun rilievo salvato</Text>
+            <Text style={styles.emptySubtitle}>Torna alla home e crea un nuovo progetto</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -111,11 +130,18 @@ export default function SavedProjectsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: '#EEF2F7' },
+  container:      { flex: 1, backgroundColor: '#0c2d75' },
+  searchBox:      { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  searchInput:    {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+    fontSize: 14, color: '#fff',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+  },
   list:           { padding: 16, gap: 10 },
   emptyContainer: { flex: 1 },
   empty:          { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, marginTop: 80 },
   emptyIcon:      { fontSize: 52, marginBottom: 16 },
-  emptyTitle:     { fontSize: 20, fontWeight: '800', color: '#1a2a3a', marginBottom: 8 },
-  emptySubtitle:  { fontSize: 14, color: '#8a9ab0', textAlign: 'center', lineHeight: 20 },
+  emptyTitle:     { fontSize: 20, fontWeight: '800', color: '#fff', marginBottom: 8 },
+  emptySubtitle:  { fontSize: 14, color: 'rgba(255,255,255,0.55)', textAlign: 'center', lineHeight: 20 },
 });

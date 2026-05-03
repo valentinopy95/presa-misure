@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Project } from '../types';
 
 interface Props {
@@ -18,12 +17,6 @@ export default function ProjectCard({ project, onPress, onDelete, isSubProject =
 
   return (
     <TouchableOpacity style={[styles.card, isSubProject && styles.cardSub]} onPress={onPress} activeOpacity={0.78}>
-      {/* Left accent */}
-      <LinearGradient
-        colors={isSubProject ? ['#42a5f5', '#1565C0'] : ['#1976d2', '#0d47a1']}
-        start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-        style={styles.accent}
-      />
 
       {/* Body */}
       <View style={styles.body}>
@@ -68,7 +61,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     backgroundColor: '#F8FBFF',
   },
-  accent: { width: 5 },
   body: { flex: 1, paddingVertical: 16, paddingHorizontal: 16 },
   name: { fontSize: 16, fontWeight: '800', color: '#1a2a3a', letterSpacing: 0.1 },
   client: { fontSize: 13, color: '#556070', marginTop: 3, fontWeight: '500' },
@@ -78,7 +70,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEF2F7', paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 20,
   },
-  countText: { fontSize: 11, fontWeight: '700', color: '#1565C0' },
+  countText: { fontSize: 11, fontWeight: '700', color: '#0c2d75' },
   date: { fontSize: 11, color: '#aab0ba', fontWeight: '500' },
   delete: { justifyContent: 'center', paddingHorizontal: 16 },
   deleteBox: {

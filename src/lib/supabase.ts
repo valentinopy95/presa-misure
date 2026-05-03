@@ -151,9 +151,13 @@ export async function inviteToCompany(companyId: string, invitedBy: string, emai
 
 /** Controlla se c'è un invito pendente senza accettarlo — ritorna l'azienda o null */
 export async function peekPendingInvite(): Promise<Company | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.email) return null;
+
   const { data: invites } = await supabase
     .from('company_invites')
     .select('id, company_id')
+    .eq('invited_email', user.email.toLowerCase())
     .limit(1);
 
   if (!invites || invites.length === 0) return null;
@@ -162,9 +166,13 @@ export async function peekPendingInvite(): Promise<Company | null> {
 
 /** Controlla se l'utente corrente ha inviti pendenti e, se sì, accetta il primo */
 export async function checkAndAcceptInvite(userId: string): Promise<Company | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.email) return null;
+
   const { data: invites } = await supabase
     .from('company_invites')
     .select('id, company_id')
+    .eq('invited_email', user.email.toLowerCase())
     .limit(1);
 
   if (!invites || invites.length === 0) return null;

@@ -20,7 +20,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 const MENU_ITEMS = [
   {
     key: 'create',
-    image: require('../../assets/menu_create.jpeg'),
+    image: require('../../assets/principale.png'),
     title: 'Crea progetto misure',
     subtitle: 'Nuovo rilievo infissi',
     color: '#1565C0',
@@ -204,9 +204,12 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.settingsBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.75}>
             <Text style={styles.headerIcon}>⚙</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.statsBtn} onPress={() => navigation.navigate('Stats')} activeOpacity={0.75}>
+            <Text style={styles.headerIcon}>📊</Text>
+          </TouchableOpacity>
 
           {/* Mascotte + titolo centrati */}
-          <Image source={require('../../assets/principale.png')} style={styles.logoImg} resizeMode="contain"/>
+          <Image source={require('../../assets/aiuto.jpeg')} style={styles.logoImg} resizeMode="contain"/>
           <Text style={styles.appName}>Misu</Text>
           <Text style={styles.appSub}>MISURE PROFESSIONALI PER INFISSI</Text>
         </View>
@@ -298,12 +301,12 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
   iconBox: {
-    width: 64, height: 64,
-    margin: 12,
+    width: 80, height: 80,
+    margin: 10,
     borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
   },
-  icon: { width: 54, height: 54 },
+  icon: { width: 70, height: 70 },
   cardText: { flex: 1, paddingVertical: 14, paddingRight: 4 },
   cardTitle: { fontSize: 14, fontWeight: '800', color: NAVY, marginBottom: 3, letterSpacing: 0.1 },
   cardSub:   { fontSize: 11.5, color: '#8a9ab0', fontWeight: '500' },
@@ -318,6 +321,12 @@ const styles = StyleSheet.create({
   // ── Buttons header ──
   settingsBtn: {
     position: 'absolute', top: 52, right: 18,
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: '#F0F4F8',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  statsBtn: {
+    position: 'absolute', top: 52, right: 106,
     width: 36, height: 36, borderRadius: 10,
     backgroundColor: '#F0F4F8',
     alignItems: 'center', justifyContent: 'center',

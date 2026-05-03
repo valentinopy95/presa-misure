@@ -4,6 +4,7 @@ import {
   TouchableOpacity, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Props {
   visible: boolean;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
@@ -32,7 +34,7 @@ export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(36, insets.bottom + 20) }]}>
           <View style={styles.handle} />
 
           <LinearGradient
@@ -118,7 +120,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
     overflow: 'hidden',
-    paddingBottom: 36,
   },
   handle: {
     width: 44, height: 4, backgroundColor: '#DDE4EE',
