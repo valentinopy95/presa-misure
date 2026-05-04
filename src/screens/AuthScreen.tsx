@@ -8,7 +8,7 @@ import AppLogo from '../components/AppLogo';
 
 const MASCOT = require('../../assets/principale.png');
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'reset';
 
 export default function AuthScreen() {
   const [mode,      setMode]      = useState<Mode>('login');
@@ -16,8 +16,24 @@ export default function AuthScreen() {
   const [email,     setEmail]     = useState('');
   const [password,  setPassword]  = useState('');
   const [confirm,   setConfirm]   = useState('');
-  const [loading,   setLoading]   = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [emailSent,  setEmailSent]  = useState(false);
+  const [resetSent,  setResetSent]  = useState(false);
+
+  const handleReset = async () => {
+    if (!email.trim()) {
+      Alert.alert('Email mancante', 'Inserisci la tua email per reimpostare la password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+      if (error) Alert.alert('Errore', error.message);
+      else setResetSent(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -56,6 +72,29 @@ export default function AuthScreen() {
     }
   };
 
+  if (resetSent) {
+    return (
+      <View style={s.root}>
+        <View style={s.verifyContainer}>
+          <View style={s.verifyIconBox}>
+            <Image source={MASCOT} style={s.verifyIcon} resizeMode="contain"/>
+          </View>
+          <Text style={s.verifyTitle}>Email inviata</Text>
+          <Text style={s.verifySub}>
+            Controlla la tua email{'\n'}
+            <Text style={s.verifyEmail}>{email.trim()}</Text>
+          </Text>
+          <Text style={s.verifyNote}>
+            Clicca il link nell'email per reimpostare la password, poi torna qui ad accedere.
+          </Text>
+          <TouchableOpacity style={s.verifyBtn} onPress={() => { setResetSent(false); setMode('login'); }}>
+            <Text style={s.verifyBtnText}>Torna al login</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   if (emailSent) {
     return (
       <View style={s.root}>
@@ -90,20 +129,27 @@ export default function AuthScreen() {
         </View>
 
         <View style={s.card}>
-          <View style={s.tabs}>
-            <TouchableOpacity
-              style={[s.tab, mode === 'login' && s.tabActive]}
-              onPress={() => setMode('login')}
-            >
-              <Text style={[s.tabText, mode === 'login' && s.tabTextActive]}>Accedi</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.tab, mode === 'register' && s.tabActive]}
-              onPress={() => setMode('register')}
-            >
-              <Text style={[s.tabText, mode === 'register' && s.tabTextActive]}>Registrati</Text>
-            </TouchableOpacity>
-          </View>
+          {mode !== 'reset' && (
+            <View style={s.tabs}>
+              <TouchableOpacity
+                style={[s.tab, mode === 'login' && s.tabActive]}
+                onPress={() => setMode('login')}
+              >
+                <Text style={[s.tabText, mode === 'login' && s.tabTextActive]}>Accedi</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.tab, mode === 'register' && s.tabActive]}
+                onPress={() => setMode('register')}
+              >
+                <Text style={[s.tabText, mode === 'register' && s.tabTextActive]}>Registrati</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {mode === 'reset' && (
+            <View style={[s.tabs, { justifyContent: 'center' }]}>
+              <Text style={[s.tabText, { color: BLUE, fontWeight: '800', paddingVertical: 14 }]}>Reimposta password</Text>
+            </View>
+          )}
 
           <View style={s.form}>
             {mode === 'register' && (
@@ -118,6 +164,11 @@ export default function AuthScreen() {
                   autoCapitalize="words"
                 />
               </View>
+            )}
+            {mode === 'reset' && (
+              <Text style={{ fontSize: 13, color: '#666', marginBottom: 14, lineHeight: 19 }}>
+                Inserisci la tua email e ti invieremo un link per reimpostare la password.
+              </Text>
             )}
 
             <View style={s.inputWrap}>
@@ -134,17 +185,19 @@ export default function AuthScreen() {
               />
             </View>
 
-            <View style={s.inputWrap}>
-              <Text style={s.label}>Password</Text>
-              <TextInput
-                style={s.input}
-                placeholder="Minimo 6 caratteri"
-                placeholderTextColor="#aab"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-            </View>
+            {mode !== 'reset' && (
+              <View style={s.inputWrap}>
+                <Text style={s.label}>Password</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder="Minimo 6 caratteri"
+                  placeholderTextColor="#aab"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
+            )}
 
             {mode === 'register' && (
               <View style={s.inputWrap}>
@@ -160,11 +213,32 @@ export default function AuthScreen() {
               </View>
             )}
 
-            <TouchableOpacity style={s.btnPrimary} onPress={handleEmailAuth} disabled={loading}>
-              {loading
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={s.btnPrimaryText}>{mode === 'login' ? 'Accedi' : 'Crea account'}</Text>}
-            </TouchableOpacity>
+            {mode !== 'reset' && (
+              <TouchableOpacity style={s.btnPrimary} onPress={handleEmailAuth} disabled={loading}>
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.btnPrimaryText}>{mode === 'login' ? 'Accedi' : 'Crea account'}</Text>}
+              </TouchableOpacity>
+            )}
+
+            {mode === 'login' && (
+              <TouchableOpacity style={s.forgotBtn} onPress={() => setMode('reset')}>
+                <Text style={s.forgotText}>Password dimenticata?</Text>
+              </TouchableOpacity>
+            )}
+
+            {mode === 'reset' && (
+              <>
+                <TouchableOpacity style={s.btnPrimary} onPress={handleReset} disabled={loading} >
+                  {loading
+                    ? <ActivityIndicator color="#fff"/>
+                    : <Text style={s.btnPrimaryText}>Invia link di reset</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={s.forgotBtn} onPress={() => setMode('login')}>
+                  <Text style={s.forgotText}>← Torna al login</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
@@ -203,6 +277,8 @@ const s = StyleSheet.create({
 
   btnPrimary:     { backgroundColor: BLUE, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4, elevation: 2, shadowColor: BLUE, shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
   btnPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  forgotBtn:      { alignItems: 'center', marginTop: 16 },
+  forgotText:     { fontSize: 13, color: BLUE, fontWeight: '600' },
 
   verifyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   verifyIconBox:   { width: 140, height: 140, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
