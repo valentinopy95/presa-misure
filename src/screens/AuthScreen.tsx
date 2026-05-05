@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, Image,
+  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
+import * as AppAlert from '../components/AppAlert';
 import { supabase } from '../lib/supabase';
 import AppLogo from '../components/AppLogo';
 
-const MASCOT = require('../../assets/principale.png');
 
 type Mode = 'login' | 'register' | 'reset';
 
@@ -22,13 +22,13 @@ export default function AuthScreen() {
 
   const handleReset = async () => {
     if (!email.trim()) {
-      Alert.alert('Email mancante', 'Inserisci la tua email per reimpostare la password.');
+      AppAlert.show('Email mancante', 'Inserisci la tua email per reimpostare la password.');
       return;
     }
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-      if (error) Alert.alert('Errore', error.message);
+      if (error) AppAlert.show('Errore', error.message);
       else setResetSent(true);
     } finally {
       setLoading(false);
@@ -37,22 +37,22 @@ export default function AuthScreen() {
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Campi mancanti', 'Inserisci email e password.');
+      AppAlert.show('Campi mancanti', 'Inserisci email e password.');
       return;
     }
     if (mode === 'register' && !name.trim()) {
-      Alert.alert('Campi mancanti', 'Inserisci il tuo nome e cognome.');
+      AppAlert.show('Campi mancanti', 'Inserisci il tuo nome e cognome.');
       return;
     }
     if (mode === 'register' && password !== confirm) {
-      Alert.alert('Password non corrispondenti', 'Le due password non coincidono.');
+      AppAlert.show('Password non corrispondenti', 'Le due password non coincidono.');
       return;
     }
     setLoading(true);
     try {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-        if (error) Alert.alert('Accesso non riuscito', error.message === 'Invalid login credentials'
+        if (error) AppAlert.show('Accesso non riuscito', error.message === 'Invalid login credentials'
           ? 'Email o password errati. Riprova.'
           : error.message);
       } else {
@@ -62,7 +62,7 @@ export default function AuthScreen() {
           options: { data: { full_name: name.trim() } },
         });
         if (error) {
-          Alert.alert('Registrazione non riuscita', error.message);
+          AppAlert.show('Registrazione non riuscita', error.message);
         } else {
           setEmailSent(true);
         }
@@ -76,9 +76,6 @@ export default function AuthScreen() {
     return (
       <View style={s.root}>
         <View style={s.verifyContainer}>
-          <View style={s.verifyIconBox}>
-            <Image source={MASCOT} style={s.verifyIcon} resizeMode="contain"/>
-          </View>
           <Text style={s.verifyTitle}>Email inviata</Text>
           <Text style={s.verifySub}>
             Controlla la tua email{'\n'}
@@ -99,9 +96,6 @@ export default function AuthScreen() {
     return (
       <View style={s.root}>
         <View style={s.verifyContainer}>
-          <View style={s.verifyIconBox}>
-            <Image source={MASCOT} style={s.verifyIcon} resizeMode="contain"/>
-          </View>
           <Text style={s.verifyTitle}>Controlla la tua email</Text>
           <Text style={s.verifySub}>
             Abbiamo inviato un link di conferma a{'\n'}
@@ -242,8 +236,6 @@ export default function AuthScreen() {
           </View>
         </View>
 
-        {/* Mascotte grande in basso */}
-        <Image source={MASCOT} style={s.mascotBottom} resizeMode="contain"/>
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -259,8 +251,6 @@ const s = StyleSheet.create({
   header:    { alignItems: 'center', marginBottom: 28 },
   appName:   { fontSize: 36, fontWeight: '900', color: BLUE, letterSpacing: 0.5 },
   appSub:    { fontSize: 13, color: '#999', marginTop: 6 },
-  mascotBottom: { width: 220, height: 220, alignSelf: 'center', marginTop: 16 },
-
   card: { backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', elevation: 3, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
 
   tabs:          { flexDirection: 'row', backgroundColor: '#F0F4F8' },
@@ -281,8 +271,6 @@ const s = StyleSheet.create({
   forgotText:     { fontSize: 13, color: BLUE, fontWeight: '600' },
 
   verifyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  verifyIconBox:   { width: 140, height: 140, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  verifyIcon:      { width: 140, height: 140 },
   verifyTitle:     { fontSize: 24, fontWeight: '900', color: BLUE, textAlign: 'center', marginBottom: 12 },
   verifySub:       { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 22, marginBottom: 16 },
   verifyEmail:     { fontWeight: '800', color: BLUE },

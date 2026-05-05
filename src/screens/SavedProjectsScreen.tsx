@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, FlatList, StyleSheet, Alert, Text, TouchableOpacity, TextInput } from 'react-native';
+import { View, FlatList, StyleSheet, Text, TouchableOpacity, TextInput } from 'react-native';
+import * as AppAlert from '../components/AppAlert';
 import { useTheme } from '../contexts/ThemeContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -77,7 +78,7 @@ export default function SavedProjectsScreen() {
       const msg = childCount > 0
         ? `Eliminando il progetto verranno eliminati anche i ${childCount} sotto-progetti collegati. Continuare?`
         : "Sei sicuro? L'operazione non è reversibile.";
-      Alert.alert('Elimina progetto', msg, [
+      AppAlert.show('Elimina progetto', msg, [
         { text: 'Annulla', style: 'cancel' },
         {
           text: 'Elimina', style: 'destructive', onPress: async () => {

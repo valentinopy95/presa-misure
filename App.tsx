@@ -1,14 +1,15 @@
 import 'react-native-get-random-values';
 import 'react-native-gesture-handler';
-import React, { useEffect, useState, useCallback } from 'react';
-import { TouchableOpacity, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { TouchableOpacity, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { Session } from '@supabase/supabase-js';
 
-import { supabase, fetchProfile, checkAndAcceptInvite, Profile } from './src/lib/supabase';
+import { supabase } from './src/lib/supabase';
+import * as AppAlert from './src/components/AppAlert';
 import { migrateLocalToSupabase, clearDbCache } from './src/storage/database';
 import { RootStackParamList } from './src/types';
 
@@ -16,6 +17,7 @@ import SplashScreen            from './src/screens/SplashScreen';
 import AuthScreen              from './src/screens/AuthScreen';
 import CompanySetupScreen      from './src/screens/CompanySetupScreen';
 import HomeScreen              from './src/screens/HomeScreen';
+
 import SavedProjectsScreen     from './src/screens/SavedProjectsScreen';
 import ProjectScreen           from './src/screens/ProjectScreen';
 import MeasurementScreen       from './src/screens/MeasurementScreen';
@@ -75,99 +77,40 @@ function AppNavigator() {
         <Stack.Screen name="Stats"             component={StatsScreen}            options={{ title: 'Statistiche' }}/>
         <Stack.Screen name="CuttingProjects"    component={CuttingProjectsScreen}  options={{ title: 'Distinta di taglio', ...helpRight }}/>
         <Stack.Screen name="CuttingList"       component={CuttingListScreen}      options={{ title: 'Distinta di taglio' }}/>
+        <Stack.Screen name="CompanySetup"      component={CompanySetupScreen}     options={{ headerShown: false }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
 
 function AppContent() {
-  const [session,  setSession]  = useState<Session | null>(null);
-  const [profile,  setProfile]  = useState<Profile | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [retrying, setRetrying] = useState(false);
-
-  /** Carica il profilo e lo restituisce (senza aggiornare lo stato). */
-  const fetchAndResolveProfile = useCallback(async (userId: string): Promise<Profile | null> => {
-    let p = await fetchProfile(userId);
-    // Controlla inviti anche se il profilo è null (utente appena registrato senza profilo ancora)
-    if (!p || !p.company_id) {
-      await checkAndAcceptInvite(userId);
-      p = await fetchProfile(userId);
-    }
-    return p;
-  }, []);
-
-  const loadProfile = useCallback(async (userId: string) => {
-    const p = await fetchAndResolveProfile(userId);
-    setProfile(prev => {
-      // Non sovrascrivere un profilo valido con uno senza company_id (rete lenta/dati parziali)
-      if (!p?.company_id && prev?.company_id) return prev;
-      return p;
-    });
-  }, [fetchAndResolveProfile]);
-
-  const refreshProfile = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) await loadProfile(user.id);
-  }, [loadProfile]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fallback di sicurezza: se INITIAL_SESSION non arriva entro 8s, sblocca comunque il loading
     const timeout = setTimeout(() => setLoading(false), 8000);
 
-    // Pattern Supabase v2: onAuthStateChange gestisce sia il caricamento iniziale
-    // (evento INITIAL_SESSION) che i cambi successivi di sessione
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') {
-        let p: Profile | null = null;
-        if (session) {
-          try { p = await fetchAndResolveProfile(session.user.id); } catch { }
-        }
         clearTimeout(timeout);
-
-        // Se abbiamo una sessione valida ma il profilo è null (rete lenta all'avvio),
-        // mostriamo lo splash e riproviamo una volta prima di arrenderci.
-        if (session && !p?.company_id) {
-          setSession(session);
-          setLoading(false);
-          setRetrying(true);
-          try {
-            const retried = await fetchAndResolveProfile(session.user.id);
-            if (retried?.company_id) p = retried;
-          } catch { }
-          setProfile(p);
-          setRetrying(false);
-        } else {
-          setSession(session);
-          setProfile(p);
-          setLoading(false);
-        }
+        setSession(session);
+        setLoading(false);
         return;
       }
-
       setSession(session);
-      if (session) {
-        try { await loadProfile(session.user.id); } catch { /* mantieni profilo esistente su errori di rete */ }
-      } else {
-        setProfile(null);
-        clearDbCache();
-      }
+      if (!session) clearDbCache();
     });
 
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
-  }, [loadProfile]);
+  }, []);
 
-  // Migrazione locale → Supabase (una tantum)
+  // Migrazione locale → Supabase (una tantum al login)
   useEffect(() => {
-    if (session && profile?.company_id) {
-      migrateLocalToSupabase();
-    }
-  }, [session, profile?.company_id]);
+    if (session) migrateLocalToSupabase();
+  }, [session]);
 
-  if (loading || retrying) return <SplashScreen />;
-
-  if (!session)             return <AuthScreen />;
-  if (!profile?.company_id) return <CompanySetupScreen onComplete={refreshProfile} />;
+  if (loading) return <SplashScreen />;
+  if (!session) return <AuthScreen />;
   return <AppNavigator />;
 }
 
@@ -175,6 +118,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AppContent />
+      <AppAlert.Host />
     </ThemeProvider>
   );
 }

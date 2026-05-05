@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import * as AppAlert from '../components/AppAlert';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
@@ -92,7 +93,7 @@ export default function DuplicateProjectScreen() {
 
   const handleCreate = async () => {
     if (!projectName.trim()) {
-      Alert.alert('Nome mancante', 'Inserisci il nome del nuovo progetto.');
+      AppAlert.show('Nome mancante', 'Inserisci il nome del nuovo progetto.');
       return;
     }
     setSaving(true);
@@ -113,7 +114,7 @@ export default function DuplicateProjectScreen() {
         updatedAt: now,
       };
       await saveProject(newProject);
-      Alert.alert('Copia creata!', `"${newProject.name}" è stato creato.`, [
+      AppAlert.show('Copia creata!', `"${newProject.name}" è stato creato.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } finally {

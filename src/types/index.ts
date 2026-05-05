@@ -27,7 +27,7 @@ export type OpeningStyle =
   | 'mosquito_lateral'
   // Personalizzata (disegno libero)
   | 'custom'
-export type OpeningSide = 'left' | 'right' | 'center' | 'center-left' | 'center-right' | 'top' | 'bottom';
+export type OpeningSide = 'left' | 'right' | 'center' | 'center-left' | 'center-right' | 'top' | 'bottom' | 'both';
 
 export interface AudioNote {
   uri: string;
@@ -66,6 +66,7 @@ export interface Opening {
   textNote: string;
   audioNote: AudioNote | null;
   sketchData: string | null;   // SVG path data per disegno libero (custom)
+  viewSide: 'interno' | 'esterno' | null; // lato da cui si misura
   createdAt: string;
   updatedAt: string;
 }
@@ -102,6 +103,7 @@ export type RootStackParamList = {
   Settings: undefined;
   Account:  undefined;
   DuplicateProject: { projectId: string };
-  Help:     undefined;
-  Stats:    undefined;
+  Help:        undefined;
+  Stats:       undefined;
+  CompanySetup: undefined;
 };

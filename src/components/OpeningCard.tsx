@@ -8,6 +8,7 @@ interface Props {
   onPress: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  pricePerSqm?: number; // €/m² per la categoria di questo infisso
 }
 
 const formatDim = (v: number | null) => (v ? `${v}` : '—');
@@ -23,9 +24,13 @@ function accentColor(style: OpeningStyle | null): string {
   return '#455A64';
 }
 
-export default function OpeningCard({ opening, onPress, onDelete, onDuplicate }: Props) {
+export default function OpeningCard({ opening, onPress, onDelete, onDuplicate, pricePerSqm }: Props) {
   const hasDims = opening.width || opening.height;
   const color = accentColor(opening.style);
+  const estimatedPrice =
+    pricePerSqm && pricePerSqm > 0 && opening.width && opening.height
+      ? (opening.width * opening.height / 1_000_000) * pricePerSqm
+      : null;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.78}>
@@ -53,6 +58,18 @@ export default function OpeningCard({ opening, onPress, onDelete, onDuplicate }:
               {opening.width && opening.height && (
                 <View style={styles.infoBadge}>
                   <Text style={styles.infoBadgeText}>{(opening.width * opening.height / 1_000_000).toFixed(2)} m²</Text>
+                </View>
+              )}
+              {opening.viewSide && (
+                <View style={[styles.infoBadge, opening.viewSide === 'esterno' ? styles.infoBadgeExt : styles.infoBadgeInt]}>
+                  <Text style={[styles.infoBadgeText, opening.viewSide === 'esterno' ? styles.infoBadgeExtTxt : styles.infoBadgeIntTxt]}>
+                    {opening.viewSide === 'esterno' ? 'Esterno' : 'Interno'}
+                  </Text>
+                </View>
+              )}
+              {estimatedPrice !== null && (
+                <View style={styles.infoBadgePrice}>
+                  <Text style={styles.infoBadgePriceTxt}>~€ {estimatedPrice.toFixed(0)}</Text>
                 </View>
               )}
             </View>
@@ -160,8 +177,14 @@ const styles = StyleSheet.create({
 
   styleRow:   { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 2 },
   infoBadges: { flexDirection: 'row', gap: 4 },
-  infoBadge:  { backgroundColor: '#F0F4FF', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  infoBadge:     { backgroundColor: '#F0F4FF', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   infoBadgeText: { fontSize: 11, color: '#1565C0', fontWeight: '700' },
+  infoBadgeInt:    { backgroundColor: '#E3F2FD' },
+  infoBadgeIntTxt: { color: '#1565C0' },
+  infoBadgeExt:    { backgroundColor: '#E8F5E9' },
+  infoBadgeExtTxt: { color: '#2E7D32' },
+  infoBadgePrice:    { backgroundColor: '#FFF3E0', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  infoBadgePriceTxt: { fontSize: 11, fontWeight: '800', color: '#E65100' },
 
   badges: { flexDirection: 'row', gap: 6, marginTop: 7 },
   badge: {

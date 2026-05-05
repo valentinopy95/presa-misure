@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, ScrollView,
-  TouchableOpacity, Image, Alert, Dimensions, Modal, Pressable,
+  TouchableOpacity, Image, Dimensions, Modal, Pressable,
 } from 'react-native';
+import * as AppAlert from '../components/AppAlert';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
@@ -35,6 +36,7 @@ function getOpeningSides(style: OpeningStyle | null, leafCount: number | null): 
       { value: 'top',    label: 'Alto ↑'  },
     ];
   }
+  const isSliding = style === 'window_sliding' || style === 'door_sliding';
   const n = leafCount ?? 1;
   if (n >= 4) return [
     { value: 'left',         label: '← Sinistra'   },
@@ -50,6 +52,7 @@ function getOpeningSides(style: OpeningStyle | null, leafCount: number | null): 
   return [
     { value: 'left',  label: '← Sinistra' },
     { value: 'right', label: 'Destra →'   },
+    ...(isSliding ? [{ value: 'both' as OpeningSide, label: '↔ Entrambi' }] : []),
   ];
 }
 
@@ -79,6 +82,7 @@ const emptyOpening = (): Opening => ({
   textNote: '',
   audioNote: null,
   sketchData: null,
+  viewSide: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 });
@@ -182,6 +186,7 @@ export default function MeasurementScreen() {
   const isMonoblocco    = opening.style === 'roller_blind';
   const isSubframe      = opening.style === 'subframe_window';
   const isFixed         = opening.style === 'window_fixed';
+  const isCustom        = opening.style === 'custom';
   const isSliding       = opening.style === 'door_sliding' || opening.style === 'window_sliding';
   const isMosquitoNoSide = opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup';
   const hideLeafCount   = isSubframe || isFixed || isMonoblocco || opening.style === 'mosquito_fixed' || opening.style === 'mosquito_rollup' || opening.style === 'mosquito_lateral';
@@ -228,7 +233,7 @@ export default function MeasurementScreen() {
 
   const handleSavePress = () => {
     if (!opening.name.trim()) {
-      Alert.alert('Nome richiesto', 'Inserisci un nome per questa apertura.');
+      AppAlert.show('Nome richiesto', 'Inserisci un nome per questa apertura.');
       return;
     }
     setShowSaveModal(true);
@@ -263,8 +268,44 @@ export default function MeasurementScreen() {
         onClose={() => setTourVisible(false)}
       />
 
-      {/* ── Disegno 2D live (sempre visibile) ── */}
-      <View style={styles.drawingCard}>
+      {/* ── Banner informativo per tipologia personalizzata ── */}
+      {isCustom && (
+        <View style={styles.customBanner}>
+          <Text style={styles.customBannerIcon}>✏️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.customBannerTitle}>Elemento personalizzato</Text>
+            <Text style={styles.customBannerDesc}>
+              Usa questo tipo per verande, box doccia, infissi fuori misura o qualsiasi elemento non standard.{'\n'}
+              Inserisci le misure che ti servono e usa lo schizzo qui sotto per disegnare la forma a mano libera.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* ── Toggle Interno / Esterno ── */}
+      {!isCustom && opening.style && (
+        <View style={styles.viewSideRow}>
+          <TouchableOpacity
+            style={[styles.viewSideBtn, opening.viewSide !== 'esterno' && styles.viewSideBtnActive]}
+            onPress={() => update({ viewSide: 'interno' })}
+          >
+            <Text style={[styles.viewSideTxt, opening.viewSide !== 'esterno' && styles.viewSideTxtActive]}>
+              Interno
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewSideBtn, opening.viewSide === 'esterno' && styles.viewSideBtnActive]}
+            onPress={() => update({ viewSide: 'esterno' })}
+          >
+            <Text style={[styles.viewSideTxt, opening.viewSide === 'esterno' && styles.viewSideTxtActive]}>
+              Esterno
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Disegno 2D live (nascosto per tipologia personalizzata) ── */}
+      {!isCustom && <View style={styles.drawingCard}>
         <LiveDrawing
           style={opening.style}
           width={opening.width}
@@ -291,7 +332,7 @@ export default function MeasurementScreen() {
             Seleziona un tipo per vedere il disegno
           </Text>
         )}
-      </View>
+      </View>}
 
       {/* ── Nome ── */}
       <Text style={styles.label}>Nome apertura *</Text>
@@ -669,12 +710,15 @@ export default function MeasurementScreen() {
       <SketchCanvas
         value={opening.sketchData ?? null}
         onChange={data => update({ sketchData: data })}
-        width={SCREEN_W - 40}
-        height={260}
       />
 
       {/* ── Foto ── */}
       <Text style={styles.label}>Foto</Text>
+      <View style={styles.photoLocalNote}>
+        <Text style={styles.photoLocalNoteText}>
+          📱 Le foto vengono salvate solo su questo dispositivo. Se si cambia telefono o si disinstalla l'app, le immagini vengono perse.
+        </Text>
+      </View>
       {opening.photos.length > 0 && (
         <View style={styles.photoGrid}>
           {opening.photos.map(photo => (
@@ -734,6 +778,39 @@ export default function MeasurementScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5' },
   content: { padding: 20, paddingBottom: 48 },
+
+  customBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    backgroundColor: '#EEF4FF', borderRadius: 14, padding: 16,
+    marginBottom: 20, borderWidth: 1.5, borderColor: '#C7D9F5',
+  },
+  photoLocalNote: {
+    backgroundColor: '#FFF8E1', borderRadius: 10, padding: 12,
+    marginBottom: 12, borderWidth: 1, borderColor: '#FFE082',
+  },
+  photoLocalNoteText: { fontSize: 12, color: '#7a6000', lineHeight: 17 },
+
+  customBannerIcon:  { fontSize: 32, marginTop: 2 },
+  customBannerTitle: { fontSize: 15, fontWeight: '800', color: '#1a3060', marginBottom: 5 },
+  customBannerDesc:  { fontSize: 13, color: '#4a6080', lineHeight: 19 },
+
+  viewSideRow: {
+    flexDirection: 'row', marginBottom: 8,
+    backgroundColor: '#EEF2F7', borderRadius: 10, padding: 3,
+    alignSelf: 'center',
+  },
+  viewSideBtn: {
+    paddingHorizontal: 22, paddingVertical: 7, borderRadius: 8,
+  },
+  viewSideBtnActive: {
+    backgroundColor: '#1565C0', elevation: 1,
+  },
+  viewSideTxt: {
+    fontSize: 13, fontWeight: '700', color: '#7a8a9a',
+  },
+  viewSideTxtActive: {
+    color: '#fff',
+  },
 
   drawingCard: {
     backgroundColor: '#fff', borderRadius: 14, padding: 8,

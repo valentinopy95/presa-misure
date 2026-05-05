@@ -9,7 +9,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
 import { Project, RootStackParamList } from '../types';
 import { saveProject } from '../storage/database';
-import { listPendingInvites, fetchProfile, supabase } from '../lib/supabase';
+import { listPendingInvites, listInvitesForMe, fetchProfile, supabase } from '../lib/supabase';
+import * as AppAlert from '../components/AppAlert';
 import NewProjectModal from '../components/NewProjectModal';
 import TourModal, { TourStep, SpotRect } from '../components/TourModal';
 import { getTourSeen, setTourSeen } from '../storage/settings';
@@ -59,6 +60,9 @@ export default function HomeScreen() {
   const [pendingInvites, setPendingInvites] = useState(0);
   const [tourVisible,    setTourVisible]    = useState(false);
   const [tourSteps,      setTourSteps]      = useState<TourStep[]>([]);
+  const [userName,       setUserName]       = useState<string | null>(null);
+  const [hasCompany,     setHasCompany]     = useState(true);
+  const [hasInvites,     setHasInvites]     = useState(false);
 
   const anims      = useRef(MENU_ITEMS.map(() => new Animated.Value(0))).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
@@ -128,14 +132,32 @@ export default function HomeScreen() {
     setTourVisible(true);
   }, []);
 
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h >= 5  && h < 12) return 'Buongiorno';
+    if (h >= 12 && h < 18) return 'Buon pomeriggio';
+    if (h >= 18 && h < 22) return 'Buonasera';
+    return 'Buonanotte';
+  };
+
   useEffect(() => {
     // Auto-mostra tour alla prima apertura (dopo animazioni ~1s)
     getTourSeen('home').then(seen => { if (!seen) setTimeout(openTour, 1100); });
-    // Carica badge inviti pendenti
+    // Carica badge inviti pendenti + nome utente
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
       const profile = await fetchProfile(user.id);
-      if (!profile?.company_id) return;
+      if (profile?.full_name) {
+        setUserName(profile.full_name.trim().split(' ')[0]);
+      }
+      if (!profile?.company_id) {
+        setHasCompany(false);
+        // Controlla se ci sono inviti in arrivo per il badge
+        const mine = await listInvitesForMe();
+        setHasInvites(mine.length > 0);
+        return;
+      }
+      setHasCompany(true);
       const list = await listPendingInvites(profile.company_id);
       setPendingInvites(list.length);
     });
@@ -167,7 +189,20 @@ export default function HomeScreen() {
   };
 
   const handlePress = (key: string) => {
-    if (key === 'create') setModalVisible(true);
+    if (key === 'create') {
+      if (!hasCompany) {
+        AppAlert.show(
+          'Azienda richiesta',
+          'Per creare progetti devi prima configurare la tua azienda. Ci vogliono 30 secondi.',
+          [
+            { text: 'Dopo', style: 'cancel' },
+            { text: 'Configura ora', onPress: () => navigation.navigate('Account') },
+          ]
+        );
+        return;
+      }
+      setModalVisible(true);
+    }
     else if (key === 'saved') navigation.navigate('SavedProjects');
     else if (key === 'materials') navigation.navigate('MaterialsProjects');
     else if (key === 'cutting') navigation.navigate('CuttingProjects');
@@ -191,9 +226,9 @@ export default function HomeScreen() {
               style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
             >
               <Text style={styles.headerIcon}>👤</Text>
-              {pendingInvites > 0 && (
+              {(pendingInvites > 0 || hasInvites) && (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{pendingInvites}</Text>
+                  <Text style={styles.badgeText}>{pendingInvites > 0 ? pendingInvites : '!'}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -208,12 +243,36 @@ export default function HomeScreen() {
             <Text style={styles.headerIcon}>📊</Text>
           </TouchableOpacity>
 
-          {/* Mascotte + titolo centrati */}
-          <Image source={require('../../assets/aiuto.jpeg')} style={styles.logoImg} resizeMode="contain"/>
+          {/* Saluto + titolo centrati */}
+          {userName ? (
+            <Text style={styles.greeting}>{getGreeting()}, {userName}!</Text>
+          ) : (
+            <Text style={styles.greeting}>{getGreeting()}!</Text>
+          )}
           <Text style={styles.appName}>Misu</Text>
           <Text style={styles.appSub}>MISURE PROFESSIONALI PER INFISSI</Text>
         </View>
       </Animated.View>
+
+      {/* ── Banner nessuna azienda ── */}
+      {!hasCompany && (
+        <TouchableOpacity
+          style={styles.companyBanner}
+          onPress={() => navigation.navigate('Account')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.companyBannerIcon}>{hasInvites ? '✉️' : '🏢'}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.companyBannerTitle}>
+              {hasInvites ? 'Hai un invito in arrivo!' : 'Configura la tua azienda'}
+            </Text>
+            <Text style={styles.companyBannerSub}>
+              {hasInvites ? 'Vai su Account per accettarlo' : 'Crea o unisciti a un\'azienda per collaborare'}
+            </Text>
+          </View>
+          <Text style={styles.companyBannerArrow}>›</Text>
+        </TouchableOpacity>
+      )}
 
       {/* ── MENU ── */}
       <View style={styles.menu}>
@@ -285,8 +344,8 @@ const styles = StyleSheet.create({
     elevation: 6,
     shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
   },
-  logoImg: { width: 100, height: 100, marginBottom: 8 },
-  appName: { fontSize: 28, fontWeight: '900', color: NAVY, letterSpacing: 1 },
+  greeting: { fontSize: 13, color: '#8a9ab0', fontWeight: '600', letterSpacing: 0.3, marginBottom: 4, marginTop: 44 },
+  appName: { fontSize: 32, fontWeight: '900', color: NAVY, letterSpacing: 1 },
   appSub:  { fontSize: 10, color: '#aaa', marginTop: 4, letterSpacing: 2, fontWeight: '700' },
 
   // ── Menu ──
@@ -344,6 +403,17 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerIcon: { fontSize: 17 },
+  companyBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#1a3f8f',
+    marginHorizontal: 18, marginTop: 10,
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, gap: 10,
+  },
+  companyBannerIcon:  { fontSize: 20 },
+  companyBannerTitle: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  companyBannerSub:   { fontSize: 11, color: '#aac4ff', marginTop: 1 },
+  companyBannerArrow: { fontSize: 22, fontWeight: '700', color: '#aac4ff' },
+
   badge: {
     position: 'absolute', top: -5, right: -5,
     minWidth: 18, height: 18, borderRadius: 9,

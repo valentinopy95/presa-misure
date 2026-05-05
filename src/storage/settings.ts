@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { OpeningStyle } from '../types';
 
 export const KEYS = {
   ROLE:            '@measure_user_role',
@@ -15,7 +16,20 @@ export const KEYS = {
   ANTA_REDUCTION:    '@measure_anta_reduction',
   ANTA_TOP_RAIL:     '@measure_anta_top_rail',
   TUTORIAL_SHOWN:    '@measure_tutorial_shown',
+  PRICE_INTERNI:     '@measure_price_interni',
+  PRICE_PERSIANE:    '@measure_price_persiane',
+  PRICE_CONTROTELAI: '@measure_price_controtelai',
+  PRICE_ZANZARIERE:  '@measure_price_zanzariere',
+  PRICE_MONOBLOCCHI: '@measure_price_monoblocchi',
 } as const;
+
+export interface PriceConfig {
+  interni:     number;
+  persiane:    number;
+  controtelai: number;
+  zanzariere:  number;
+  monoblocchi: number;
+}
 
 export const DEFAULT_TOLERANCE_W    = 10;
 export const DEFAULT_TOLERANCE_H    = 10;
@@ -147,6 +161,42 @@ export async function setAntaTopRail(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.ANTA_TOP_RAIL, String(mm));
 }
 
+const parsePrice = (raw: string | null): number => {
+  if (!raw) return 0;
+  const n = parseFloat(raw);
+  return isNaN(n) || n < 0 ? 0 : n;
+};
+const KEY_MAP: Record<keyof PriceConfig, string> = {
+  interni:     KEYS.PRICE_INTERNI,
+  persiane:    KEYS.PRICE_PERSIANE,
+  controtelai: KEYS.PRICE_CONTROTELAI,
+  zanzariere:  KEYS.PRICE_ZANZARIERE,
+  monoblocchi: KEYS.PRICE_MONOBLOCCHI,
+};
+export async function getPrices(): Promise<PriceConfig> {
+  const [a,b,c,d,e] = await Promise.all([
+    AsyncStorage.getItem(KEYS.PRICE_INTERNI),
+    AsyncStorage.getItem(KEYS.PRICE_PERSIANE),
+    AsyncStorage.getItem(KEYS.PRICE_CONTROTELAI),
+    AsyncStorage.getItem(KEYS.PRICE_ZANZARIERE),
+    AsyncStorage.getItem(KEYS.PRICE_MONOBLOCCHI),
+  ]);
+  return { interni: parsePrice(a), persiane: parsePrice(b), controtelai: parsePrice(c), zanzariere: parsePrice(d), monoblocchi: parsePrice(e) };
+}
+export async function setPrice(key: keyof PriceConfig, value: number): Promise<void> {
+  await AsyncStorage.setItem(KEY_MAP[key], String(value));
+}
+
+export function priceForStyle(style: OpeningStyle | null, prices: PriceConfig): number {
+  if (!style) return 0;
+  if (style.startsWith('window') || style.startsWith('door')) return prices.interni;
+  if (style.startsWith('shutter'))  return prices.persiane;
+  if (style === 'roller_blind')     return prices.monoblocchi;
+  if (style.startsWith('subframe')) return prices.controtelai;
+  if (style.startsWith('mosquito')) return prices.zanzariere;
+  return 0;
+}
+
 export async function getTutorialShown(): Promise<boolean> {
   const raw = await AsyncStorage.getItem(KEYS.TUTORIAL_SHOWN);
   return raw === 'true';
@@ -186,6 +236,12 @@ export interface SettingsPreset {
   fasciaH: number;
   antaTopRail: number;
   antaReduction: number;
+  // Prezzi al m² (opzionali per retrocompat con preset salvati precedentemente)
+  priceInterni?:     number;
+  pricePersiane?:    number;
+  priceControtelai?: number;
+  priceZanzariere?:  number;
+  priceMonoblocchi?: number;
 }
 
 export async function getPresets(): Promise<SettingsPreset[]> {
@@ -231,5 +287,10 @@ export async function applyPreset(preset: SettingsPreset): Promise<void> {
     setFasciaH(preset.fasciaH),
     setAntaTopRail(preset.antaTopRail ?? DEFAULT_ANTA_TOP_RAIL),
     setAntaReduction(preset.antaReduction),
+    setPrice('interni',     preset.priceInterni     ?? 0),
+    setPrice('persiane',    preset.pricePersiane    ?? 0),
+    setPrice('controtelai', preset.priceControtelai ?? 0),
+    setPrice('zanzariere',  preset.priceZanzariere  ?? 0),
+    setPrice('monoblocchi', preset.priceMonoblocchi ?? 0),
   ]);
 }

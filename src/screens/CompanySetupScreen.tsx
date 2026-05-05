@@ -1,40 +1,35 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, Image,
+  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
-import { supabase, createCompany, checkAndAcceptInvite, peekPendingInvite, Company } from '../lib/supabase';
+import * as AppAlert from '../components/AppAlert';
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { supabase, createCompany, checkAndAcceptInvite } from '../lib/supabase';
+import { clearDbCache } from '../storage/database';
+import { RootStackParamList } from '../types';
 
-const MASCOT = require('../../assets/principale.png');
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type Step = 'choose' | 'create' | 'waiting';
+type Step = 'choose' | 'create';
 
-interface Props {
-  onComplete: () => Promise<void>;
-}
+export default function CompanySetupScreen() {
+  const navigation = useNavigation<Nav>();
+  const [step,    setStep]    = useState<Step>('choose');
+  const [name,    setName]    = useState('');
+  const [loading, setLoading] = useState(false);
 
-export default function CompanySetupScreen({ onComplete }: Props) {
-  const [step,         setStep]         = useState<Step>('choose');
-  const [name,         setName]         = useState('');
-  const [loading,      setLoading]      = useState(false);
-  const [checking,     setChecking]     = useState(false);
-  const [foundCompany, setFoundCompany] = useState<Company | null>(null);
-
-  // Polling automatico ogni 10s quando si è in attesa di invito
-  React.useEffect(() => {
-    if (step !== 'waiting') return;
-    const poll = async () => {
-      const company = await peekPendingInvite();
-      if (company) setFoundCompany(company);
-    };
-    poll(); // controllo immediato al cambio step
-    const id = setInterval(poll, 10000);
-    return () => clearInterval(id);
-  }, [step]);
+  const goHome = () => {
+    clearDbCache();
+    // Refresh sessione per aggiornare profile in AppContent
+    supabase.auth.refreshSession().catch(() => {});
+    navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }));
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Campo mancante', 'Inserisci il nome dell\'azienda.');
+      AppAlert.show('Campo mancante', 'Inserisci il nome dell\'azienda.');
       return;
     }
     setLoading(true);
@@ -43,28 +38,12 @@ export default function CompanySetupScreen({ onComplete }: Props) {
       if (!user) return;
       const company = await createCompany(user.id, name.trim());
       if (company) {
-        await onComplete();
+        goHome();
       } else {
-        Alert.alert('Errore', 'Impossibile creare l\'azienda. Riprova.');
+        AppAlert.show('Errore', 'Impossibile creare l\'azienda. Riprova.');
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCheckInvite = async () => {
-    setChecking(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const company = await checkAndAcceptInvite(user.id);
-      if (company) {
-        await onComplete();
-      } else {
-        Alert.alert('Nessun invito trovato', 'Non hai ancora ricevuto un invito. Chiedi al titolare di invitarti tramite la tua email: ' + user.email);
-      }
-    } finally {
-      setChecking(false);
     }
   };
 
@@ -72,20 +51,15 @@ export default function CompanySetupScreen({ onComplete }: Props) {
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
-        {/* Header bianco con robot */}
         <View style={s.header}>
-          <Image source={MASCOT} style={s.mascot} resizeMode="contain"/>
           <Text style={s.title}>La tua azienda</Text>
           <Text style={s.sub}>
             {step === 'choose'
-              ? 'Crea una nuova azienda oppure attendi di essere invitato da un collega.'
-              : step === 'create'
-              ? 'Inserisci il nome della tua azienda. Potrai invitare i colleghi dalla sezione Account.'
-              : 'Chiedi al titolare di invitarti usando la tua email. Quando l\'invito arriva, premi il pulsante qui sotto.'}
+              ? 'Crea una nuova azienda per iniziare a collaborare con il tuo team.'
+              : 'Inserisci il nome della tua azienda. Potrai invitare i colleghi dalla sezione Account.'}
           </Text>
         </View>
 
-        {/* Scelta */}
         {step === 'choose' && (
           <View style={s.choices}>
             <TouchableOpacity style={s.choiceCard} onPress={() => setStep('create')} activeOpacity={0.8}>
@@ -98,21 +72,9 @@ export default function CompanySetupScreen({ onComplete }: Props) {
               </View>
               <Text style={s.choiceArrow}>›</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity style={[s.choiceCard, s.choiceCardAlt]} onPress={() => setStep('waiting')} activeOpacity={0.8}>
-              <View style={[s.choiceIcon, { backgroundColor: '#E8F5E9' }]}>
-                <Text style={s.choiceEmoji}>✉️</Text>
-              </View>
-              <View style={s.choiceBody}>
-                <Text style={s.choiceTitle}>Sono stato invitato</Text>
-                <Text style={s.choiceSub}>Il titolare mi ha inviato un invito</Text>
-              </View>
-              <Text style={s.choiceArrow}>›</Text>
-            </TouchableOpacity>
           </View>
         )}
 
-        {/* Crea azienda */}
         {step === 'create' && (
           <View style={s.card}>
             <View style={s.inputWrap}>
@@ -140,41 +102,6 @@ export default function CompanySetupScreen({ onComplete }: Props) {
           </View>
         )}
 
-        {/* In attesa di invito */}
-        {step === 'waiting' && (
-          <View style={s.card}>
-            {foundCompany ? (
-              <View style={s.waitingBox}>
-                <Text style={s.waitingEmoji}>🎉</Text>
-                <Text style={s.waitingTitle}>Invito ricevuto!</Text>
-                <Text style={s.waitingText}>
-                  Sei stato invitato ad unirti a{'\n'}
-                </Text>
-                <Text style={s.companyName}>{foundCompany.name}</Text>
-              </View>
-            ) : (
-              <View style={s.waitingBox}>
-                <Text style={s.waitingEmoji}>✉️</Text>
-                <Text style={s.waitingTitle}>In attesa di invito</Text>
-                <Text style={s.waitingText}>
-                  Chiedi al titolare di invitarti dall'app tramite la tua email.{'\n'}
-                  Controlliamo automaticamente ogni 10 secondi.
-                </Text>
-              </View>
-            )}
-
-            <TouchableOpacity style={s.btnPrimary} onPress={handleCheckInvite} disabled={checking}>
-              {checking
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={s.btnPrimaryText}>{foundCompany ? 'Accetta invito' : 'Controlla ora'}</Text>}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={s.back} onPress={() => { setStep('choose'); setFoundCompany(null); }}>
-              <Text style={s.backText}>← Indietro</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         <TouchableOpacity style={s.logout} onPress={() => supabase.auth.signOut({ scope: 'local' })}>
           <Text style={s.logoutText}>Esci dall'account</Text>
         </TouchableOpacity>
@@ -190,28 +117,20 @@ const s = StyleSheet.create({
   root:   { flex: 1, backgroundColor: '#fff' },
   scroll: { flexGrow: 1, justifyContent: 'center' },
 
-  header:   { alignItems: 'center', backgroundColor: '#fff', paddingTop: 48, paddingBottom: 24, paddingHorizontal: 20 },
-  mascot:   { width: 120, height: 120, marginBottom: 12 },
-  title:    { fontSize: 22, fontWeight: '900', color: BLUE, marginBottom: 8 },
-  sub:      { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 19, paddingHorizontal: 10 },
+  header: { alignItems: 'center', paddingTop: 64, paddingBottom: 32, paddingHorizontal: 28 },
+  title:  { fontSize: 26, fontWeight: '900', color: BLUE, marginBottom: 10 },
+  sub:    { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 20, paddingHorizontal: 10 },
 
-  choices:       { gap: 12, padding: 20, backgroundColor: BLUE, paddingBottom: 32 },
-  choiceCard:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  choiceCardAlt: {},
-  choiceIcon:    { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14, backgroundColor: '#F0F4F8' },
-  choiceEmoji:   { fontSize: 22 },
-  choiceBody:    { flex: 1 },
-  choiceTitle:   { fontSize: 15, fontWeight: '800', color: BLUE },
-  choiceSub:     { fontSize: 12, color: '#888', marginTop: 2 },
-  choiceArrow:   { fontSize: 22, color: BLUE, fontWeight: '700' },
+  choices:    { gap: 12, padding: 20 },
+  choiceCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, borderWidth: 1, borderColor: '#EEF2F7' },
+  choiceIcon:  { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  choiceEmoji: { fontSize: 22 },
+  choiceBody:  { flex: 1 },
+  choiceTitle: { fontSize: 15, fontWeight: '800', color: BLUE },
+  choiceSub:   { fontSize: 12, color: '#888', marginTop: 2 },
+  choiceArrow: { fontSize: 22, color: BLUE, fontWeight: '700' },
 
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, margin: 20, elevation: 2, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-
-  waitingBox:    { alignItems: 'center', paddingVertical: 12, marginBottom: 20 },
-  waitingEmoji:  { fontSize: 40, marginBottom: 12 },
-  waitingTitle:  { fontSize: 16, fontWeight: '800', color: '#1a2a3a', marginBottom: 8 },
-  waitingText:   { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 19 },
-  companyName:   { fontSize: 20, fontWeight: '900', color: BLUE, textAlign: 'center', marginTop: 4 },
 
   inputWrap: { marginBottom: 16 },
   label:     { fontSize: 11, fontWeight: '700', color: '#777', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
@@ -223,6 +142,6 @@ const s = StyleSheet.create({
   back:     { marginTop: 16, alignItems: 'center' },
   backText: { color: BLUE, fontWeight: '700', fontSize: 13 },
 
-  logout:     { marginTop: 32, alignItems: 'center' },
+  logout:     { marginTop: 40, alignItems: 'center', marginBottom: 24 },
   logoutText: { color: '#bbb', fontSize: 12, fontWeight: '600' },
 });

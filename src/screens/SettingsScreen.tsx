@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Switch,
-  Alert, Modal, Platform,
+  Modal, Platform,
 } from 'react-native';
+import * as AppAlert from '../components/AppAlert';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   DEFAULT_TOLERANCE_W, DEFAULT_TOLERANCE_H, DEFAULT_RIATTESTATTURA,
@@ -21,6 +22,7 @@ import {
   getAntaReduction, setAntaReduction,
   getAntaTopRail, setAntaTopRail,
   SettingsPreset, getPresets, addPreset, deletePreset, renamePreset, applyPreset,
+  PriceConfig, getPrices, setPrice,
 } from '../storage/settings';
 
 export default function SettingsScreen() {
@@ -38,6 +40,10 @@ export default function SettingsScreen() {
   const [fasText,    setFasText]    = useState<string>(String(DEFAULT_FASCIA_H));
   const [antaRedText,  setAntaRedText]  = useState<string>(String(DEFAULT_ANTA_REDUCTION));
   const [antaTopText,  setAntaTopText]  = useState<string>(String(DEFAULT_ANTA_TOP_RAIL));
+  const [prices, setPrices] = useState<PriceConfig>({ interni: 0, persiane: 0, controtelai: 0, zanzariere: 0, monoblocchi: 0 });
+  const [priceTexts, setPriceTexts] = useState<Record<keyof PriceConfig, string>>({
+    interni: '0', persiane: '0', controtelai: '0', zanzariere: '0', monoblocchi: '0',
+  });
   const [presets,       setPresets]       = useState<SettingsPreset[]>([]);
   const [activeId,      setActiveId]      = useState<string | null>(null);
   // modale nome preset (Android non ha Alert.prompt)
@@ -58,6 +64,16 @@ export default function SettingsScreen() {
     getAntaReduction().then(v => setAntaRedText(String(v)));
     getAntaTopRail().then(v => setAntaTopText(String(v)));
     getPresets().then(setPresets);
+    getPrices().then(p => {
+      setPrices(p);
+      setPriceTexts({
+        interni:     String(p.interni     || ''),
+        persiane:    String(p.persiane    || ''),
+        controtelai: String(p.controtelai || ''),
+        zanzariere:  String(p.zanzariere  || ''),
+        monoblocchi: String(p.monoblocchi || ''),
+      });
+    });
   }, []);
 
   const handleTolWEnd = () => {
@@ -151,6 +167,11 @@ export default function SettingsScreen() {
     fasciaH:         parseInt(fasText,     10) || DEFAULT_FASCIA_H,
     antaTopRail:     parseInt(antaTopText, 10) || DEFAULT_ANTA_TOP_RAIL,
     antaReduction:   parseInt(antaRedText, 10) || DEFAULT_ANTA_REDUCTION,
+    priceInterni:     parseFloat(priceTexts.interni)     || 0,
+    pricePersiane:    parseFloat(priceTexts.persiane)    || 0,
+    priceControtelai: parseFloat(priceTexts.controtelai) || 0,
+    priceZanzariere:  parseFloat(priceTexts.zanzariere)  || 0,
+    priceMonoblocchi: parseFloat(priceTexts.monoblocchi) || 0,
   });
 
   const openAddPrompt = () => {
@@ -193,11 +214,26 @@ export default function SettingsScreen() {
     setFasText(String(preset.fasciaH));
     setAntaTopText(String(preset.antaTopRail ?? DEFAULT_ANTA_TOP_RAIL));
     setAntaRedText(String(preset.antaReduction));
+    const newPrices: PriceConfig = {
+      interni:     preset.priceInterni     ?? 0,
+      persiane:    preset.pricePersiane    ?? 0,
+      controtelai: preset.priceControtelai ?? 0,
+      zanzariere:  preset.priceZanzariere  ?? 0,
+      monoblocchi: preset.priceMonoblocchi ?? 0,
+    };
+    setPrices(newPrices);
+    setPriceTexts({
+      interni:     newPrices.interni     ? String(newPrices.interni)     : '',
+      persiane:    newPrices.persiane    ? String(newPrices.persiane)    : '',
+      controtelai: newPrices.controtelai ? String(newPrices.controtelai) : '',
+      zanzariere:  newPrices.zanzariere  ? String(newPrices.zanzariere)  : '',
+      monoblocchi: newPrices.monoblocchi ? String(newPrices.monoblocchi) : '',
+    });
     setActiveId(preset.id);
   };
 
   const handleLongPressPreset = (preset: SettingsPreset) => {
-    Alert.alert(preset.name, 'Cosa vuoi fare?', [
+    AppAlert.show(preset.name, 'Cosa vuoi fare?', [
       { text: 'Rinomina', onPress: () => openRenamePrompt(preset) },
       {
         text: 'Elimina', style: 'destructive', onPress: async () => {
@@ -547,15 +583,15 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* ── Traverso superiore anta persiana ── */}
-      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Traverso superiore anta persiana</Text>
+      {/* ── Altezza profilo anta ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 24, color: t.textPrimary }]}>Altezza del profilo anta</Text>
       <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
-        Altezza del profilo anta in cima alla persiana — viene sottratta per calcolare le lamelle (default 68 mm)
+        Altezza del profilo anta superiore — sottratta per calcolare le lamelle della persiana (default 68 mm)
       </Text>
       <View style={[styles.toleranceCard, { backgroundColor: t.card }]}>
         <View style={styles.toleranceRow}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.toleranceLabel, { color: t.label }]}>Traverso superiore</Text>
+            <Text style={[styles.toleranceLabel, { color: t.label }]}>Profilo anta</Text>
             <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>es. 68 mm</Text>
           </View>
           <View style={styles.toleranceInputWrap}>
@@ -573,6 +609,63 @@ export default function SettingsScreen() {
           </View>
         </View>
       </View>
+
+      {/* ── Prezzi al m² ── */}
+      <Text style={[styles.sectionTitle, { marginTop: 28, color: t.textPrimary, borderLeftColor: '#E65100' }]}>
+        Prezzi indicativi al m²
+      </Text>
+      <Text style={[styles.sectionSub, { color: t.textSecondary }]}>
+        Usati per la stima orientativa nel rilievo e nel PDF. Lascia 0 per non mostrare il preventivo.
+      </Text>
+      {(
+        [
+          { key: 'interni',     label: 'Interni',     sub: 'Finestre e porte', color: '#1565C0' },
+          { key: 'persiane',    label: 'Persiane',    sub: 'Persiane singole e doppie', color: '#2E7D32' },
+          { key: 'monoblocchi', label: 'Monoblocchi', sub: 'Con tapparella', color: '#E65100' },
+          { key: 'controtelai', label: 'Controtelai', sub: 'Controtelai a U', color: '#795548' },
+          { key: 'zanzariere',  label: 'Zanzariere',  sub: 'Fisse, sali-scendi, laterali', color: '#00838F' },
+        ] as { key: keyof PriceConfig; label: string; sub: string; color: string }[]
+      ).map(({ key, label, sub, color }) => (
+        <View key={key} style={[styles.toleranceCard, { backgroundColor: t.card, marginBottom: 10 }]}>
+          <View style={styles.toleranceRow}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 3, height: 28, borderRadius: 2, backgroundColor: color }}/>
+                <View>
+                  <Text style={[styles.toleranceFormula, { color: t.textPrimary }]}>{label}</Text>
+                  <Text style={[styles.toleranceLabel, { color: t.label }]}>{sub}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.toleranceInputWrap}>
+              <Text style={[styles.toleranceUnit, { color: t.label, marginBottom: 2, marginTop: 0 }]}>€ /m²</Text>
+              <TextInput
+                style={[styles.toleranceInput, { backgroundColor: t.inputBg, borderColor: color, color, width: 90 }]}
+                keyboardType="decimal-pad"
+                value={priceTexts[key]}
+                onChangeText={v => setPriceTexts(prev => ({ ...prev, [key]: v }))}
+                onEndEditing={() => {
+                  const n = parseFloat(priceTexts[key]);
+                  const val = isNaN(n) || n < 0 ? 0 : n;
+                  setPriceTexts(prev => ({ ...prev, [key]: val === 0 ? '' : String(val) }));
+                  setPrices(prev => ({ ...prev, [key]: val }));
+                  setPrice(key, val);
+                }}
+                onBlur={() => {
+                  const n = parseFloat(priceTexts[key]);
+                  const val = isNaN(n) || n < 0 ? 0 : n;
+                  setPriceTexts(prev => ({ ...prev, [key]: val === 0 ? '' : String(val) }));
+                  setPrices(prev => ({ ...prev, [key]: val }));
+                  setPrice(key, val);
+                }}
+                placeholder="0"
+                placeholderTextColor="#bbb"
+                selectTextOnFocus
+              />
+            </View>
+          </View>
+        </View>
+      ))}
 
       <Text style={[styles.version, { color: t.dark ? '#3a5a7a' : '#CCC' }]}>Versione 1.0.0</Text>
     </ScrollView>

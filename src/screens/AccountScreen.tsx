@@ -1,22 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import * as AppAlert from '../components/AppAlert';
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   supabase, fetchProfile, fetchCompany, Company,
   inviteToCompany, listPendingInvites, revokeInvite, CompanyInvite,
+  checkAndAcceptInvite, listInvitesForMe, MyInvite,
 } from '../lib/supabase';
-
+import { clearDbCache } from '../storage/database';
+import { RootStackParamList } from '../types';
 import { User } from '@supabase/supabase-js';
 
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
 export default function AccountScreen() {
-  const [user,     setUser]     = useState<User | null>(null);
-  const [company,  setCompany]  = useState<Company | null>(null);
-  const [invites,  setInvites]  = useState<CompanyInvite[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const navigation = useNavigation<Nav>();
+  const [user,        setUser]        = useState<User | null>(null);
+  const [company,     setCompany]     = useState<Company | null>(null);
+  const [invites,     setInvites]     = useState<CompanyInvite[]>([]);
+  const [myInvites,   setMyInvites]   = useState<MyInvite[]>([]);
+  const [loading,     setLoading]     = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [sending,  setSending]  = useState(false);
+  const [sending,     setSending]     = useState(false);
+  const [accepting,   setAccepting]   = useState<string | null>(null); // invite id being accepted
 
   useEffect(() => {
     load();
@@ -35,6 +45,10 @@ export default function AccountScreen() {
           const list = await listPendingInvites(c.id);
           setInvites(list);
         }
+      } else {
+        // Nessuna azienda: carica inviti ricevuti
+        const mine = await listInvitesForMe();
+        setMyInvites(mine);
       }
     }
     setLoading(false);
@@ -45,10 +59,29 @@ export default function AccountScreen() {
     ?? user?.email?.[0]?.toUpperCase()
     ?? '?';
 
+  const handleAcceptInvite = async (invite: MyInvite) => {
+    setAccepting(invite.id);
+    try {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) return;
+      const result = await checkAndAcceptInvite(u.id);
+      if (result) {
+        clearDbCache();
+        // Aggiorna profilo in AppContent tramite refresh sessione
+        await supabase.auth.refreshSession();
+        navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }));
+      } else {
+        AppAlert.show('Errore', 'Impossibile accettare l\'invito. Riprova.');
+      }
+    } finally {
+      setAccepting(null);
+    }
+  };
+
   const handleSendInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
     if (!email || !email.includes('@')) {
-      Alert.alert('Email non valida', 'Inserisci un indirizzo email corretto.');
+      AppAlert.show('Email non valida', 'Inserisci un indirizzo email corretto.');
       return;
     }
     if (!company || !user) return;
@@ -57,13 +90,13 @@ export default function AccountScreen() {
       const result = await inviteToCompany(company.id, user.id, email);
       if (result === 'ok') {
         setInviteEmail('');
-        Alert.alert('Invito inviato', `${email} potrà accedere all'azienda non appena aprirà l'app con quella email.`);
+        AppAlert.show('Invito inviato', `${email} vedrà l'invito nella sezione Account non appena aprirà l'app.`);
         const list = await listPendingInvites(company.id);
         setInvites(list);
       } else if (result === 'already_invited') {
-        Alert.alert('Già invitato', `${email} ha già un invito pendente.`);
+        AppAlert.show('Già invitato', `${email} ha già un invito pendente.`);
       } else {
-        Alert.alert('Errore', 'Impossibile inviare l\'invito. Riprova.');
+        AppAlert.show('Errore', 'Impossibile inviare l\'invito. Riprova.');
       }
     } finally {
       setSending(false);
@@ -71,7 +104,7 @@ export default function AccountScreen() {
   };
 
   const handleRevokeInvite = (invite: CompanyInvite) => {
-    Alert.alert(
+    AppAlert.show(
       'Revoca invito',
       `Revocare l'invito per ${invite.invited_email}?`,
       [
@@ -88,7 +121,7 @@ export default function AccountScreen() {
   };
 
   const handleLeaveCompany = () => {
-    Alert.alert(
+    AppAlert.show(
       'Lascia l\'azienda',
       'Perderai l\'accesso a tutti i rilievi dell\'azienda. Sei sicuro?',
       [
@@ -99,7 +132,8 @@ export default function AccountScreen() {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
               await supabase.from('profiles').update({ company_id: null }).eq('id', user.id);
-              await supabase.auth.signOut({ scope: 'local' });
+              clearDbCache();
+              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }));
             }
           },
         },
@@ -108,7 +142,7 @@ export default function AccountScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Esci dall\'account', 'Sei sicuro di voler uscire?', [
+    AppAlert.show('Esci dall\'account', 'Sei sicuro di voler uscire?', [
       { text: 'Annulla', style: 'cancel' },
       { text: 'Esci', style: 'destructive', onPress: () => supabase.auth.signOut({ scope: 'local' }) },
     ]);
@@ -157,11 +191,9 @@ export default function AccountScreen() {
               <Text style={s.sectionTitle}>Invita collaboratore</Text>
               <View style={s.card}>
                 <View style={s.row}>
-                  <View style={s.rowInfo}>
-                    <Text style={s.rowHint}>
-                      Inserisci la email del collega. Potrà accedere ai progetti dell'azienda non appena aprirà l'app con quell'email.
-                    </Text>
-                  </View>
+                  <Text style={s.rowHint}>
+                    Inserisci la email del collega. Riceverà l'invito nella sezione Account dell'app.
+                  </Text>
                 </View>
                 <View style={[s.row, s.rowBorder, { gap: 10 }]}>
                   <TextInput
@@ -181,7 +213,6 @@ export default function AccountScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Lista inviti pendenti */}
                 {invites.length > 0 && (
                   <>
                     <View style={[s.row, s.rowBorder]}>
@@ -201,12 +232,56 @@ export default function AccountScreen() {
             </View>
           </>
         ) : (
-          <View style={s.section}>
-            <Text style={s.sectionTitle}>Azienda</Text>
-            <View style={s.card}>
-              <Text style={s.rowHint}>Nessuna azienda associata.</Text>
+          <>
+            {/* Inviti ricevuti */}
+            {myInvites.length > 0 && (
+              <View style={s.section}>
+                <Text style={s.sectionTitle}>Inviti ricevuti</Text>
+                <View style={s.card}>
+                  {myInvites.map(inv => (
+                    <View key={inv.id} style={s.inviteRow}>
+                      <View style={s.inviteIcon}>
+                        <Text style={{ fontSize: 20 }}>🏢</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.inviteCompanyName}>{inv.company_name}</Text>
+                        <Text style={s.inviteHint}>Sei stato invitato a unirti a questa azienda</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={s.acceptBtn}
+                        onPress={() => handleAcceptInvite(inv)}
+                        disabled={accepting === inv.id}
+                      >
+                        {accepting === inv.id
+                          ? <ActivityIndicator color="#fff" size="small" />
+                          : <Text style={s.acceptBtnText}>Accetta</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Nessuna azienda */}
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Azienda</Text>
+              <View style={s.card}>
+                <Text style={[s.rowHint, { padding: 16 }]}>
+                  {myInvites.length > 0
+                    ? 'Accetta un invito oppure crea la tua azienda.'
+                    : 'Non sei ancora associato a nessuna azienda.'}
+                </Text>
+                <View style={[s.row, s.rowBorder, { justifyContent: 'center' }]}>
+                  <TouchableOpacity
+                    style={s.createCompanyBtn}
+                    onPress={() => navigation.navigate('CompanySetup')}
+                  >
+                    <Text style={s.createCompanyBtnText}>Crea azienda</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
+          </>
         )}
 
         {/* Azioni */}
@@ -254,12 +329,22 @@ const s = StyleSheet.create({
   rowInfo:   { flex: 1 },
   rowLabel:  { fontSize: 11, fontWeight: '700', color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 3 },
   rowValue:  { fontSize: 15, fontWeight: '700', color: '#1a2a3a' },
-  rowHint:   { flex: 1, fontSize: 12, color: '#aaa', lineHeight: 17 },
+  rowHint:   { fontSize: 12, color: '#aaa', lineHeight: 17 },
+
+  inviteRow:        { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
+  inviteIcon:       { width: 44, height: 44, borderRadius: 12, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' },
+  inviteCompanyName:{ fontSize: 15, fontWeight: '800', color: '#1a2a3a', marginBottom: 2 },
+  inviteHint:       { fontSize: 11, color: '#aaa' },
+  acceptBtn:        { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, minWidth: 78, alignItems: 'center' },
+  acceptBtnText:    { color: '#fff', fontWeight: '800', fontSize: 13 },
 
   inviteInput: { flex: 1, borderWidth: 1.5, borderColor: '#DDE3ED', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a2a3a', backgroundColor: '#F8FAFC' },
   inviteBtn:   { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, minWidth: 64, alignItems: 'center' },
   inviteBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
   revokeText:  { fontSize: 12, fontWeight: '700', color: '#DC2626' },
+
+  createCompanyBtn:     { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 11, alignItems: 'center' },
+  createCompanyBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
 
   actionRow:    { flexDirection: 'row', alignItems: 'center', padding: 16 },
   actionLabel:  { flex: 1, fontSize: 15, fontWeight: '600', color: '#1a2a3a' },

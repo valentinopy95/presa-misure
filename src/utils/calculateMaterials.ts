@@ -99,10 +99,15 @@ function calcBars(
     remaining: rem,
   }));
 
+  // L'alert scatta solo se l'ULTIMA barra ha pochissimo avanzo.
+  // Le barre precedenti piene sono semplicemente un buon utilizzo del materiale.
+  const lastBinRem = bins[bins.length - 1];
+  const nearLimitCount = (lastBinRem > 0 && lastBinRem < NEAR_LIMIT_THRESHOLD) ? 1 : 0;
+
   return {
-    count:          bins.length,
-    offcuts:        bins.filter(s => s >= MIN_REMNANT_MM),
-    nearLimitCount: bins.filter(s => s > 0 && s < NEAR_LIMIT_THRESHOLD).length,
+    count: bins.length,
+    offcuts: bins.filter(s => s >= MIN_REMNANT_MM),
+    nearLimitCount,
     binDetails,
   };
 }

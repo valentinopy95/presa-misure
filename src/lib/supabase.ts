@@ -188,6 +188,33 @@ export async function checkAndAcceptInvite(userId: string): Promise<Company | nu
   return fetchCompany(invite.company_id);
 }
 
+export interface MyInvite {
+  id:           string;
+  company_id:   string;
+  company_name: string;
+}
+
+/** Inviti ricevuti dall'utente corrente (per la sua email) */
+export async function listInvitesForMe(): Promise<MyInvite[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.email) return [];
+
+  const { data: invites } = await supabase
+    .from('company_invites')
+    .select('id, company_id')
+    .eq('invited_email', user.email.toLowerCase());
+
+  if (!invites || invites.length === 0) return [];
+
+  const results = await Promise.all(
+    invites.map(async (inv: { id: string; company_id: string }) => {
+      const company = await fetchCompany(inv.company_id);
+      return { id: inv.id, company_id: inv.company_id, company_name: company?.name ?? 'Azienda' };
+    })
+  );
+  return results;
+}
+
 /** Lista inviti pendenti dell'azienda corrente */
 export async function listPendingInvites(companyId: string): Promise<CompanyInvite[]> {
   const { data } = await supabase

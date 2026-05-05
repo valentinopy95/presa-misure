@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Modal, Pressable, Platform,
+  ActivityIndicator, Modal, Pressable, Platform,
 } from 'react-native';
+import * as AppAlert from '../components/AppAlert';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -137,7 +138,7 @@ export default function DocumentScreen() {
         UTI: 'com.adobe.pdf',
       });
     } catch {
-      Alert.alert('Errore', 'Impossibile generare il PDF. Riprova.');
+      AppAlert.show('Errore', 'Impossibile generare il PDF. Riprova.');
     } finally {
       setExporting(false);
     }
@@ -174,7 +175,7 @@ export default function DocumentScreen() {
         await FileSystem.writeAsStringAsync(destUri, content, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        Alert.alert('Salvato!', `"${fileName}" salvato nella cartella scelta.`);
+        AppAlert.show('Salvato!', `"${fileName}" salvato nella cartella scelta.`);
       } else {
         await Sharing.shareAsync(srcUri, {
           mimeType: 'application/pdf',
@@ -183,7 +184,7 @@ export default function DocumentScreen() {
         });
       }
     } catch {
-      Alert.alert('Errore', 'Impossibile salvare il PDF. Riprova.');
+      AppAlert.show('Errore', 'Impossibile salvare il PDF. Riprova.');
     } finally {
       setExporting(false);
     }

@@ -55,16 +55,32 @@ const CATEGORY_COLORS: Record<Category, string> = {
 };
 
 // Card con memo — LiveDrawing non si ridisegna se le props non cambiano
-const StyleCard = React.memo(({ option, onPress }: { option: StyleOption; onPress: () => void }) => (
-  <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
-    <View style={styles.drawingWrap}>
-      {option.value === 'custom'
-        ? <Text style={styles.customIcon}>✏️</Text>
-        : <LiveDrawing style={option.value} previewMode previewSize={82} />}
-    </View>
-    <Text style={styles.cardLabel}>{option.label}</Text>
-  </TouchableOpacity>
-));
+const StyleCard = React.memo(({ option, onPress }: { option: StyleOption; onPress: () => void }) => {
+  if (option.value === 'custom') {
+    return (
+      <TouchableOpacity style={styles.customCard} onPress={onPress} activeOpacity={0.75}>
+        <Text style={styles.customCardIcon}>✏️</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.customCardTitle}>Elemento personalizzato</Text>
+          <Text style={styles.customCardDesc}>
+            Per verande, box doccia, infissi fuori misura o qualsiasi elemento non presente nell'elenco. Puoi disegnare uno schizzo a mano libera e aggiungere le misure che servono.
+          </Text>
+        </View>
+        <View style={styles.customCardBtnWrap}>
+          <Text style={styles.customCardBtn}>Seleziona</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
+      <View style={styles.drawingWrap}>
+        <LiveDrawing style={option.value} previewMode previewSize={82} />
+      </View>
+      <Text style={styles.cardLabel}>{option.label}</Text>
+    </TouchableOpacity>
+  );
+});
 
 export default function StylePickerScreen() {
   const navigation = useNavigation<Nav>();
@@ -149,5 +165,27 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: '700', color: '#333', textAlign: 'center',
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  customIcon: { fontSize: 48 },
+
+  // ── Custom card (larghezza piena) ──
+  customCard: {
+    backgroundColor: '#fff', borderRadius: 14,
+    padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14,
+    width: '100%',
+    elevation: 2,
+    shadowColor: '#000', shadowOpacity: 0.07,
+    shadowRadius: 4, shadowOffset: { width: 0, height: 2 },
+    borderWidth: 1.5, borderColor: '#DDE8F0',
+  },
+  customCardIcon:  { fontSize: 40 },
+  customCardTitle: { fontSize: 15, fontWeight: '800', color: '#455A64', marginBottom: 4 },
+  customCardDesc:  { fontSize: 12.5, color: '#7a8a9a', lineHeight: 18 },
+  customCardBtnWrap: {
+    backgroundColor: '#455A64', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 8,
+    alignSelf: 'flex-start', marginLeft: 4,
+  },
+  customCardBtn: {
+    color: '#fff', fontSize: 12, fontWeight: '800',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  },
 });

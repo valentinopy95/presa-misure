@@ -1,5 +1,6 @@
 import { Project, Opening, OpeningStyle } from '../types';
 import { calculateMaterials, MaterialsResult, MaterialsConfig, CuttingListResult, CuttingProfile } from './calculateMaterials';
+import { PriceConfig, priceForStyle } from '../storage/settings';
 
 export type PdfMode = 'both' | 'misure' | 'materiale';
 
@@ -502,6 +503,69 @@ export interface GenerateHTMLOptions {
   mode?: PdfMode;
   photoMap?: Record<string, string[]>;
   materialsConfig?: MaterialsConfig;
+  prices?: PriceConfig;
+}
+
+function preventivoSection(openings: Opening[], prices: PriceConfig): string {
+  const LABELS: Record<string, string> = {
+    interni: 'Interni (finestre e porte)',
+    persiane: 'Persiane',
+    monoblocchi: 'Monoblocchi',
+    controtelai: 'Controtelai',
+    zanzariere: 'Zanzariere',
+  };
+  const CATS = ['interni','persiane','monoblocchi','controtelai','zanzariere'] as (keyof PriceConfig)[];
+  type Row = { label: string; sqm: number; price: number; total: number };
+  const rows: Row[] = [];
+  let grandTotal = 0;
+  for (const cat of CATS) {
+    const unitPrice = prices[cat];
+    if (!unitPrice) continue;
+    const sqm = openings.reduce((s, o) => {
+      if (priceForStyle(o.style, prices) !== unitPrice) return s;
+      if (!o.width || !o.height) return s;
+      return s + (o.width * o.height / 1_000_000);
+    }, 0);
+    if (sqm === 0) continue;
+    const total = sqm * unitPrice;
+    grandTotal += total;
+    rows.push({ label: LABELS[cat], sqm, price: unitPrice, total });
+  }
+  if (rows.length === 0) return '';
+  const rowsHtml = rows.map((r, i) => `
+    <tr style="background:${i%2===0?'#fff':'#F7FAFF'};">
+      <td style="padding:8px 12px;font-size:11px;color:#1a2a3a;font-weight:600;">${r.label}</td>
+      <td style="padding:8px 12px;font-size:11px;text-align:right;color:#555;">${r.sqm.toFixed(2)} m²</td>
+      <td style="padding:8px 12px;font-size:11px;text-align:right;color:#555;">€ ${r.price.toFixed(2)}/m²</td>
+      <td style="padding:8px 12px;font-size:12px;text-align:right;font-weight:800;color:#1565C0;">€ ${r.total.toFixed(0)}</td>
+    </tr>`).join('');
+  return `
+  <div style="margin-top:24px;page-break-inside:avoid;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+      <span style="font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#1a1a1a;">PREVENTIVO ORIENTATIVO</span>
+      <span style="font-size:9px;color:#aaa;font-style:italic;">Stima al m² — verificare prima dell'ordine</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #E0E8F0;border-radius:8px;overflow:hidden;">
+      <thead>
+        <tr style="background:#1565C0;">
+          <th style="padding:8px 12px;text-align:left;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Categoria</th>
+          <th style="padding:8px 12px;text-align:right;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">m²</th>
+          <th style="padding:8px 12px;text-align:right;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Prezzo/m²</th>
+          <th style="padding:8px 12px;text-align:right;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Totale</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+      <tfoot>
+        <tr style="background:#0c2d75;">
+          <td colspan="3" style="padding:10px 12px;font-size:12px;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:0.5px;">Totale stimato</td>
+          <td style="padding:10px 12px;font-size:16px;font-weight:900;color:#FFE082;text-align:right;">€ ${grandTotal.toFixed(0)}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div style="font-size:9px;color:#aaa;margin-top:6px;">
+      ⚠️ Stima orientativa basata sui prezzi al m² configurati. Non include posa, accessori, trasporto o IVA.
+    </div>
+  </div>`;
 }
 
 export function generateHTML(
@@ -534,6 +598,7 @@ export function generateHTML(
 
   const matResult = showMateriale ? calculateMaterials(project.openings, matConfig) : null;
   const matHTML = matResult ? materialsSection(matResult, barLength) : '';
+  const prevHTML = opts?.prices ? preventivoSection(project.openings, opts.prices) : '';
 
   const modeLabel = mode === 'misure' ? 'Rilievo misure' : mode === 'materiale' ? 'Sviluppo materiale' : 'Rilievo completo';
 
@@ -628,6 +693,8 @@ export function generateHTML(
   ` : ''}
 
   ${matHTML}
+
+  ${prevHTML}
 
   <!-- ── FOOTER ── -->
   <hr style="border:none;border-top:1px solid #e0e0e0;margin-top:24px;"/>

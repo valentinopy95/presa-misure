@@ -122,6 +122,19 @@ export default function CuttingListScreen() {
         </ScrollView>
       )}
 
+      {/* Sviluppo materiale (scorciatoia) */}
+      <TouchableOpacity
+        style={s.materialsBtn}
+        onPress={() => navigation.navigate('Materials', { projectId })}
+      >
+        <Text style={s.materialsBtnIcon}>📊</Text>
+        <View style={s.materialsBtnText}>
+          <Text style={s.materialsBtnTitle}>Sviluppo materiale</Text>
+          <Text style={s.materialsBtnSub}>Quante barre ordinare per questo rilievo</Text>
+        </View>
+        <Text style={s.materialsBtnArrow}>›</Text>
+      </TouchableOpacity>
+
       {/* Header */}
       <View style={s.header}>
         <Text style={s.projectName}>{project.name}</Text>
@@ -329,6 +342,18 @@ const s = StyleSheet.create({
   legendBody:  { fontSize: 12, color: '#455A64', lineHeight: 18 },
   empty:       { alignItems: 'center', padding: 32 },
   emptyText:   { color: '#AAA', fontSize: 14, textAlign: 'center' },
+  materialsBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fff', borderRadius: 14,
+    padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#2E7D32',
+    elevation: 2, gap: 12,
+  },
+  materialsBtnIcon:  { fontSize: 22 },
+  materialsBtnText:  { flex: 1 },
+  materialsBtnTitle: { fontSize: 15, fontWeight: '800', color: '#2E7D32' },
+  materialsBtnSub:   { fontSize: 12, color: '#70A070', marginTop: 2 },
+  materialsBtnArrow: { fontSize: 22, color: '#2E7D32', fontWeight: '700' },
 });
 
 const sec = StyleSheet.create({

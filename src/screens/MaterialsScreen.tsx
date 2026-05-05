@@ -126,6 +126,21 @@ export default function MaterialsScreen() {
         <Text style={s.projectSub}>{validCount} aperture elaborate</Text>
       </View>
 
+      {/* ── Distinta di taglio (in alto) ── */}
+      {validCount > 0 && (
+        <TouchableOpacity
+          style={s.cuttingBtn}
+          onPress={() => navigation.navigate('CuttingList', { projectId })}
+        >
+          <Text style={s.cuttingBtnIcon}>✂️</Text>
+          <View style={s.cuttingBtnText}>
+            <Text style={s.cuttingBtnTitle}>Distinta di taglio</Text>
+            <Text style={s.cuttingBtnSub}>Come tagliare ogni barra, barra per barra</Text>
+          </View>
+          <Text style={s.cuttingBtnArrow}>›</Text>
+        </TouchableOpacity>
+      )}
+
       {/* ── Disclaimer ── */}
       <View style={s.disclaimer}>
         <Text style={s.disclaimerText}>
@@ -233,21 +248,6 @@ export default function MaterialsScreen() {
             Inserisci larghezza e altezza per ogni apertura.
           </Text>
         </View>
-      )}
-
-      {/* ── Distinta di taglio ── */}
-      {validCount > 0 && (
-        <TouchableOpacity
-          style={s.cuttingBtn}
-          onPress={() => navigation.navigate('CuttingList', { projectId })}
-        >
-          <Text style={s.cuttingBtnIcon}>✂️</Text>
-          <View style={s.cuttingBtnText}>
-            <Text style={s.cuttingBtnTitle}>Distinta di taglio</Text>
-            <Text style={s.cuttingBtnSub}>Come tagliare ogni barra, barra per barra</Text>
-          </View>
-          <Text style={s.cuttingBtnArrow}>›</Text>
-        </TouchableOpacity>
       )}
 
       <View style={{ height: 40 }}/>

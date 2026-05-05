@@ -1,8 +1,10 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import {
-  View, FlatList, StyleSheet, TouchableOpacity, Alert, Text,
+  View, FlatList, StyleSheet, TouchableOpacity, Text,
   Modal, Pressable, ActivityIndicator, Platform, ScrollView,
+  TextInput, KeyboardAvoidingView,
 } from 'react-native';
+import * as AppAlert from '../components/AppAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,8 +14,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 import { v4 as uuidv4 } from 'uuid';
 import { Project, Opening, OpeningStyle, RootStackParamList } from '../types';
-import { getProject, getProjectFamily, deleteOpening, saveOpening, deleteProject } from '../storage/database';
-import { getToleranceW, getToleranceH } from '../storage/settings';
+import { getProject, getProjectFamily, deleteOpening, saveOpening, deleteProject, saveProject } from '../storage/database';
+import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig } from '../storage/settings';
 import { generateHTML } from '../utils/pdfExport';
 import OpeningCard from '../components/OpeningCard';
 import { useTheme } from '../contexts/ThemeContext';
@@ -35,6 +37,13 @@ export default function ProjectScreen() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [tourVisible,     setTourVisible]     = useState(false);
   const [tourSteps,       setTourSteps]       = useState<TourStep[]>([]);
+  const [showEditModal,   setShowEditModal]   = useState(false);
+  const [editName,        setEditName]        = useState('');
+  const [editClient,      setEditClient]      = useState('');
+  const [editPhone,       setEditPhone]       = useState('');
+  const [editAddress,     setEditAddress]     = useState('');
+  const [editSaving,      setEditSaving]      = useState(false);
+  const [prices,          setPricesState]     = useState<PriceConfig>({ interni: 0, persiane: 0, controtelai: 0, zanzariere: 0, monoblocchi: 0 });
 
   const headerRef           = useRef<any>(null);
   const pdfBtnRef           = useRef<any>(null);
@@ -58,7 +67,10 @@ export default function ProjectScreen() {
   }, [projectId]);
 
   // useFocusEffect richiede un callback sincrono — l'async deve stare dentro
-  useFocusEffect(useCallback(() => { loadFamily(); }, [loadFamily]));
+  useFocusEffect(useCallback(() => {
+    loadFamily();
+    getPrices().then(setPricesState);
+  }, [loadFamily]));
 
   // Ricarica solo il progetto attivo dopo cambio tab
   useEffect(() => {
@@ -177,7 +189,7 @@ export default function ProjectScreen() {
     const tolW = await getToleranceW();
     const tolH = await getToleranceH();
     const logo = await getLogoBase64();
-    const html = generateHTML(activeProject, tolW, tolH, logo);
+    const html = generateHTML(activeProject, tolW, tolH, logo, { prices });
     const { uri: tmp } = await Print.printToFileAsync({ html, base64: false });
     const safe = activeProject.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim();
     const dest  = `${FileSystem.documentDirectory}${safe}.pdf`;
@@ -192,7 +204,7 @@ export default function ProjectScreen() {
       if (Platform.OS === 'web') {
         const tolW = await getToleranceW();
         const tolH = await getToleranceH();
-        const html = generateHTML(activeProject!, tolW, tolH, await getLogoBase64());
+        const html = generateHTML(activeProject!, tolW, tolH, await getLogoBase64(), { prices });
         const blob = new Blob([html], { type: 'text/html' });
         const url  = URL.createObjectURL(blob);
         const tab  = window.open(url, '_blank');
@@ -201,7 +213,7 @@ export default function ProjectScreen() {
       }
       const uri = await buildPDF();
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: `Rilievo - ${activeProject?.name}` });
-    } catch { Alert.alert('Errore', 'Impossibile generare il PDF.'); }
+    } catch { AppAlert.show('Errore', 'Impossibile generare il PDF.'); }
     finally   { setExporting(false); }
   };
 
@@ -213,7 +225,7 @@ export default function ProjectScreen() {
       if (Platform.OS === 'web') {
         const tolW = await getToleranceW();
         const tolH = await getToleranceH();
-        const html = generateHTML(activeProject!, tolW, tolH, await getLogoBase64());
+        const html = generateHTML(activeProject!, tolW, tolH, await getLogoBase64(), { prices });
         const blob = new Blob([html], { type: 'text/html' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
@@ -230,11 +242,11 @@ export default function ProjectScreen() {
         const dest    = await StorageAccessFramework.createFileAsync(perms.directoryUri, fileName, 'application/pdf');
         const content = await FileSystem.readAsStringAsync(src, { encoding: FileSystem.EncodingType.Base64 });
         await FileSystem.writeAsStringAsync(dest, content, { encoding: FileSystem.EncodingType.Base64 });
-        Alert.alert('Salvato!', `"${fileName}" salvato nella cartella scelta.`);
+        AppAlert.show('Salvato!', `"${fileName}" salvato nella cartella scelta.`);
       } else {
         await Sharing.shareAsync(src, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: `Salva - ${activeProject?.name}` });
       }
-    } catch { Alert.alert('Errore', 'Impossibile salvare il PDF.'); }
+    } catch { AppAlert.show('Errore', 'Impossibile salvare il PDF.'); }
     finally   { setExporting(false); }
   };
 
@@ -249,7 +261,7 @@ export default function ProjectScreen() {
   const handleDuplicate = (opening: Opening) => {
     const isWindowOrDoor = opening.style?.startsWith('window') || opening.style?.startsWith('door');
     if (isWindowOrDoor) {
-      Alert.alert('Duplica apertura', 'Vuoi cambiare la tipologia della copia in persiana?', [
+      AppAlert.show('Duplica apertura', 'Vuoi cambiare la tipologia della copia in persiana?', [
         { text: 'Sì, cambia in persiana', onPress: async () => {
             const copy: Opening = { ...opening, id: uuidv4(), name: opening.name + ' (copia)', style: shutterEquivalent(opening.style) };
             await saveOpening(activeProjectId, copy); reload();
@@ -263,7 +275,7 @@ export default function ProjectScreen() {
         { text: 'Annulla', style: 'cancel' },
       ]);
     } else {
-      Alert.alert('Duplica apertura', 'Vuoi duplicare questa apertura?', [
+      AppAlert.show('Duplica apertura', 'Vuoi duplicare questa apertura?', [
         { text: 'Annulla', style: 'cancel' },
         { text: 'Duplica', onPress: async () => {
             const copy: Opening = { ...opening, id: uuidv4(), name: opening.name + ' (copia)' };
@@ -275,7 +287,7 @@ export default function ProjectScreen() {
   };
 
   const handleDelete = (openingId: string) => {
-    Alert.alert('Elimina apertura', 'Vuoi eliminare questa voce?', [
+    AppAlert.show('Elimina apertura', 'Vuoi eliminare questa voce?', [
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
           await deleteOpening(activeProjectId, openingId); reload();
@@ -287,7 +299,7 @@ export default function ProjectScreen() {
   const handleDeleteSubProject = (idx: number) => {
     const proj = family[idx];
     if (!proj) return;
-    Alert.alert(
+    AppAlert.show(
       'Elimina sottoprogetto',
       `Vuoi eliminare "${proj.name}" con tutte le sue aperture? L'operazione non è reversibile.`,
       [
@@ -307,9 +319,44 @@ export default function ProjectScreen() {
     );
   };
 
+  const openEditModal = () => {
+    if (!activeProject) return;
+    setEditName(activeProject.name);
+    setEditClient(activeProject.clientName);
+    setEditPhone(activeProject.clientPhone);
+    setEditAddress(activeProject.address);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!activeProject || !editName.trim()) return;
+    setEditSaving(true);
+    try {
+      const updated: Project = {
+        ...activeProject,
+        name:        editName.trim(),
+        clientName:  editClient.trim(),
+        clientPhone: editPhone.trim(),
+        address:     editAddress.trim(),
+        updatedAt:   new Date().toISOString(),
+      };
+      await saveProject(updated);
+      setFamily(prev => prev.map((p, i) => i === activeIdx ? updated : p));
+      setShowEditModal(false);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   if (!activeProject) return <View style={{ flex: 1, backgroundColor: t.bg }}/>;
 
   const openings = activeProject.openings ?? [];
+
+  const totalEstimate = openings.reduce((sum, o) => {
+    const p = priceForStyle(o.style, prices);
+    if (!p || !o.width || !o.height) return sum;
+    return sum + (o.width * o.height / 1_000_000) * p;
+  }, 0);
 
   return (
     <View style={[styles.container, { backgroundColor: t.bg }]}>
@@ -321,12 +368,30 @@ export default function ProjectScreen() {
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={styles.projectInfo}
       >
-        <Text style={styles.client}>{activeProject.clientName || 'Cliente non specificato'}</Text>
-        <Text style={styles.address}>{activeProject.address || 'Indirizzo non specificato'}</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.count}>
-            {openings.length} apertur{openings.length === 1 ? 'a' : 'e'}
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.client}>{activeProject.clientName || 'Cliente non specificato'}</Text>
+            <Text style={styles.address}>{activeProject.address || 'Indirizzo non specificato'}</Text>
+            {!!activeProject.clientPhone && (
+              <Text style={styles.address}>{activeProject.clientPhone}</Text>
+            )}
+          </View>
+          <TouchableOpacity onPress={openEditModal} style={styles.editBtn} activeOpacity={0.75}>
+            <Text style={styles.editBtnIcon}>✏️</Text>
+            <Text style={styles.editBtnText}>Modifica</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <View style={styles.countBadge}>
+            <Text style={styles.count}>
+              {openings.length} apertur{openings.length === 1 ? 'a' : 'e'}
+            </Text>
+          </View>
+          {totalEstimate > 0 && (
+            <View style={styles.estimateBadge}>
+              <Text style={styles.estimateText}>~ € {totalEstimate.toFixed(0)}</Text>
+            </View>
+          )}
         </View>
 
         {/* Tab strip — visibile solo se ci sono più progetti nella famiglia */}
@@ -403,6 +468,7 @@ export default function ProjectScreen() {
             onPress={() => navigation.navigate('Measurement', { projectId: activeProjectId, openingId: item.id })}
             onDelete={() => handleDelete(item.id)}
             onDuplicate={() => handleDuplicate(item)}
+            pricePerSqm={priceForStyle(item.style, prices) || undefined}
           />
         )}
       />
@@ -412,6 +478,45 @@ export default function ProjectScreen() {
         steps={tourSteps}
         onClose={() => { setTourVisible(false); setTourSeen('project'); }}
       />
+
+      {/* ── Edit Project Modal ── */}
+      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <Pressable style={{ flex: 1 }} onPress={() => setShowEditModal(false)} />
+          <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: 32 }]}>
+            <View style={styles.handle} />
+            <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Modifica progetto</Text>
+
+            {[
+              { label: 'Nome progetto', value: editName, set: setEditName, cap: 'words' as const, keyboard: 'default' as const },
+              { label: 'Cliente', value: editClient, set: setEditClient, cap: 'words' as const, keyboard: 'default' as const },
+              { label: 'Telefono', value: editPhone, set: setEditPhone, cap: 'none' as const, keyboard: 'phone-pad' as const },
+              { label: 'Indirizzo', value: editAddress, set: setEditAddress, cap: 'words' as const, keyboard: 'default' as const },
+            ].map(f => (
+              <View key={f.label} style={styles.editField}>
+                <Text style={styles.editLabel}>{f.label}</Text>
+                <TextInput
+                  style={[styles.editInput, { color: t.textPrimary, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC' }]}
+                  value={f.value}
+                  onChangeText={f.set}
+                  autoCapitalize={f.cap}
+                  keyboardType={f.keyboard}
+                  placeholderTextColor="#aab"
+                />
+              </View>
+            ))}
+
+            <TouchableOpacity style={styles.optBtn} onPress={handleSaveEdit} disabled={editSaving} activeOpacity={0.8}>
+              {editSaving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={[styles.optTitle, { color: '#fff' }]}>Salva modifiche</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancel} onPress={() => setShowEditModal(false)}>
+              <Text style={styles.cancelText}>Annulla</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* ── Export Modal ── */}
       <Modal visible={showExportModal} transparent animationType="fade" onRequestClose={() => setShowExportModal(false)}>
@@ -460,12 +565,29 @@ const styles = StyleSheet.create({
   projectInfo: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14 },
   client:      { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.1 },
   address:     { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 3 },
+  editBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10,
+    paddingVertical: 7, paddingHorizontal: 12, marginLeft: 8,
+  },
+  editBtnIcon: { fontSize: 13 },
+  editBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  editField:   { marginBottom: 12 },
+  editLabel:   { fontSize: 11, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 5 },
+  editInput:   { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 },
   countBadge:  {
-    marginTop: 12, alignSelf: 'flex-start',
+    alignSelf: 'flex-start',
     backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20,
     paddingHorizontal: 12, paddingVertical: 4,
   },
   count: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  estimateBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,180,0,0.25)', borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 4,
+    borderWidth: 1, borderColor: 'rgba(255,180,0,0.4)',
+  },
+  estimateText: { color: '#FFE082', fontSize: 12, fontWeight: '800' },
 
   // ── Tab strip ──
   tabStrip:   { marginTop: 14 },

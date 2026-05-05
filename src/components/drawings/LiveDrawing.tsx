@@ -437,25 +437,47 @@ function AnimatedOpening({ openingSide, leafCount, progress, isDoor = false }: A
   }
 
   if (openingSide === 'bottom') {
-    // Vasistas: cerniera in alto, maniglia in basso al centro
+    // Vasistas: cerniera in alto, maniglia in basso — una per ogni anta
     return (
       <G opacity={progress}>
-        <Line x1={GX+6} y1={GY+4} x2={GX2-6} y2={GY+4} stroke={c} strokeWidth={3} strokeLinecap="round"/>
-        <Line x1={CX} y1={GY2-M} x2={GX+M} y2={GY+M} stroke={c} strokeWidth={2} strokeLinecap="round"/>
-        <Line x1={CX} y1={GY2-M} x2={GX2-M} y2={GY+M} stroke={c} strokeWidth={2} strokeLinecap="round"/>
-        <HandleSymbol hx={CX} hy={GY2-20} leverRight={true} progress={1}/>
+        {Array.from({ length: n }).map((_, i) => {
+          const sx = GX + i * sashW, sx2 = sx + sashW;
+          const scx = (sx + sx2) / 2;
+          return (
+            <G key={i}>
+              {/* Cerniera in alto */}
+              <Line x1={sx+3} y1={GY+4} x2={sx2-3} y2={GY+4} stroke={c} strokeWidth={3} strokeLinecap="round"/>
+              {/* Linee a V dal basso verso l'alto */}
+              <Line x1={scx} y1={GY2-M} x2={sx+M} y2={GY+M} stroke={c} strokeWidth={1.8} strokeLinecap="round"/>
+              <Line x1={scx} y1={GY2-M} x2={sx2-M} y2={GY+M} stroke={c} strokeWidth={1.8} strokeLinecap="round"/>
+              {/* Maniglia in basso al centro dell'anta */}
+              <HandleSymbol hx={scx} hy={GY2-20} leverRight={true} progress={1}/>
+            </G>
+          );
+        })}
       </G>
     );
   }
 
   if (openingSide === 'top') {
-    // Vasistas inverso: cerniera in basso, maniglia in alto al centro
+    // Vasistas inverso: cerniera in basso, maniglia in alto — una per ogni anta
     return (
       <G opacity={progress}>
-        <Line x1={GX+6} y1={GY2-4} x2={GX2-6} y2={GY2-4} stroke={c} strokeWidth={3} strokeLinecap="round"/>
-        <Line x1={CX} y1={GY+M} x2={GX+M} y2={GY2-M} stroke={c} strokeWidth={2} strokeLinecap="round"/>
-        <Line x1={CX} y1={GY+M} x2={GX2-M} y2={GY2-M} stroke={c} strokeWidth={2} strokeLinecap="round"/>
-        <HandleSymbol hx={CX} hy={GY+20} leverRight={true} progress={1}/>
+        {Array.from({ length: n }).map((_, i) => {
+          const sx = GX + i * sashW, sx2 = sx + sashW;
+          const scx = (sx + sx2) / 2;
+          return (
+            <G key={i}>
+              {/* Cerniera in basso */}
+              <Line x1={sx+3} y1={GY2-4} x2={sx2-3} y2={GY2-4} stroke={c} strokeWidth={3} strokeLinecap="round"/>
+              {/* Linee a V dall'alto verso il basso */}
+              <Line x1={scx} y1={GY+M} x2={sx+M} y2={GY2-M} stroke={c} strokeWidth={1.8} strokeLinecap="round"/>
+              <Line x1={scx} y1={GY+M} x2={sx2-M} y2={GY2-M} stroke={c} strokeWidth={1.8} strokeLinecap="round"/>
+              {/* Maniglia in alto al centro dell'anta */}
+              <HandleSymbol hx={scx} hy={GY+20} leverRight={true} progress={1}/>
+            </G>
+          );
+        })}
       </G>
     );
   }
@@ -463,29 +485,37 @@ function AnimatedOpening({ openingSide, leafCount, progress, isDoor = false }: A
   return null;
 }
 
-// ─── Sliding indicator: n sashes, active one moves ───────────────────────────
+// ─── Sliding indicator: n sashes, active one(s) move ─────────────────────────
 function SlidingIndicator({ leafCount, openingSide, progress }: AnimProps) {
   const c = C_IND;
   const n = Math.max(2, leafCount);
   const sashW = GW / n;
 
-  // Which sash index slides?
-  let activeIdx = 0;
-  if (openingSide === 'left')         activeIdx = 0;
-  else if (openingSide === 'right')   activeIdx = n - 1;
-  else if (openingSide === 'center')  activeIdx = Math.floor(n / 2);
-  else if (openingSide === 'center-left')  activeIdx = 1;
-  else if (openingSide === 'center-right') activeIdx = n - 2;
+  // 'both' = first and last sash both slide (toward center)
+  const isBoth = openingSide === 'both';
 
-  // Arrow direction: left sashes slide right, right sashes slide left
-  const slidesRight = activeIdx < n / 2;
+  // Which sash index(es) slide?
+  let activeIdxs: number[] = [];
+  if (isBoth) {
+    activeIdxs = [0, n - 1];
+  } else {
+    let idx = 0;
+    if (openingSide === 'left')              idx = 0;
+    else if (openingSide === 'right')        idx = n - 1;
+    else if (openingSide === 'center')       idx = Math.floor(n / 2);
+    else if (openingSide === 'center-left')  idx = 1;
+    else if (openingSide === 'center-right') idx = n - 2;
+    activeIdxs = [idx];
+  }
 
   return (
     <G>
       {Array.from({ length: n }).map((_, i) => {
         const sx = GX + i * sashW;
         const gx = sx + ST, gy = GY + ST, gw = sashW - ST * 2, gh = GH - ST * 2;
-        const isActive = i === activeIdx;
+        const isActive = activeIdxs.includes(i);
+        // 'both': left sash slides right (toward center), right sash slides left
+        const slidesRight = isBoth ? i < n / 2 : activeIdxs[0] < n / 2;
         return (
           <G key={i}>
             <Rect x={sx} y={GY} width={sashW} height={GH}
@@ -495,12 +525,10 @@ function SlidingIndicator({ leafCount, openingSide, progress }: AnimProps) {
                   fill="url(#glass_grad)" stroke="#7AAFC8" strokeWidth={0.8}/>
             {isActive && (
               <G opacity={progress}>
-                {/* Slide arrow */}
                 <Line x1={sx + sashW * 0.25} y1={CY} x2={sx + sashW * 0.75} y2={CY}
                       stroke={c} strokeWidth={1.8}/>
                 <Path d={arrow(slidesRight ? sx + sashW * 0.75 : sx + sashW * 0.25, CY,
                                slidesRight ? 0 : Math.PI)} fill={c}/>
-                {/* Handle on opposite side of arrow */}
                 <Rect x={slidesRight ? sx + 3 : sx + sashW - 8}
                       y={CY - 10} width={5} height={20} rx={2.5} fill={c}/>
               </G>
