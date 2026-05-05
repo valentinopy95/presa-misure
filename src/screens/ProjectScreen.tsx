@@ -8,15 +8,13 @@ import * as AppAlert from '../components/AppAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
-import { Asset } from 'expo-asset';
 import { v4 as uuidv4 } from 'uuid';
 import { Project, Opening, OpeningStyle, RootStackParamList } from '../types';
 import { getProject, getProjectFamily, deleteOpening, saveOpening, deleteProject, saveProject } from '../storage/database';
-import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig } from '../storage/settings';
-import { generateHTML } from '../utils/pdfExport';
+import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail } from '../storage/settings';
+import { generateHTML, generateCuttingListHTML } from '../utils/pdfExport';
+import { calculateCuttingList } from '../utils/calculateMaterials';
+import { getLogoBase64, sharePdf, saveToDevice } from '../utils/pdfActions';
 import OpeningCard from '../components/OpeningCard';
 import { useTheme } from '../contexts/ThemeContext';
 import TourModal, { TourStep, SpotRect } from '../components/TourModal';
@@ -175,79 +173,48 @@ export default function ProjectScreen() {
   }, [family, activeProjectId, navigation, openTour]);
 
   // ── PDF ────────────────────────────────────────────────────────────────────
-  const getLogoBase64 = async (): Promise<string | undefined> => {
-    try {
-      const asset = Asset.fromModule(require('../../assets/mascote.png'));
-      await asset.downloadAsync();
-      if (!asset.localUri) return undefined;
-      return await FileSystem.readAsStringAsync(asset.localUri, { encoding: FileSystem.EncodingType.Base64 as any });
-    } catch { return undefined; }
-  };
-
-  const buildPDF = async (): Promise<string> => {
-    if (!activeProject) throw new Error('no project');
-    const tolW = await getToleranceW();
-    const tolH = await getToleranceH();
-    const logo = await getLogoBase64();
-    const html = generateHTML(activeProject, tolW, tolH, logo, { prices });
-    const { uri: tmp } = await Print.printToFileAsync({ html, base64: false });
-    const safe = activeProject.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim();
-    const dest  = `${FileSystem.documentDirectory}${safe}.pdf`;
-    await FileSystem.copyAsync({ from: tmp, to: dest });
-    return dest;
-  };
-
-  const handleShare = async () => {
+  const handlePdfAction = async (
+    pdfType: 'rilievo' | 'sviluppo' | 'distinta',
+    action: 'share' | 'save',
+  ) => {
     setShowExportModal(false);
     setExporting(true);
     try {
-      if (Platform.OS === 'web') {
-        const tolW = await getToleranceW();
-        const tolH = await getToleranceH();
-        const html = generateHTML(activeProject!, tolW, tolH, await getLogoBase64(), { prices });
-        const blob = new Blob([html], { type: 'text/html' });
-        const url  = URL.createObjectURL(blob);
-        const tab  = window.open(url, '_blank');
-        if (tab) setTimeout(() => URL.revokeObjectURL(url), 2000);
-        return;
-      }
-      const uri = await buildPDF();
-      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: `Rilievo - ${activeProject?.name}` });
-    } catch { AppAlert.show('Errore', 'Impossibile generare il PDF.'); }
-    finally   { setExporting(false); }
-  };
-
-  const handleSaveToDevice = async () => {
-    setShowExportModal(false);
-    setExporting(true);
-    try {
+      const [tolW, tolH, logo, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop] =
+        await Promise.all([
+          getToleranceW(), getToleranceH(), getLogoBase64(),
+          getRiattestattura(), getBarLength(), getKerf90(), getSafetyMargin(),
+          getSlatPitch(), getZoccoloH(), getFasciaH(), getAntaReduction(), getAntaTopRail(),
+        ]);
+      const matConfig = {
+        riattestattura: riatt, barLength: barLen, kerf90: kerf,
+        safetyMarginPct: margin, slatPitch: slatP, zoccoloH: zocH,
+        fasciaH: fasH, antaReduction: antaRed, antaTopRail: antaTop,
+      };
       const safe = activeProject!.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim();
-      if (Platform.OS === 'web') {
-        const tolW = await getToleranceW();
-        const tolH = await getToleranceH();
-        const html = generateHTML(activeProject!, tolW, tolH, await getLogoBase64(), { prices });
-        const blob = new Blob([html], { type: 'text/html' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href = url; a.download = `${safe}_rilievo.html`; a.click();
-        URL.revokeObjectURL(url);
-        return;
-      }
-      const src      = await buildPDF();
-      const fileName = `${safe}.pdf`;
-      if (Platform.OS === 'android') {
-        const { StorageAccessFramework } = FileSystem;
-        const perms = await StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (!perms.granted) { setExporting(false); return; }
-        const dest    = await StorageAccessFramework.createFileAsync(perms.directoryUri, fileName, 'application/pdf');
-        const content = await FileSystem.readAsStringAsync(src, { encoding: FileSystem.EncodingType.Base64 });
-        await FileSystem.writeAsStringAsync(dest, content, { encoding: FileSystem.EncodingType.Base64 });
-        AppAlert.show('Salvato!', `"${fileName}" salvato nella cartella scelta.`);
+
+      let html: string;
+      let filename: string;
+
+      if (pdfType === 'rilievo') {
+        html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'misure', prices });
+        filename = `${safe}_rilievo`;
+      } else if (pdfType === 'sviluppo') {
+        html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'materiale', materialsConfig: matConfig, prices });
+        filename = `${safe}_sviluppo`;
       } else {
-        await Sharing.shareAsync(src, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: `Salva - ${activeProject?.name}` });
+        const cuttingResult = calculateCuttingList(activeProject!.openings, matConfig);
+        html = generateCuttingListHTML(activeProject!, cuttingResult, logo);
+        filename = `${safe}_distinta`;
       }
-    } catch { AppAlert.show('Errore', 'Impossibile salvare il PDF.'); }
-    finally   { setExporting(false); }
+
+      if (action === 'share') {
+        await sharePdf(html, filename);
+      } else {
+        await saveToDevice(html, filename);
+      }
+    } catch { AppAlert.show('Errore', 'Impossibile generare il PDF.'); }
+    finally  { setExporting(false); }
   };
 
   // ── Aperture ───────────────────────────────────────────────────────────────
@@ -520,37 +487,55 @@ export default function ProjectScreen() {
 
       {/* ── Export Modal ── */}
       <Modal visible={showExportModal} transparent animationType="fade" onRequestClose={() => setShowExportModal(false)}>
-        <Pressable style={styles.overlay} onPress={() => setShowExportModal(false)}>
+        <Pressable style={styles.overlay} onPress={() => !exporting && setShowExportModal(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: t.card }]} onPress={() => {}}>
             <View style={styles.handle} />
             <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Esporta PDF</Text>
-            {activeProject && (
-              <Text style={styles.sheetFile}>
-                {activeProject.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim()}{Platform.OS === 'web' ? '_rilievo.html' : '.pdf'}
-              </Text>
+
+            {exporting ? (
+              <View style={{ alignItems: 'center', paddingVertical: 28 }}>
+                <ActivityIndicator color="#1565C0" size="large" />
+                <Text style={{ color: '#888', marginTop: 12, fontSize: 13 }}>Generazione in corso…</Text>
+              </View>
+            ) : (
+              <>
+                {([
+                  { type: 'rilievo',  icon: '📄', title: 'Rilievo misure',     sub: 'Elenco aperture con misure e note' },
+                  { type: 'sviluppo', icon: '📊', title: 'Sviluppo materiale', sub: 'Barre e profili da ordinare' },
+                  { type: 'distinta', icon: '✂️', title: 'Distinta di taglio', sub: 'Sequenza di taglio barra per barra' },
+                ] as const).map(item => (
+                  <View key={item.type} style={styles.pdfTypeRow}>
+                    <View style={styles.pdfTypeLabel}>
+                      <Text style={styles.pdfTypeIcon}>{item.icon}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.pdfTypeTitle}>{item.title}</Text>
+                        <Text style={styles.pdfTypeSub}>{item.sub}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.pdfTypeActions}>
+                      <TouchableOpacity
+                        style={styles.pdfActionBtn}
+                        onPress={() => handlePdfAction(item.type, 'share')}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.pdfActionIcon}>📤</Text>
+                        <Text style={styles.pdfActionText}>Condividi</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.pdfActionBtn, styles.pdfActionBtnSave]}
+                        onPress={() => handlePdfAction(item.type, 'save')}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.pdfActionIcon}>💾</Text>
+                        <Text style={[styles.pdfActionText, { color: '#1565C0' }]}>Salva</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </>
             )}
 
-            <TouchableOpacity style={styles.optBtn} onPress={handleShare} activeOpacity={0.8}>
-              <Text style={styles.optIcon}>📤</Text>
-              <View>
-                <Text style={styles.optTitle}>{Platform.OS === 'web' ? 'Apri nel browser' : 'Condividi'}</Text>
-                <Text style={styles.optSub}>{Platform.OS === 'web' ? 'Stampa o salva come PDF dal browser' : 'Apri nelle app del dispositivo'}</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.optBtn, styles.optBtnAlt]} onPress={handleSaveToDevice} activeOpacity={0.8}>
-              <Text style={styles.optIcon}>💾</Text>
-              <View>
-                <Text style={[styles.optTitle, { color: '#1565C0' }]}>
-                  {Platform.OS === 'web' ? 'Scarica HTML' : Platform.OS === 'ios' ? 'Salva su File' : 'Salva sul dispositivo'}
-                </Text>
-                <Text style={[styles.optSub, { color: '#7a9cc0' }]}>
-                  {Platform.OS === 'web' ? 'Scarica e apri nel browser per stampare' : Platform.OS === 'ios' ? 'Salva in File tramite share sheet' : 'Scegli una cartella di destinazione'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.cancel} onPress={() => setShowExportModal(false)}>
+            <TouchableOpacity style={styles.cancel} onPress={() => setShowExportModal(false)} disabled={exporting}>
               <Text style={styles.cancelText}>Annulla</Text>
             </TouchableOpacity>
           </Pressable>
@@ -637,4 +622,24 @@ const styles = StyleSheet.create({
   optSub:     { fontSize: 11, color: 'rgba(255,255,255,0.75)' },
   cancel:     { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
   cancelText: { fontSize: 15, color: '#888', fontWeight: '600' },
+
+  // ── PDF type rows ──
+  pdfTypeRow: {
+    borderTopWidth: 1, borderTopColor: '#F0F4F8',
+    paddingVertical: 12, gap: 8,
+  },
+  pdfTypeLabel: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  pdfTypeIcon:  { fontSize: 20 },
+  pdfTypeTitle: { fontSize: 14, fontWeight: '700', color: '#1a2a3a' },
+  pdfTypeSub:   { fontSize: 11, color: '#888', marginTop: 1 },
+  pdfTypeActions: { flexDirection: 'row', gap: 8 },
+  pdfActionBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 5, backgroundColor: '#1565C0', borderRadius: 10, paddingVertical: 9,
+  },
+  pdfActionBtnSave: {
+    backgroundColor: '#EEF4FF', borderWidth: 1.5, borderColor: '#1565C0',
+  },
+  pdfActionIcon: { fontSize: 14 },
+  pdfActionText: { fontSize: 13, fontWeight: '700', color: '#fff' },
 });

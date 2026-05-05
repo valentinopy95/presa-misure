@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
-  TouchableOpacity,
+  TouchableOpacity, Modal, Pressable,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+import * as AppAlert from '../components/AppAlert';
 import { RootStackParamList, Project } from '../types';
+import { sharePdf, saveToDevice } from '../utils/pdfActions';
 import { getProject } from '../storage/database';
 import {
   getRiattestattura, getBarLength, getKerf90, getSafetyMargin,
@@ -34,11 +34,13 @@ export default function CuttingListScreen() {
   const navigation = useNavigation<Nav>();
   const { projectId } = route.params;
 
-  const [project,  setProject]  = useState<Project | null>(null);
-  const [result,   setResult]   = useState<CuttingListResult | null>(null);
-  const [config,   setConfig]   = useState<{ barLength: number; riattestattura: number; kerf90: number; antaReduction: number } | null>(null);
-  const [presets,  setPresets]  = useState<SettingsPreset[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [project,      setProject]      = useState<Project | null>(null);
+  const [result,       setResult]       = useState<CuttingListResult | null>(null);
+  const [config,       setConfig]       = useState<{ barLength: number; riattestattura: number; kerf90: number; antaReduction: number } | null>(null);
+  const [presets,      setPresets]      = useState<SettingsPreset[]>([]);
+  const [activeId,     setActiveId]     = useState<string | null>(null);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfBusy,      setPdfBusy]      = useState(false);
 
   const loadAndCalculate = useCallback(async () => {
     const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop] = await Promise.all([
@@ -73,27 +75,34 @@ export default function CuttingListScreen() {
   projectRef.current = project;
   resultRef.current  = result;
 
-  const handlePdf = useCallback(async () => {
+  const handlePdfAction = useCallback(async (action: 'share' | 'save') => {
     const p = projectRef.current;
     const r = resultRef.current;
     if (!p || !r) return;
-    const html = generateCuttingListHTML(p, r);
+    setShowPdfModal(false);
+    setPdfBusy(true);
     try {
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
-      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
-    } catch { /* ignore */ }
+      const html = generateCuttingListHTML(p, r);
+      const safe = p.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim();
+      if (action === 'share') {
+        await sharePdf(html, `${safe}_distinta`);
+      } else {
+        await saveToDevice(html, `${safe}_distinta`);
+      }
+    } catch { AppAlert.show('Errore', 'Impossibile generare il PDF.'); }
+    finally  { setPdfBusy(false); }
   }, []);
 
   useEffect(() => {
     navigation.setOptions({
       title: 'Distinta di taglio',
       headerRight: () => (
-        <TouchableOpacity onPress={handlePdf} style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
+        <TouchableOpacity onPress={() => setShowPdfModal(true)} style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
           <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>PDF</Text>
         </TouchableOpacity>
       ),
     });
-  }, [navigation, handlePdf]);
+  }, [navigation]);
 
   if (!project || !result || !config) {
     return <View style={s.loading}><ActivityIndicator color="#1565C0" size="large"/></View>;
@@ -102,6 +111,7 @@ export default function CuttingListScreen() {
   const hasData = result.profiles45.length > 0 || result.profiles90.length > 0;
 
   return (
+    <>
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
       {/* Preset strip */}
@@ -200,6 +210,43 @@ export default function CuttingListScreen() {
 
       <View style={{ height: 40 }}/>
     </ScrollView>
+
+    {/* ── PDF Modal ── */}
+    <Modal visible={showPdfModal} transparent animationType="fade" onRequestClose={() => setShowPdfModal(false)}>
+      <Pressable style={pdfM.overlay} onPress={() => !pdfBusy && setShowPdfModal(false)}>
+        <Pressable style={pdfM.sheet} onPress={() => {}}>
+          <View style={pdfM.handle}/>
+          <Text style={pdfM.title}>Esporta distinta di taglio</Text>
+          {pdfBusy ? (
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <ActivityIndicator color="#1565C0" size="large"/>
+              <Text style={{ color: '#888', marginTop: 10, fontSize: 13 }}>Generazione in corso…</Text>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity style={pdfM.btn} onPress={() => handlePdfAction('share')} activeOpacity={0.8}>
+                <Text style={pdfM.btnIcon}>📤</Text>
+                <View>
+                  <Text style={pdfM.btnTitle}>Condividi</Text>
+                  <Text style={pdfM.btnSub}>Apri nelle app del dispositivo</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity style={[pdfM.btn, pdfM.btnAlt]} onPress={() => handlePdfAction('save')} activeOpacity={0.8}>
+                <Text style={pdfM.btnIcon}>💾</Text>
+                <View>
+                  <Text style={[pdfM.btnTitle, { color: '#1565C0' }]}>Salva sul dispositivo</Text>
+                  <Text style={[pdfM.btnSub, { color: '#7a9cc0' }]}>Scegli la cartella di destinazione</Text>
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity style={pdfM.cancel} onPress={() => setShowPdfModal(false)} disabled={pdfBusy}>
+            <Text style={pdfM.cancelText}>Annulla</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
@@ -439,4 +486,18 @@ const warn = StyleSheet.create({
   rowAlt: { backgroundColor: '#FFF5F5' },
   icon:   { fontSize: 14, marginRight: 8, marginTop: 1 },
   text:   { flex: 1, fontSize: 13, color: '#C62828', lineHeight: 18 },
+});
+
+const pdfM = StyleSheet.create({
+  overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet:      { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 36 },
+  handle:     { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 18 },
+  title:      { fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 16 },
+  btn:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#1565C0', borderRadius: 14, padding: 16, marginBottom: 10 },
+  btnAlt:     { backgroundColor: '#EEF4FF', borderWidth: 1.5, borderColor: '#1565C0' },
+  btnIcon:    { fontSize: 24 },
+  btnTitle:   { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 1 },
+  btnSub:     { fontSize: 11, color: 'rgba(255,255,255,0.75)' },
+  cancel:     { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
+  cancelText: { fontSize: 15, color: '#888', fontWeight: '600' },
 });

@@ -50,14 +50,6 @@ function indicator(style: OpeningStyle, boxHeight: number | null): string {
         <path d="M ${GX+3} ${GY} Q ${GX2-3} ${GY} ${GX2-3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
         <line x1="${GX2-14}" y1="${CY-4}" x2="${GX2-14}" y2="${CY+4}" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`;
 
-    case 'window_double':
-      return `
-        <line x1="${CX}" y1="${GY}" x2="${CX}" y2="${GY2}" stroke="${col}" stroke-width="1.5"/>
-        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX+3} ${GY} Q ${CX-3} ${GY} ${CX-3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
-        <line x1="${GX2-3}" y1="${GY}" x2="${GX2-3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX2-3} ${GY} Q ${CX+3} ${GY} ${CX+3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>`;
-
     case 'window_sliding':
       return `
         <rect x="${GX}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(26,82,150,0.06)" stroke="${col}" stroke-width="1"/>
@@ -81,46 +73,12 @@ function indicator(style: OpeningStyle, boxHeight: number | null): string {
         <path d="M ${GX+3} ${GY2} A ${GH*0.85} ${GH*0.85} 0 0 1 ${Math.min(GX2-3, GX+3+GH*0.85)} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
         <rect x="${GX2-12}" y="${CY-8}" width="5" height="16" rx="2.5" fill="${col}"/>`;
 
-    case 'door_double':
-      return `
-        <line x1="${CX}" y1="${FY}" x2="${CX}" y2="${FY+FH}" stroke="#aabccc" stroke-width="${FT+2}"/>
-        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX+3} ${GY2} A ${GH*0.82} ${GH*0.82} 0 0 1 ${Math.min(CX-2, GX+3+GH*0.82)} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
-        <line x1="${GX2-3}" y1="${GY}" x2="${GX2-3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX2-3} ${GY2} A ${GH*0.82} ${GH*0.82} 0 0 0 ${Math.max(CX+2, GX2-3-GH*0.82)} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>`;
-
     case 'door_sliding':
       return `
         <rect x="${GX}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(26,82,150,0.06)" stroke="${col}" stroke-width="1"/>
         <rect x="${CX-6}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(255,255,255,0.15)" stroke="${col}" stroke-width="2"/>
         <rect x="${CX-3}" y="${CY-8}" width="4" height="16" rx="2" fill="${col}"/>
         <text x="${CX}" y="${GY2-6}" text-anchor="middle" font-size="7" fill="${col}" font-weight="700" font-family="Arial,sans-serif">SCOR.</text>`;
-
-    case 'door_french': {
-      const _fH = 10;
-      const _fY = Math.round(GY + GH * 0.58 - _fH / 2);
-      return `
-        <line x1="${CX}" y1="${FY}" x2="${CX}" y2="${FY+FH}" stroke="#aabccc" stroke-width="${FT+2}"/>
-        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX+3} ${GY} A ${GW/2-6} ${GW/2-6} 0 0 0 ${GX+3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
-        <line x1="${GX2-3}" y1="${GY}" x2="${GX2-3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX2-3} ${GY} A ${GW/2-6} ${GW/2-6} 0 0 1 ${GX2-3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
-        <rect x="${GX}" y="${_fY}" width="${GW}" height="${_fH}" fill="#c8d4df" stroke="#4a6070" stroke-width="1.2"/>
-        <line x1="${GX+3}" y1="${_fY+3}" x2="${GX2-3}" y2="${_fY+3}" stroke="rgba(255,255,255,0.5)" stroke-width="0.7"/>
-        <line x1="${GX+3}" y1="${_fY+_fH-3}" x2="${GX2-3}" y2="${_fY+_fH-3}" stroke="rgba(60,90,120,0.2)" stroke-width="0.6"/>`;
-    }
-
-    case 'door_bifold': {
-      const pL = GX + GW * 0.25, pR = GX + GW * 0.75, pY = GY + 16;
-      const arcR = GW / 2 - 6;
-      return `
-        <line x1="${GX+4}" y1="${GY2-4}" x2="${pL}" y2="${pY}" stroke="${col}" stroke-width="2"/>
-        <line x1="${pL}" y1="${pY}" x2="${CX-4}" y2="${GY2-4}" stroke="${col}" stroke-width="2"/>
-        <line x1="${CX+4}" y1="${GY2-4}" x2="${pR}" y2="${pY}" stroke="${col}" stroke-width="2"/>
-        <line x1="${pR}" y1="${pY}" x2="${GX2-4}" y2="${GY2-4}" stroke="${col}" stroke-width="2"/>
-        <path d="M ${GX+4} ${GY2-4} A ${arcR} ${arcR} 0 0 0 ${CX} ${GY2-4}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
-        <path d="M ${CX} ${GY2-4} A ${arcR} ${arcR} 0 0 0 ${GX2-4} ${GY2-4}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>`;
-    }
 
     case 'shutter_single': {
       const slats = 7, slH = FH / slats;
@@ -281,15 +239,12 @@ function svgForStyle(style: OpeningStyle | null, boxHeight: number | null): stri
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
 const STYLE_LABELS: Partial<Record<OpeningStyle, string>> = {
+  window_fixed:     'Finestra fissa',
   window_single:    'Finestra battente',
-  window_double:    'Finestra doppia',
   window_sliding:   'Finestra scorrevole',
   window_tilt_turn: 'Finestra vasistas',
   door_single:      'Porta singola',
-  door_double:      'Porta doppia',
   door_sliding:     'Porta scorrevole',
-  door_french:      'Porta finestra',
-  door_bifold:      'Porta a libro',
   door_entrance:    'Portoncino ingresso',
   shutter_single:   'Persiana singola',
   shutter_double:   'Persiana portafinestra',
@@ -298,6 +253,7 @@ const STYLE_LABELS: Partial<Record<OpeningStyle, string>> = {
   mosquito_fixed:   'Zanzariera fissa',
   mosquito_rollup:  'Zanzariera avvolgibile',
   mosquito_lateral: 'Zanzariera laterale',
+  custom:           'Elemento personalizzato',
 };
 
 function dim(v: number | null) { return v != null ? `${v}` : '—'; }
@@ -325,6 +281,12 @@ function openingRow(
   if (o.hasSoglia) opts.push('Soglia ribassata');
   if (o.hasBattente) opts.push('Battente');
   if (o.hasFascia) opts.push('Fascia');
+  if (o.outOfSquare) {
+    const parts: string[] = [];
+    if (o.heightLeft != null)  parts.push(`Sx ${o.heightLeft}mm`);
+    if (o.heightRight != null) parts.push(`Dx ${o.heightRight}mm`);
+    opts.push(`Fuori squadra${parts.length ? ` (${parts.join(', ')})` : ''}`);
+  }
 
   const photos = photoMap?.[o.id] ?? [];
 
@@ -340,6 +302,7 @@ function openingRow(
       <div style="font-size:9px;color:#555;font-style:italic;margin-top:2px;">${styleLabel}</div>
       ${o.profileSeries ? `<div style="font-size:9px;color:#1565C0;font-weight:700;margin-top:3px;">Serie: ${o.profileSeries}</div>` : ''}
       ${o.glassType ? `<div style="font-size:9px;color:#2E7D32;margin-top:1px;">Vetro: ${o.glassType}</div>` : ''}
+      ${o.viewSide ? `<span style="display:inline-block;background:${o.viewSide==='interno'?'#E3F2FD':'#E8F5E9'};color:${o.viewSide==='interno'?'#1565C0':'#2E7D32'};font-size:8px;font-weight:700;padding:2px 7px;border-radius:4px;margin-top:4px;">${o.viewSide==='interno'?'INTERNO':'ESTERNO'}</span>` : ''}
       ${opts.length > 0 ? `<div style="font-size:8px;color:#888;margin-top:4px;">${opts.join(' · ')}</div>` : ''}
     </td>
     <td style="padding:8px 12px; border-right:1px solid #eee; white-space:nowrap; text-align:center; vertical-align:top;">

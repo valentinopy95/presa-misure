@@ -24,7 +24,16 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.valen.presamisure"
+      "package": "com.valen.presamisure",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -33,7 +42,26 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-web-browser"
-    ]
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Misu usa la fotocamera per scattare foto durante il rilievo.",
+          "photosPermission": "Misu accede alle foto per allegare immagini al rilievo."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Misu usa il microfono per registrare note vocali durante il rilievo."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ffb78a00-3421-4e07-a35b-0796c796c4d7"
+      }
+    },
+    "owner": "valentinopy"
   }
 }

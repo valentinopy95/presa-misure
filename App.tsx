@@ -1,8 +1,9 @@
 import 'react-native-get-random-values';
 import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
-import { TouchableOpacity, Text } from 'react-native';
+import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import NetInfo from '@react-native-community/netinfo';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ThemeProvider } from './src/contexts/ThemeContext';
@@ -114,10 +115,38 @@ function AppContent() {
   return <AppNavigator />;
 }
 
+function OfflineBanner() {
+  const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener(state => {
+      setOffline(state.isConnected === false);
+    });
+    return unsub;
+  }, []);
+
+  if (!offline) return null;
+  return (
+    <View style={ob.banner}>
+      <Text style={ob.text}>⚠️  Nessuna connessione — alcune funzioni non sono disponibili</Text>
+    </View>
+  );
+}
+
+const ob = StyleSheet.create({
+  banner: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999,
+    backgroundColor: '#B71C1C', paddingVertical: 8, paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  text: { color: '#fff', fontSize: 12, fontWeight: '700', textAlign: 'center' },
+});
+
 export default function App() {
   return (
     <ThemeProvider>
       <AppContent />
+      <OfflineBanner />
       <AppAlert.Host />
     </ThemeProvider>
   );

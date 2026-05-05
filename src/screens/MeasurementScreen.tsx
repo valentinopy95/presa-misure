@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, TextInput, StyleSheet, ScrollView,
   TouchableOpacity, Image, Dimensions, Modal, Pressable,
 } from 'react-native';
+import { Platform } from 'react-native';
+// expo-av recording not supported on web
+const Audio = Platform.OS !== 'web' ? require('expo-av').Audio : null;
 import * as AppAlert from '../components/AppAlert';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -99,6 +102,10 @@ export default function MeasurementScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [tourVisible, setTourVisible] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlaying,   setIsPlaying]   = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const soundRef     = useRef<Audio.Sound | null>(null);
 
   const MEASUREMENT_TOUR: TourStep[] = [
     {
@@ -230,6 +237,59 @@ export default function MeasurementScreen() {
 
   const removePhoto = (id: string) =>
     update({ photos: opening.photos.filter(p => p.id !== id) });
+
+  const startRecording = async () => {
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) { AppAlert.show('Permesso negato', 'Consenti l\'accesso al microfono nelle impostazioni del dispositivo.'); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recordingRef.current = recording;
+      setIsRecording(true);
+    } catch { AppAlert.show('Errore', 'Impossibile avviare la registrazione.'); }
+  };
+
+  const stopRecording = async () => {
+    if (!recordingRef.current) return;
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      const status = await recordingRef.current.getStatusAsync();
+      const uri = recordingRef.current.getURI();
+      if (uri) {
+        update({ audioNote: { uri, duration: (status as any).durationMillis ?? 0, createdAt: new Date().toISOString() } });
+      }
+      recordingRef.current = null;
+      setIsRecording(false);
+    } catch { setIsRecording(false); }
+  };
+
+  const playAudio = async () => {
+    if (!opening.audioNote) return;
+    try {
+      if (soundRef.current) { await soundRef.current.unloadAsync(); soundRef.current = null; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync({ uri: opening.audioNote.uri });
+      soundRef.current = sound;
+      setIsPlaying(true);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate(s => { if ((s as any).didJustFinish) setIsPlaying(false); });
+    } catch { setIsPlaying(false); AppAlert.show('Errore', 'Impossibile riprodurre la registrazione.'); }
+  };
+
+  const stopAudio = async () => {
+    if (soundRef.current) { await soundRef.current.stopAsync(); setIsPlaying(false); }
+  };
+
+  const deleteAudio = () => {
+    if (soundRef.current) { soundRef.current.unloadAsync(); soundRef.current = null; }
+    setIsPlaying(false);
+    update({ audioNote: null });
+  };
+
+  const formatDuration = (ms: number) => {
+    const s = Math.round(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
 
   const handleSavePress = () => {
     if (!opening.name.trim()) {
@@ -742,6 +802,44 @@ export default function MeasurementScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ── Nota audio (solo nativo) ── */}
+      {Platform.OS !== 'web' && (
+        <>
+          <Text style={styles.label}>Nota vocale</Text>
+          <View style={styles.photoLocalNote}>
+            <Text style={styles.photoLocalNoteText}>
+              🎙️ Le note vocali vengono salvate solo su questo dispositivo. Se si cambia telefono o si disinstalla l'app, le registrazioni vengono perse.
+            </Text>
+          </View>
+          {opening.audioNote ? (
+            <View style={styles.audioCard}>
+              <Text style={styles.audioIcon}>🎙️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.audioLabel}>Registrazione</Text>
+                <Text style={styles.audioDuration}>{formatDuration(opening.audioNote.duration)}</Text>
+              </View>
+              <TouchableOpacity style={styles.audioBtn} onPress={isPlaying ? stopAudio : playAudio} activeOpacity={0.75}>
+                <Text style={styles.audioBtnText}>{isPlaying ? '⏹ Stop' : '▶ Play'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.audioBtn, styles.audioBtnDelete]} onPress={deleteAudio} activeOpacity={0.75}>
+                <Text style={styles.audioBtnDeleteText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.addPhotoBtn, isRecording && styles.audioRecordingBtn]}
+              onPress={isRecording ? stopRecording : startRecording}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.addPhotoIcon}>{isRecording ? '⏹' : '🎙️'}</Text>
+              <Text style={[styles.addPhotoText, isRecording && { color: '#C62828' }]}>
+                {isRecording ? 'Stop registrazione' : 'Avvia registrazione'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
+
       {/* ── Salva ── */}
       <TouchableOpacity
         style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
@@ -905,6 +1003,24 @@ const styles = StyleSheet.create({
   },
   addPhotoIcon: { fontSize: 22 },
   addPhotoText: { fontSize: 13, color: '#1565C0', fontWeight: '700' },
+
+  audioRecordingBtn: { borderColor: '#C62828', backgroundColor: '#FFF5F5' },
+  audioCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fff', borderRadius: 12, padding: 14,
+    borderWidth: 1.5, borderColor: '#DDE8F0', marginBottom: 8,
+    elevation: 1,
+  },
+  audioIcon:     { fontSize: 26 },
+  audioLabel:    { fontSize: 13, fontWeight: '700', color: '#1a2a3a' },
+  audioDuration: { fontSize: 11, color: '#7a8a9a', marginTop: 2 },
+  audioBtn: {
+    backgroundColor: '#1565C0', borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 7,
+  },
+  audioBtnText:       { color: '#fff', fontSize: 12, fontWeight: '700' },
+  audioBtnDelete:     { backgroundColor: '#FEE8E8' },
+  audioBtnDeleteText: { color: '#C62828', fontSize: 14, fontWeight: '800' },
 
   // Profile series chips
   chipScroll: { marginBottom: 4 },

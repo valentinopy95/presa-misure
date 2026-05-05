@@ -9,10 +9,7 @@ export type OpeningStyle =
   | 'window_tilt_turn'
   // Porte
   | 'door_single'
-  | 'door_double'
   | 'door_sliding'
-  | 'door_french'
-  | 'door_bifold'
   | 'door_entrance'
   // Persiane
   | 'shutter_single'

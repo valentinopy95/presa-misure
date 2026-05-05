@@ -32,11 +32,11 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'Come aggiungo un\'apertura?',
-        a: 'All\'interno di un rilievo premi il pulsante "+" in basso a destra. Seleziona prima la tipologia dell\'apertura (finestra, porta, persiana…), poi inserisci le misure e le opzioni.',
+        a: 'All\'interno di un rilievo premi il pulsante "Aggiungi" nella barra degli strumenti in alto. Seleziona prima la tipologia dell\'apertura, poi inserisci le misure e le opzioni.',
       },
       {
         q: 'Quali tipologie sono disponibili?',
-        a: 'Finestre: singola, doppia, scorrevole, vasistas.\nPorte: singola, doppia, scorrevole, portafinestra, pieghevole, d\'ingresso.\nPersiane: singola, doppia.\nMonoblocco con tapparella.\nControtelaio.\nZanzariere: fissa, avvolgibile, laterale.',
+        a: 'Finestre: battente, scorrevole, vasistas, fissa.\nPorte: singola, scorrevole, portoncino d\'ingresso.\nPersiane: singola, portafinestra.\nMonoblocco con tapparella.\nControtelaio.\nZanzariere: fissa, avvolgibile, laterale.\nPersonalizzata: per misure libere senza calcolo materiale.',
       },
       {
         q: 'Come modifico un\'apertura già inserita?',
@@ -91,8 +91,12 @@ const SECTIONS: Section[] = [
         a: 'La fascia è il profilo centrale orizzontale delle porte doppie (divide le due ante a metà altezza). Viene aggiunta alla sezione "Taglio a 90°".',
       },
       {
-        q: 'Come aggiungo note e foto?',
-        a: 'Nella schermata di modifica apertura scorri verso il basso. Trovi il campo testo per le note, il pulsante per scattare/allegare foto e il pulsante per registrare una nota vocale.',
+        q: 'Cos\'è il lato vista (Interno/Esterno)?',
+        a: 'Durante il rilievo puoi indicare da che lato stai misurando l\'apertura: Interno o Esterno. Questa info appare nel riepilogo del rilievo e nel PDF come etichetta colorata.',
+      },
+      {
+        q: 'Come aggiungo note, foto e audio?',
+        a: 'Nella schermata di rilievo scorri verso il basso. Trovi il campo testo per le note, il pulsante per scattare o allegare foto, e il pulsante per registrare una nota vocale. Foto e audio vengono salvati solo sul dispositivo.',
       },
     ],
   },
@@ -180,15 +184,19 @@ const SECTIONS: Section[] = [
   },
   {
     icon: '📄',
-    title: 'Documento rilievo',
+    title: 'Esportazione PDF',
     items: [
       {
-        q: 'Come genero il documento del rilievo?',
-        a: 'Dall\'interno del rilievo premi il pulsante "Documento". Viene generato un PDF con l\'elenco completo delle aperture, le misure e tutte le opzioni configurate.',
+        q: 'Quanti tipi di PDF posso generare?',
+        a: 'Tre tipi distinti:\n• Rilievo misure — elenco aperture con misure, note e foto\n• Sviluppo materiale — barre e profili da ordinare\n• Distinta di taglio — sequenza di taglio barra per barra',
       },
       {
-        q: 'Posso condividere il documento?',
-        a: 'Sì. Una volta generato il PDF, puoi condividerlo tramite email, WhatsApp o qualsiasi altra app di condivisione installata sul dispositivo.',
+        q: 'Come esporto i PDF dal rilievo?',
+        a: 'Dall\'interno del rilievo premi il pulsante "PDF" nella barra degli strumenti. Apparirà un menù con i 3 tipi di PDF: per ognuno puoi scegliere "Condividi" (apre le app del dispositivo) oppure "Salva" (salva in una cartella a tua scelta).',
+      },
+      {
+        q: 'Come esporto il PDF da Sviluppo materiale o Distinta taglio?',
+        a: 'In entrambe le schermate trovi il pulsante "PDF" in alto a destra. Tocca per scegliere se condividere o salvare sul dispositivo il PDF relativo a quella schermata.',
       },
     ],
   },

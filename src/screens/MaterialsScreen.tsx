@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
-  TouchableOpacity, Alert, Modal, TextInput,
+  TouchableOpacity, Modal, Pressable,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,9 +10,13 @@ import { getProject } from '../storage/database';
 import {
   getRiattestattura, getBarLength, getKerf90, getSafetyMargin,
   getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail,
+  getToleranceW, getToleranceH,
   SettingsPreset, getPresets, applyPreset,
 } from '../storage/settings';
-import { calculateMaterials, MaterialsResult, ProfileResult, MIN_REMNANT_MM } from '../utils/calculateMaterials';
+import { calculateMaterials, MaterialsResult, MaterialsConfig, ProfileResult, MIN_REMNANT_MM } from '../utils/calculateMaterials';
+import { generateHTML } from '../utils/pdfExport';
+import { getLogoBase64, sharePdf, saveToDevice } from '../utils/pdfActions';
+import * as AppAlert from '../components/AppAlert';
 import TourModal, { TourStep } from '../components/TourModal';
 
 type Route = RouteProp<RootStackParamList, 'Materials'>;
@@ -31,20 +35,52 @@ export default function MaterialsScreen() {
   const navigation = useNavigation<Nav>();
   const { projectId } = route.params;
 
-  const [project,     setProject]     = useState<Project | null>(null);
-  const [result,      setResult]      = useState<MaterialsResult | null>(null);
-  const [presets,     setPresets]     = useState<SettingsPreset[]>([]);
-  const [activeId,    setActiveId]    = useState<string | null>(null);
-  const [tourVisible, setTourVisible] = useState(false);
+  const [project,      setProject]      = useState<Project | null>(null);
+  const [result,       setResult]       = useState<MaterialsResult | null>(null);
+  const [matConfig,    setMatConfig]    = useState<MaterialsConfig | null>(null);
+  const [presets,      setPresets]      = useState<SettingsPreset[]>([]);
+  const [activeId,     setActiveId]     = useState<string | null>(null);
+  const [tourVisible,  setTourVisible]  = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfBusy,      setPdfBusy]      = useState(false);
   // extraBars: quante barre extra l'utente ha aggiunto manualmente label→count
-  const [extraBars,   setExtraBars]   = useState<Record<string, number>>({});
+  const [extraBars,    setExtraBars]    = useState<Record<string, number>>({});
+
+  const projectRef   = useRef(project);
+  const matConfigRef = useRef(matConfig);
+  projectRef.current   = project;
+  matConfigRef.current = matConfig;
+
+  const handlePdfAction = useCallback(async (action: 'share' | 'save') => {
+    const p   = projectRef.current;
+    const cfg = matConfigRef.current;
+    if (!p || !cfg) return;
+    setShowPdfModal(false);
+    setPdfBusy(true);
+    try {
+      const [tolW, tolH, logo] = await Promise.all([getToleranceW(), getToleranceH(), getLogoBase64()]);
+      const html = generateHTML(p, tolW, tolH, logo, { mode: 'materiale', materialsConfig: cfg });
+      const safe = p.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim();
+      if (action === 'share') {
+        await sharePdf(html, `${safe}_sviluppo`);
+      } else {
+        await saveToDevice(html, `${safe}_sviluppo`);
+      }
+    } catch { AppAlert.show('Errore', 'Impossibile generare il PDF.'); }
+    finally  { setPdfBusy(false); }
+  }, []);
 
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity onPress={() => setTourVisible(true)} style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
-          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => setShowPdfModal(true)} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>PDF</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setTourVisible(true)} style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
+          </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation]);
@@ -55,12 +91,14 @@ export default function MaterialsScreen() {
       getSafetyMargin(), getSlatPitch(), getZoccoloH(), getFasciaH(), getAntaReduction(), getAntaTopRail(),
     ]);
     if (!p) return;
-    setProject(p);
-    setResult(calculateMaterials(p.openings, {
+    const cfg: MaterialsConfig = {
       riattestattura: riatt, barLength: barLen, kerf90: kerf,
-      safetyMarginPct: margin, slatPitch: slatP, zoccoloH: zocH, fasciaH: fasH,
-      antaReduction: antaRed, antaTopRail: antaTop,
-    }));
+      safetyMarginPct: margin, slatPitch: slatP, zoccoloH: zocH,
+      fasciaH: fasH, antaReduction: antaRed, antaTopRail: antaTop,
+    };
+    setProject(p);
+    setMatConfig(cfg);
+    setResult(calculateMaterials(p.openings, cfg));
   }, [projectId]);
 
   useEffect(() => {
@@ -98,6 +136,7 @@ export default function MaterialsScreen() {
   const nearLimitProfiles = [...result.profiles45, ...result.profiles90].filter(p => p.nearLimit);
 
   return (
+    <>
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <TourModal visible={tourVisible} steps={MATERIALS_TOUR} onClose={() => setTourVisible(false)}/>
 
@@ -252,6 +291,43 @@ export default function MaterialsScreen() {
 
       <View style={{ height: 40 }}/>
     </ScrollView>
+
+    {/* ── PDF Modal ── */}
+    <Modal visible={showPdfModal} transparent animationType="fade" onRequestClose={() => setShowPdfModal(false)}>
+      <Pressable style={pdfM.overlay} onPress={() => !pdfBusy && setShowPdfModal(false)}>
+        <Pressable style={pdfM.sheet} onPress={() => {}}>
+          <View style={pdfM.handle}/>
+          <Text style={pdfM.title}>Esporta sviluppo materiale</Text>
+          {pdfBusy ? (
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <ActivityIndicator color="#1565C0" size="large"/>
+              <Text style={{ color: '#888', marginTop: 10, fontSize: 13 }}>Generazione in corso…</Text>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity style={pdfM.btn} onPress={() => handlePdfAction('share')} activeOpacity={0.8}>
+                <Text style={pdfM.btnIcon}>📤</Text>
+                <View>
+                  <Text style={pdfM.btnTitle}>Condividi</Text>
+                  <Text style={pdfM.btnSub}>Apri nelle app del dispositivo</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity style={[pdfM.btn, pdfM.btnAlt]} onPress={() => handlePdfAction('save')} activeOpacity={0.8}>
+                <Text style={pdfM.btnIcon}>💾</Text>
+                <View>
+                  <Text style={[pdfM.btnTitle, { color: '#1565C0' }]}>Salva sul dispositivo</Text>
+                  <Text style={[pdfM.btnSub, { color: '#7a9cc0' }]}>Scegli la cartella di destinazione</Text>
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity style={pdfM.cancel} onPress={() => setShowPdfModal(false)} disabled={pdfBusy}>
+            <Text style={pdfM.cancelText}>Annulla</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
@@ -414,4 +490,18 @@ const off = StyleSheet.create({
   right:    { alignItems: 'flex-end' },
   count:    { fontSize: 14, fontWeight: '900', color: '#E65100' },
   lengths:  { fontSize: 11, color: '#888', marginTop: 1 },
+});
+
+const pdfM = StyleSheet.create({
+  overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet:      { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 36 },
+  handle:     { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 18 },
+  title:      { fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 16 },
+  btn:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#1565C0', borderRadius: 14, padding: 16, marginBottom: 10 },
+  btnAlt:     { backgroundColor: '#EEF4FF', borderWidth: 1.5, borderColor: '#1565C0' },
+  btnIcon:    { fontSize: 24 },
+  btnTitle:   { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 1 },
+  btnSub:     { fontSize: 11, color: 'rgba(255,255,255,0.75)' },
+  cancel:     { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
+  cancelText: { fontSize: 15, color: '#888', fontWeight: '600' },
 });
