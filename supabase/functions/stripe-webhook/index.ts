@@ -3,20 +3,30 @@ import Stripe from 'npm:stripe@^14';
 import { createClient } from 'npm:@supabase/supabase-js@^2';
 
 Deno.serve(async (req) => {
+  // Stripe chiama il webhook senza JWT — rispondi subito alle preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { status: 200 });
+  }
+
   const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!);
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  const sig  = req.headers.get('stripe-signature')!;
+  const sig  = req.headers.get('stripe-signature');
   const body = await req.text();
+
+  if (!sig) {
+    return new Response('Firma mancante', { status: 400 });
+  }
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, Deno.env.get('STRIPE_WEBHOOK_SECRET')!);
-  } catch {
-    return new Response('Firma non valida', { status: 400 });
+    event = await stripe.webhooks.constructEventAsync(body, sig, Deno.env.get('STRIPE_WEBHOOK_SECRET')!);
+  } catch (err: any) {
+    console.error('Firma non valida:', err.message);
+    return new Response(`Firma non valida: ${err.message}`, { status: 400 });
   }
 
   try {

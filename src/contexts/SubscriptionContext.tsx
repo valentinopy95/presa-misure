@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { supabase, fetchProfile, fetchCompanyPlan, CompanyPlan, SubscriptionStatus } from '../lib/supabase';
 import { getAllProjects } from '../storage/database';
 
-export const FREE_PROJECT_LIMIT = 5;
+export const FREE_PROJECT_LIMIT = 3;
 
 interface SubscriptionContextValue {
   plan:         CompanyPlan;

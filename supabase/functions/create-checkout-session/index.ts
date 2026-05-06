@@ -76,8 +76,8 @@ Deno.serve(async (req) => {
       customer:  customerId,
       mode:      'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: 'https://misu.pro?payment=success',
-      cancel_url:  'https://misu.pro?payment=cancelled',
+      success_url: 'presamisure://payment-success',
+      cancel_url:  'presamisure://payment-cancelled',
       metadata: { company_id: profile.company_id },
       subscription_data: {
         metadata: { company_id: profile.company_id, plan },

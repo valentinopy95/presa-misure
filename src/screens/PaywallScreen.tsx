@@ -14,8 +14,8 @@ const PLANS = [
   {
     key:         'base' as const,
     name:        'Base',
-    monthly:     15,
-    yearly:      180,
+    monthly:     19,
+    yearly:      190,
     yearlyPromo: false,
     users:       2,
     color:       '#1565C0',
@@ -24,8 +24,8 @@ const PLANS = [
   {
     key:         'pro' as const,
     name:        'Pro',
-    monthly:     20,
-    yearly:      200,
+    monthly:     29,
+    yearly:      290,
     yearlyPromo: true,
     users:       5,
     color:       '#6A1B9A',
