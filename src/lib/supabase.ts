@@ -21,11 +21,19 @@ export interface Profile {
   company_id: string | null;
 }
 
+export type CompanyPlan      = 'free' | 'base' | 'pro';
+export type SubscriptionStatus = 'free' | 'active' | 'past_due' | 'canceled';
+
 export interface Company {
-  id:       string;
-  name:     string;
-  code:     string;
-  owner_id: string;
+  id:                    string;
+  name:                  string;
+  code:                  string;
+  owner_id:              string;
+  plan:                  CompanyPlan;
+  subscription_status:   SubscriptionStatus;
+  stripe_customer_id:    string | null;
+  stripe_subscription_id: string | null;
+  current_period_end:    string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -63,11 +71,35 @@ export async function fetchProfile(userId: string, timeoutMs = 10000): Promise<P
 export async function fetchCompany(companyId: string): Promise<Company | null> {
   const { data, error } = await supabase
     .from('companies')
-    .select('id, name, code, owner_id')
+    .select('id, name, code, owner_id, plan, subscription_status, stripe_customer_id, stripe_subscription_id, current_period_end')
     .eq('id', companyId)
     .single();
   if (error) return null;
-  return data as Company;
+  const c = data as any;
+  return {
+    ...c,
+    plan: c.plan ?? 'free',
+    subscription_status: c.subscription_status ?? 'free',
+    stripe_customer_id: c.stripe_customer_id ?? null,
+    stripe_subscription_id: c.stripe_subscription_id ?? null,
+    current_period_end: c.current_period_end ?? null,
+  } as Company;
+}
+
+/** Carica solo i campi piano/abbonamento di un'azienda */
+export async function fetchCompanyPlan(companyId: string): Promise<Pick<Company, 'plan' | 'subscription_status' | 'current_period_end'> | null> {
+  const { data, error } = await supabase
+    .from('companies')
+    .select('plan, subscription_status, current_period_end')
+    .eq('id', companyId)
+    .single();
+  if (error) return null;
+  const c = data as any;
+  return {
+    plan: c.plan ?? 'free',
+    subscription_status: c.subscription_status ?? 'free',
+    current_period_end: c.current_period_end ?? null,
+  };
 }
 
 /** Cerca azienda tramite codice */

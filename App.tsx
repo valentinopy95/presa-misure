@@ -7,6 +7,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ThemeProvider } from './src/contexts/ThemeContext';
+import { SubscriptionProvider } from './src/contexts/SubscriptionContext';
 import { Session } from '@supabase/supabase-js';
 
 import { supabase } from './src/lib/supabase';
@@ -33,6 +34,7 @@ import HelpScreen              from './src/screens/HelpScreen';
 import StatsScreen             from './src/screens/StatsScreen';
 import CuttingListScreen        from './src/screens/CuttingListScreen';
 import CuttingProjectsScreen   from './src/screens/CuttingProjectsScreen';
+import PaywallScreen           from './src/screens/PaywallScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -79,6 +81,7 @@ function AppNavigator() {
         <Stack.Screen name="CuttingProjects"    component={CuttingProjectsScreen}  options={{ title: 'Distinta di taglio', ...helpRight }}/>
         <Stack.Screen name="CuttingList"       component={CuttingListScreen}      options={{ title: 'Distinta di taglio' }}/>
         <Stack.Screen name="CompanySetup"      component={CompanySetupScreen}     options={{ headerShown: false }}/>
+        <Stack.Screen name="Paywall"           component={PaywallScreen}          options={{ title: 'Piano e abbonamento', presentation: 'modal' }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -112,7 +115,11 @@ function AppContent() {
 
   if (loading) return <SplashScreen />;
   if (!session) return <AuthScreen />;
-  return <AppNavigator />;
+  return (
+    <SubscriptionProvider>
+      <AppNavigator />
+    </SubscriptionProvider>
+  );
 }
 
 function OfflineBanner() {

@@ -103,4 +103,5 @@ export type RootStackParamList = {
   Help:        undefined;
   Stats:       undefined;
   CompanySetup: undefined;
+  Paywall: undefined;
 };

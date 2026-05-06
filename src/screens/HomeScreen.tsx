@@ -14,6 +14,7 @@ import * as AppAlert from '../components/AppAlert';
 import NewProjectModal from '../components/NewProjectModal';
 import TourModal, { TourStep, SpotRect } from '../components/TourModal';
 import { getTourSeen, setTourSeen } from '../storage/settings';
+import { useSubscription } from '../contexts/SubscriptionContext';
 
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -54,8 +55,9 @@ const MENU_ITEMS = [
 ];
 
 export default function HomeScreen() {
-  const navigation = useNavigation<Nav>();
+  const navigation   = useNavigation<Nav>();
   const { theme: t } = useTheme();
+  const subscription = useSubscription();
   const [modalVisible,   setModalVisible]   = useState(false);
   const [pendingInvites, setPendingInvites] = useState(0);
   const [tourVisible,    setTourVisible]    = useState(false);
@@ -185,6 +187,7 @@ export default function HomeScreen() {
     };
     await saveProject(project);
     setModalVisible(false);
+    subscription.refresh();
     navigation.navigate('Project', { projectId: project.id });
   };
 
@@ -199,6 +202,10 @@ export default function HomeScreen() {
             { text: 'Configura ora', onPress: () => navigation.navigate('Account') },
           ]
         );
+        return;
+      }
+      if (!subscription.canCreate) {
+        navigation.navigate('Paywall');
         return;
       }
       setModalVisible(true);

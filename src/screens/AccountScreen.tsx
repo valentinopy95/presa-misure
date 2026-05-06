@@ -14,11 +14,13 @@ import {
 import { clearDbCache } from '../storage/database';
 import { RootStackParamList } from '../types';
 import { User } from '@supabase/supabase-js';
+import { useSubscription, FREE_PROJECT_LIMIT } from '../contexts/SubscriptionContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function AccountScreen() {
-  const navigation = useNavigation<Nav>();
+  const navigation   = useNavigation<Nav>();
+  const subscription = useSubscription();
   const [user,        setUser]        = useState<User | null>(null);
   const [company,     setCompany]     = useState<Company | null>(null);
   const [invites,     setInvites]     = useState<CompanyInvite[]>([]);
@@ -169,6 +171,52 @@ export default function AccountScreen() {
             {(user?.user_metadata?.full_name as string | undefined) ?? 'Utente'}
           </Text>
           <Text style={s.email}>{user?.email ?? ''}</Text>
+        </View>
+
+        {/* Piano abbonamento */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Piano</Text>
+          <View style={s.card}>
+            <View style={s.row}>
+              <View style={s.rowInfo}>
+                <Text style={s.rowLabel}>Piano attuale</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                  <View style={[s.planBadge, {
+                    backgroundColor:
+                      subscription.plan === 'pro'  ? '#F3E5F5' :
+                      subscription.plan === 'base' ? '#E3F2FD' : '#F0F4F8',
+                  }]}>
+                    <Text style={[s.planBadgeText, {
+                      color:
+                        subscription.plan === 'pro'  ? '#6A1B9A' :
+                        subscription.plan === 'base' ? '#1565C0' : '#666',
+                    }]}>
+                      {subscription.plan === 'free' ? 'Gratuito' :
+                       subscription.plan === 'base' ? 'Base' : 'Pro'}
+                    </Text>
+                  </View>
+                  {subscription.status === 'past_due' && (
+                    <View style={s.pastDueBadge}>
+                      <Text style={s.pastDueBadgeText}>Pagamento scaduto</Text>
+                    </View>
+                  )}
+                </View>
+                {subscription.plan === 'free' && (
+                  <Text style={s.planSub}>
+                    {subscription.projectCount}/{FREE_PROJECT_LIMIT} progetti usati
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity
+                style={s.upgradePillBtn}
+                onPress={() => navigation.navigate('Paywall')}
+              >
+                <Text style={s.upgradePillText}>
+                  {subscription.plan === 'free' ? 'Upgrade' : 'Gestisci'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {/* Azienda */}
@@ -350,4 +398,12 @@ const s = StyleSheet.create({
   actionLabel:  { flex: 1, fontSize: 15, fontWeight: '600', color: '#1a2a3a' },
   actionArrow:  { fontSize: 20, color: '#ccc' },
   actionDanger: { color: '#DC2626' },
+
+  planBadge:      { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  planBadgeText:  { fontSize: 13, fontWeight: '800' },
+  planSub:        { fontSize: 11, color: '#aaa', marginTop: 4 },
+  pastDueBadge:   { backgroundColor: '#FFF3E0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  pastDueBadgeText: { fontSize: 11, fontWeight: '700', color: '#E65100' },
+  upgradePillBtn: { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  upgradePillText:{ color: '#fff', fontWeight: '800', fontSize: 13 },
 });
