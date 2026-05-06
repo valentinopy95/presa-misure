@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Misu — Misure professionali per infissi</title>
+  <meta name="description" content="L'app per serramentisti professionisti. Rilievi misure, calcolo materiale e distinta di taglio. Disponibile su Android e web." />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #1a2a3a; }
+
+    /* NAV */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid #eef2f7;
+      padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo { font-size: 22px; font-weight: 900; color: #0c2d75; letter-spacing: 1px; }
+    .nav-links { display: flex; gap: 8px; }
+    .nav-login { padding: 8px 18px; border: 1.5px solid #0c2d75; border-radius: 10px; color: #0c2d75; font-weight: 700; font-size: 14px; text-decoration: none; }
+    .nav-cta { padding: 8px 18px; background: #0c2d75; border-radius: 10px; color: #fff; font-weight: 700; font-size: 14px; text-decoration: none; }
+
+    /* HERO */
+    .hero {
+      background: linear-gradient(135deg, #0c2d75 0%, #1a4db8 100%);
+      padding: 80px 24px 100px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: '';
+      position: absolute; bottom: -2px; left: 0; right: 0;
+      height: 60px;
+      background: #fff;
+      clip-path: ellipse(55% 100% at 50% 100%);
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      font-size: 12px; font-weight: 700;
+      padding: 6px 14px; border-radius: 999px;
+      margin-bottom: 24px; letter-spacing: 1px;
+    }
+    .hero h1 { font-size: clamp(32px, 6vw, 56px); font-weight: 900; color: #fff; line-height: 1.1; margin-bottom: 20px; }
+    .hero h1 span { color: #7eb3ff; }
+    .hero p { font-size: 18px; color: rgba(255,255,255,0.8); max-width: 560px; margin: 0 auto 40px; line-height: 1.6; }
+    .hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 60px; }
+    .btn-primary { padding: 16px 32px; background: #fff; color: #0c2d75; border-radius: 14px; font-weight: 800; font-size: 16px; text-decoration: none; }
+    .btn-secondary { padding: 16px 32px; border: 2px solid rgba(255,255,255,0.5); color: #fff; border-radius: 14px; font-weight: 700; font-size: 16px; text-decoration: none; }
+    .hero-platforms { color: rgba(255,255,255,0.6); font-size: 13px; }
+    .hero-platforms strong { color: rgba(255,255,255,0.9); }
+
+    /* FEATURES */
+    .section { padding: 80px 24px; max-width: 1100px; margin: 0 auto; }
+    .section-label { font-size: 11px; font-weight: 800; color: #0c2d75; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+    .section-title { font-size: clamp(26px, 4vw, 40px); font-weight: 900; color: #1a2a3a; margin-bottom: 16px; }
+    .section-sub { font-size: 16px; color: #666; max-width: 520px; line-height: 1.6; margin-bottom: 48px; }
+
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .feature-card {
+      background: #f8fafc; border-radius: 20px; padding: 28px;
+      border: 1px solid #eef2f7;
+    }
+    .feature-icon { font-size: 32px; margin-bottom: 16px; }
+    .feature-title { font-size: 17px; font-weight: 800; color: #1a2a3a; margin-bottom: 8px; }
+    .feature-desc { font-size: 14px; color: #666; line-height: 1.6; }
+
+    /* PRICING */
+    .pricing-section { background: #f0f4f8; padding: 80px 24px; }
+    .pricing-inner { max-width: 900px; margin: 0 auto; text-align: center; }
+    .pricing-toggle {
+      display: inline-flex;
+      background: #e2e8f0; border-radius: 12px; padding: 4px;
+      margin-bottom: 40px;
+    }
+    .toggle-opt {
+      padding: 8px 24px; border-radius: 9px; font-size: 14px; font-weight: 700;
+      cursor: pointer; border: none; background: transparent; color: #666;
+      transition: all 0.2s;
+    }
+    .toggle-opt.active { background: #fff; color: #0c2d75; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; max-width: 700px; margin: 0 auto 16px; }
+    .plan-card {
+      background: #fff; border-radius: 20px; overflow: hidden;
+      border: 2px solid #e2e8f0;
+      text-align: left;
+    }
+    .plan-card.featured { border-color: #6A1B9A; }
+    .plan-header { padding: 24px; }
+    .plan-header.base { background: #E3F2FD; }
+    .plan-header.pro { background: #F3E5F5; }
+    .plan-name { font-size: 20px; font-weight: 900; }
+    .plan-name.base { color: #1565C0; }
+    .plan-name.pro { color: #6A1B9A; }
+    .plan-price { font-size: 36px; font-weight: 900; margin: 8px 0 4px; }
+    .plan-price.base { color: #1565C0; }
+    .plan-price.pro { color: #6A1B9A; }
+    .plan-period { font-size: 13px; font-weight: 600; opacity: 0.7; }
+    .plan-users { font-size: 12px; font-weight: 700; margin-top: 6px; opacity: 0.7; }
+    .promo-chip { display: inline-block; background: #E8F5E9; color: #2E7D32; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px; margin-left: 8px; }
+    .plan-body { padding: 20px 24px; }
+    .plan-feature { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 14px; color: #444; font-weight: 600; }
+    .plan-feature-check { font-size: 14px; font-weight: 900; }
+    .plan-feature-check.base { color: #1565C0; }
+    .plan-feature-check.pro { color: #6A1B9A; }
+    .plan-cta {
+      display: block; margin: 0 20px 20px;
+      padding: 14px; border-radius: 12px;
+      text-align: center; font-weight: 800; font-size: 15px;
+      text-decoration: none;
+    }
+    .plan-cta.base { background: #1565C0; color: #fff; }
+    .plan-cta.pro { background: #6A1B9A; color: #fff; }
+    .pricing-note { font-size: 12px; color: #aaa; margin-top: 12px; }
+
+    /* FREE */
+    .free-section { padding: 60px 24px; max-width: 700px; margin: 0 auto; text-align: center; }
+    .free-card { background: #f8fafc; border-radius: 20px; padding: 32px; border: 1px solid #eef2f7; }
+    .free-title { font-size: 20px; font-weight: 900; color: #1a2a3a; margin-bottom: 8px; }
+    .free-sub { font-size: 14px; color: #666; margin-bottom: 20px; line-height: 1.5; }
+    .free-cta { display: inline-block; padding: 14px 32px; background: #0c2d75; color: #fff; border-radius: 12px; font-weight: 800; font-size: 15px; text-decoration: none; }
+
+    /* PLATFORMS */
+    .platforms-section { padding: 80px 24px; background: #0c2d75; text-align: center; }
+    .platforms-title { font-size: clamp(24px, 4vw, 36px); font-weight: 900; color: #fff; margin-bottom: 12px; }
+    .platforms-sub { font-size: 15px; color: rgba(255,255,255,0.7); margin-bottom: 40px; }
+    .platform-cards { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .platform-card { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; padding: 24px 32px; color: #fff; text-decoration: none; }
+    .platform-card-icon { font-size: 32px; margin-bottom: 10px; }
+    .platform-card-title { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+    .platform-card-sub { font-size: 12px; opacity: 0.7; }
+
+    /* FOOTER */
+    footer { background: #0a1f52; padding: 32px 24px; text-align: center; }
+    .footer-links { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
+    .footer-links a { color: rgba(255,255,255,0.5); font-size: 13px; text-decoration: none; }
+    .footer-links a:hover { color: #fff; }
+    .footer-copy { color: rgba(255,255,255,0.3); font-size: 12px; }
+
+    @media (max-width: 600px) {
+      .nav-login { display: none; }
+      .hero { padding: 60px 20px 80px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Misu</div>
+  <div class="nav-links">
+    <a href="/app" class="nav-login">Accedi</a>
+    <a href="#prezzi" class="nav-cta">Inizia gratis</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">MISURE PROFESSIONALI PER INFISSI</div>
+  <h1>Il tuo cantiere,<br><span>sempre in ordine</span></h1>
+  <p>Rilievi precisi, calcolo materiale automatico e distinta di taglio. Tutto quello che serve a un serramentista professionista.</p>
+  <div class="hero-btns">
+    <a href="#prezzi" class="btn-primary">Inizia gratis</a>
+    <a href="/app" class="btn-secondary">Apri sul web</a>
+  </div>
+  <div class="hero-platforms">Disponibile su <strong>Android</strong> e <strong>browser web</strong></div>
+</section>
+
+<!-- FEATURES -->
+<section class="section">
+  <div class="section-label">Funzionalità</div>
+  <h2 class="section-title">Tutto quello che serve,<br>niente di superfluo</h2>
+  <p class="section-sub">Progettato da chi conosce il settore, per chi lavora sul campo ogni giorno.</p>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">📐</div>
+      <div class="feature-title">Rilievo misure</div>
+      <div class="feature-desc">Inserisci larghezza, altezza e tipologia di ogni apertura. Foto, note vocali e schizzi allegati al rilievo.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📦</div>
+      <div class="feature-title">Sviluppo materiale</div>
+      <div class="feature-desc">Calcolo automatico delle barre di profilo necessarie, ottimizzato per ridurre gli scarti al minimo.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">✂️</div>
+      <div class="feature-title">Distinta di taglio</div>
+      <div class="feature-desc">Piano di taglio barra per barra con grafico proporzionale. Esportabile in PDF da consegnare in laboratorio.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📄</div>
+      <div class="feature-title">Export PDF</div>
+      <div class="feature-desc">Tre PDF distinti: rilievo misure, sviluppo materiale e distinta di taglio. Condividibili o salvabili.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">👥</div>
+      <div class="feature-title">Multi-utente</div>
+      <div class="feature-desc">Più operatori sulla stessa azienda. I dati si sincronizzano in tempo reale su tutti i dispositivi.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📐</div>
+      <div class="feature-title">Fuori squadra</div>
+      <div class="feature-desc">Gestione vani irregolari con misure differenti a sinistra e destra. Calcolo materiale adattato automaticamente.</div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<div class="pricing-section" id="prezzi">
+  <div class="pricing-inner">
+    <div class="section-label" style="text-align:center">Prezzi</div>
+    <h2 class="section-title" style="text-align:center">Semplice e trasparente</h2>
+    <p style="color:#666;margin-bottom:32px;font-size:15px">Nessuna sorpresa. Disdici quando vuoi.</p>
+
+    <div class="pricing-toggle">
+      <button class="toggle-opt active" onclick="setPeriod('monthly', this)">Mensile</button>
+      <button class="toggle-opt" onclick="setPeriod('yearly', this)">Annuale</button>
+    </div>
+
+    <div class="plans">
+      <div class="plan-card">
+        <div class="plan-header base">
+          <div class="plan-name base">Base</div>
+          <div class="plan-price base" id="base-price">19€</div>
+          <div class="plan-period" id="base-period">/mese</div>
+          <div class="plan-users">fino a 2 utenti</div>
+        </div>
+        <div class="plan-body">
+          <div class="plan-feature"><span class="plan-feature-check base">✓</span>Progetti illimitati</div>
+          <div class="plan-feature"><span class="plan-feature-check base">✓</span>Tutte le funzionalità</div>
+          <div class="plan-feature"><span class="plan-feature-check base">✓</span>PDF rilievo e materiale</div>
+          <div class="plan-feature"><span class="plan-feature-check base">✓</span>App Android + Web</div>
+        </div>
+        <a href="/app" class="plan-cta base">Inizia con Base</a>
+      </div>
+
+      <div class="plan-card featured">
+        <div class="plan-header pro">
+          <div class="plan-name pro">Pro <span id="promo-chip" style="display:none" class="promo-chip">2 mesi gratis</span></div>
+          <div class="plan-price pro" id="pro-price">29€</div>
+          <div class="plan-period" id="pro-period">/mese</div>
+          <div class="plan-users">fino a 5 utenti</div>
+        </div>
+        <div class="plan-body">
+          <div class="plan-feature"><span class="plan-feature-check pro">✓</span>Progetti illimitati</div>
+          <div class="plan-feature"><span class="plan-feature-check pro">✓</span>Tutte le funzionalità</div>
+          <div class="plan-feature"><span class="plan-feature-check pro">✓</span>PDF rilievo e materiale</div>
+          <div class="plan-feature"><span class="plan-feature-check pro">✓</span>App Android + Web</div>
+          <div class="plan-feature"><span class="plan-feature-check pro">✓</span>Fino a 5 utenti</div>
+        </div>
+        <a href="/app" class="plan-cta pro">Inizia con Pro</a>
+      </div>
+    </div>
+    <div class="pricing-note">Pagamento sicuro via Stripe · Disdici in qualsiasi momento</div>
+  </div>
+</div>
+
+<!-- FREE -->
+<div class="free-section">
+  <div class="free-card">
+    <div class="free-title">Prova gratis, senza carta di credito</div>
+    <div class="free-sub">Registrati e usa Misu sui tuoi primi 3 progetti completamente gratis. Nessun impegno, nessun dato di pagamento richiesto.</div>
+    <a href="/app" class="free-cta">Inizia gratis</a>
+  </div>
+</div>
+
+<!-- PLATFORMS -->
+<div class="platforms-section">
+  <div class="platforms-title">Disponibile ovunque lavori</div>
+  <div class="platforms-sub">Stesso account su tutti i dispositivi. I dati si sincronizzano automaticamente.</div>
+  <div class="platform-cards">
+    <div class="platform-card">
+      <div class="platform-card-icon">🤖</div>
+      <div class="platform-card-title">Android</div>
+      <div class="platform-card-sub">App nativa per smartphone e tablet</div>
+    </div>
+    <a href="/app" class="platform-card">
+      <div class="platform-card-icon">🌐</div>
+      <div class="platform-card-title">Browser Web</div>
+      <div class="platform-card-sub">Accedi da PC o Mac senza installare nulla</div>
+    </a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-links">
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/terms">Termini di servizio</a>
+    <a href="/app">Accedi</a>
+  </div>
+  <div class="footer-copy">© 2026 Misu · Tutti i diritti riservati</div>
+</footer>
+
+<script>
+  function setPeriod(period, el) {
+    document.querySelectorAll('.toggle-opt').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    if (period === 'monthly') {
+      document.getElementById('base-price').textContent = '19€';
+      document.getElementById('base-period').textContent = '/mese';
+      document.getElementById('pro-price').textContent = '29€';
+      document.getElementById('pro-period').textContent = '/mese';
+      document.getElementById('promo-chip').style.display = 'none';
+    } else {
+      document.getElementById('base-price').textContent = '190€';
+      document.getElementById('base-period').textContent = '/anno';
+      document.getElementById('pro-price').textContent = '290€';
+      document.getElementById('pro-period').textContent = '/anno';
+      document.getElementById('promo-chip').style.display = 'inline';
+    }
+  }
+</script>
+
+</body>
+</html>
