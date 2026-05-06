@@ -661,12 +661,53 @@ export function generateHTML(
 
   <!-- ── FOOTER ── -->
   <hr style="border:none;border-top:1px solid #e0e0e0;margin-top:24px;"/>
-  <div style="display:flex;justify-content:space-between;padding-top:8px;">
-    <div style="font-size:8px;color:#bbb;">Generato con Misu &mdash; ${new Date().toLocaleString('it-IT')}</div>
-    <div style="font-size:8px;color:#bbb;">Tol.: L ${toleranceW} mm / H ${toleranceH} mm</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;">
+    <div style="font-size:8px;color:#bbb;">Tol.: L ${toleranceW} mm / H ${toleranceH} mm &mdash; ${new Date().toLocaleString('it-IT')}</div>
+    <div style="font-size:8px;color:#ccc;font-weight:600;letter-spacing:0.3px;">Powered by <span style="color:#0c2d75;font-weight:800;">Misu</span> &middot; misu.pro</div>
   </div>
 
 </div>
+</body>
+</html>`;
+}
+
+// ─── PDF Unico (Rilievo + Materiale + Distinta) ───────────────────────────────
+export function generateFullPDF(
+  project: Project,
+  toleranceW: number,
+  toleranceH: number,
+  cuttingResult: CuttingListResult,
+  logoBase64?: string,
+  matConfig?: Partial<MaterialsConfig>,
+  prices?: PriceConfig,
+): string {
+  const rilievoBody   = generateHTML(project, toleranceW, toleranceH, logoBase64, { mode: 'misure', prices });
+  const materialeBody = generateHTML(project, toleranceW, toleranceH, logoBase64, { mode: 'materiale', materialsConfig: matConfig });
+  const distintatBody = generateCuttingListHTML(project, cuttingResult, logoBase64);
+
+  // Estrai il contenuto <body> da ciascun HTML e li unisce con page-break
+  const extractBody = (html: string) => {
+    const match = html.match(/<body>([\s\S]*)<\/body>/i);
+    return match ? match[1] : html;
+  };
+
+  return `<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,Helvetica,sans-serif; background:#fff; color:#1a1a1a; font-size:11px; }
+  .page-break { page-break-before:always; break-before:page; padding-top:4px; }
+  @media print { body { background:white; } }
+</style>
+</head>
+<body>
+${extractBody(rilievoBody)}
+<div class="page-break"></div>
+${extractBody(materialeBody)}
+<div class="page-break"></div>
+${extractBody(distintatBody)}
 </body>
 </html>`;
 }
@@ -863,9 +904,9 @@ export function generateCuttingListHTML(
 
   <!-- FOOTER -->
   <hr style="border:none;border-top:1px solid #e0e0e0;margin-top:24px;"/>
-  <div style="display:flex;justify-content:space-between;padding-top:8px;">
-    <div style="font-size:8px;color:#bbb;">Generato con Misu &mdash; ${new Date().toLocaleString('it-IT')}</div>
-    <div style="font-size:8px;color:#bbb;">Barre da ${barLength} mm</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;">
+    <div style="font-size:8px;color:#bbb;">Barre da ${barLength} mm &mdash; ${new Date().toLocaleString('it-IT')}</div>
+    <div style="font-size:8px;color:#ccc;font-weight:600;letter-spacing:0.3px;">Powered by <span style="color:#0c2d75;font-weight:800;">Misu</span> &middot; misu.pro</div>
   </div>
 
 </div>

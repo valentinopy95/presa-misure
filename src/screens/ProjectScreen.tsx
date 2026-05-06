@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Project, Opening, OpeningStyle, RootStackParamList } from '../types';
 import { getProject, getProjectFamily, deleteOpening, saveOpening, deleteProject, saveProject } from '../storage/database';
 import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail } from '../storage/settings';
-import { generateHTML, generateCuttingListHTML } from '../utils/pdfExport';
+import { generateHTML, generateCuttingListHTML, generateFullPDF } from '../utils/pdfExport';
 import { calculateCuttingList } from '../utils/calculateMaterials';
 import { getLogoBase64, sharePdf, saveToDevice } from '../utils/pdfActions';
 import OpeningCard from '../components/OpeningCard';
@@ -174,7 +174,7 @@ export default function ProjectScreen() {
 
   // ── PDF ────────────────────────────────────────────────────────────────────
   const handlePdfAction = async (
-    pdfType: 'rilievo' | 'sviluppo' | 'distinta',
+    pdfType: 'rilievo' | 'sviluppo' | 'distinta' | 'completo',
     action: 'share' | 'save',
   ) => {
     setShowExportModal(false);
@@ -202,10 +202,15 @@ export default function ProjectScreen() {
       } else if (pdfType === 'sviluppo') {
         html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'materiale', materialsConfig: matConfig, prices });
         filename = `${safe}_sviluppo`;
-      } else {
+      } else if (pdfType === 'distinta') {
         const cuttingResult = calculateCuttingList(activeProject!.openings, matConfig);
         html = generateCuttingListHTML(activeProject!, cuttingResult, logo);
         filename = `${safe}_distinta`;
+      } else {
+        // completo — tutti e 3 in un unico PDF
+        const cuttingResult = calculateCuttingList(activeProject!.openings, matConfig);
+        html = generateFullPDF(activeProject!, tolW, tolH, cuttingResult, logo, matConfig, prices);
+        filename = `${safe}_completo`;
       }
 
       if (action === 'share') {
@@ -532,6 +537,35 @@ export default function ProjectScreen() {
                     </View>
                   </View>
                 ))}
+
+                {/* ── PDF Completo ── */}
+                <View style={[styles.pdfTypeRow, { borderTopWidth: 1, borderTopColor: '#eef2f7', marginTop: 6, paddingTop: 12 }]}>
+                  <View style={styles.pdfTypeLabel}>
+                    <Text style={styles.pdfTypeIcon}>📋</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pdfTypeTitle}>PDF completo</Text>
+                      <Text style={styles.pdfTypeSub}>Rilievo + Materiale + Distinta in un unico file</Text>
+                    </View>
+                  </View>
+                  <View style={styles.pdfTypeActions}>
+                    <TouchableOpacity
+                      style={styles.pdfActionBtn}
+                      onPress={() => handlePdfAction('completo', 'share')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.pdfActionIcon}>📤</Text>
+                      <Text style={styles.pdfActionText}>Condividi</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.pdfActionBtn, styles.pdfActionBtnSave]}
+                      onPress={() => handlePdfAction('completo', 'save')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.pdfActionIcon}>💾</Text>
+                      <Text style={[styles.pdfActionText, { color: '#1565C0' }]}>Salva</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </>
             )}
 
