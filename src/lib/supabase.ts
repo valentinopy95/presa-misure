@@ -34,6 +34,7 @@ export interface Company {
   stripe_customer_id:    string | null;
   stripe_subscription_id: string | null;
   current_period_end:    string | null;
+  logo_url:              string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ export async function fetchCompany(companyId: string): Promise<Company | null> {
     stripe_customer_id: c.stripe_customer_id ?? null,
     stripe_subscription_id: c.stripe_subscription_id ?? null,
     current_period_end: c.current_period_end ?? null,
+    logo_url: c.logo_url ?? null,
   } as Company;
 }
 
@@ -255,6 +257,35 @@ export async function listPendingInvites(companyId: string): Promise<CompanyInvi
     .eq('company_id', companyId)
     .order('created_at', { ascending: false });
   return (data as CompanyInvite[]) ?? [];
+}
+
+/** Carica e salva il logo aziendale su Supabase Storage */
+export async function uploadCompanyLogo(companyId: string, base64: string, mimeType: string): Promise<string | null> {
+  try {
+    const ext = mimeType.includes('png') ? 'png' : 'jpg';
+    const path = `${companyId}/logo.${ext}`;
+
+    // Converti base64 → Uint8Array (compatibile React Native / web)
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    const { error } = await supabase.storage
+      .from('company-logos')
+      .upload(path, bytes, { upsert: true, contentType: mimeType });
+
+    if (error) return null;
+
+    const { data } = supabase.storage.from('company-logos').getPublicUrl(path);
+    const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
+
+    await supabase.from('companies').update({ logo_url: publicUrl }).eq('id', companyId);
+    return publicUrl;
+  } catch {
+    return null;
+  }
 }
 
 /** Revoca un invito */
