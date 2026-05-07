@@ -42,4 +42,9 @@ yarn-error.*
 
 # Build artifacts
 dist_android/
+dist-android/
 android/app/src/main/assets/index.android.bundle
+
+# Supabase
+supabase/.temp/
+supabase.exe
