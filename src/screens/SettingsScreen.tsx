@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Switch,
   Modal, Platform,
 } from 'react-native';
 import * as AppAlert from '../components/AppAlert';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   DEFAULT_TOLERANCE_W, DEFAULT_TOLERANCE_H, DEFAULT_RIATTESTATTURA,
@@ -23,11 +25,19 @@ import {
   getAntaTopRail, setAntaTopRail,
   SettingsPreset, getPresets, addPreset, deletePreset, renamePreset, applyPreset,
   PriceConfig, getPrices, setPrice,
+  CatalogSeries, getCatalogSeries,
+  getDefaultCatalogSeriesId, setDefaultCatalogSeriesId,
 } from '../storage/settings';
+import { RootStackParamList } from '../types';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SettingsScreen() {
+  const navigation = useNavigation<Nav>();
   const { theme, toggleDark } = useTheme();
   const t = theme;
+  const [catalogSeries,    setCatalogSeries]    = useState<CatalogSeries[]>([]);
+  const [defaultSeriesId,  setDefaultSeriesId]  = useState<string | null>(null);
 
   const [tolWText,   setTolWText]   = useState<string>(String(DEFAULT_TOLERANCE_W));
   const [tolHText,   setTolHText]   = useState<string>(String(DEFAULT_TOLERANCE_H));
@@ -75,6 +85,11 @@ export default function SettingsScreen() {
       });
     });
   }, []);
+
+  useFocusEffect(useCallback(() => {
+    getCatalogSeries().then(setCatalogSeries);
+    getDefaultCatalogSeriesId().then(setDefaultSeriesId);
+  }, []));
 
   const handleTolWEnd = () => {
     const n = parseInt(tolWText, 10);
@@ -279,6 +294,44 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Serie profili catalogo ── */}
+      <View style={[styles.seriesBar, { backgroundColor: t.card }]}>
+        <View style={styles.seriesHeader}>
+          <Text style={[styles.presetTitle, { color: t.textSecondary }]}>SERIE PROFILI</Text>
+          <TouchableOpacity
+            style={styles.seriesAddBtn}
+            onPress={() => navigation.navigate('SeriesEditor', {})}
+          >
+            <Text style={styles.seriesAddBtnText}>+ Nuova serie</Text>
+          </TouchableOpacity>
+        </View>
+        {catalogSeries.length === 0 ? (
+          <Text style={[styles.seriesEmpty, { color: t.textSecondary }]}>
+            Nessuna serie. Aggiungine una per calcolare i tagli dal catalogo.
+          </Text>
+        ) : (
+          catalogSeries.map(s => (
+            <TouchableOpacity
+              key={s.id}
+              style={styles.seriesRow}
+              onPress={() => navigation.navigate('SeriesEditor', { seriesId: s.id })}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.seriesName, { color: t.textPrimary }]}>{s.name}</Text>
+                <Text style={[styles.seriesSub, { color: t.textSecondary }]}>{s.variants.length} {s.variants.length === 1 ? 'variante' : 'varianti'}</Text>
+              </View>
+              {defaultSeriesId === s.id
+                ? <Text style={styles.seriesDefaultBadge}>DEFAULT</Text>
+                : <TouchableOpacity onPress={async () => { await setDefaultCatalogSeriesId(s.id); setDefaultSeriesId(s.id); }}>
+                    <Text style={[styles.seriesSetDefault, { color: t.textSecondary }]}>Imposta default</Text>
+                  </TouchableOpacity>
+              }
+              <Text style={{ color: t.textSecondary, fontSize: 18, marginLeft: 6 }}>›</Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
 
       {/* ── Striscia preset ── */}
       <View style={[styles.presetBar, { backgroundColor: t.card }]}>
@@ -725,6 +778,18 @@ const styles = StyleSheet.create({
   toggleBtnActive: { borderColor: '#1565C0', backgroundColor: '#EEF5FF' },
   toggleBtnText: { fontSize: 13, fontWeight: '700', color: '#8a9ab0' },
   toggleBtnTextActive: { color: '#1565C0' },
+
+  // Serie catalogo
+  seriesBar:       { borderRadius: 16, padding: 16, marginBottom: 20, elevation: 2, shadowColor: '#1a3a5c', shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  seriesHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  seriesAddBtn:    { backgroundColor: '#0c2d75', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  seriesAddBtnText:{ color: '#fff', fontWeight: '800', fontSize: 12 },
+  seriesEmpty:     { fontSize: 12, fontStyle: 'italic', marginBottom: 4 },
+  seriesRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)' },
+  seriesName:         { fontSize: 14, fontWeight: '700' },
+  seriesSub:          { fontSize: 11, marginTop: 1 },
+  seriesDefaultBadge: { fontSize: 10, fontWeight: '800', color: '#2E7D32', backgroundColor: '#E8F5E9', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  seriesSetDefault:   { fontSize: 10, fontWeight: '600' },
 
   // Preset strip
   presetBar: {

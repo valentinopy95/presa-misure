@@ -57,7 +57,8 @@ export interface Opening {
   heightLeft: number | null;              // altezza lato sinistro (mm)
   heightRight: number | null;             // altezza lato destro (mm)
   style: OpeningStyle | null;
-  profileSeries: string | null;   // serie profilo (es. EKOS 100, EKU 66 TT)
+  profileSeries: string | null;    // serie profilo (es. EKOS 100, EKU 66 TT)
+  catalogSeriesId: string | null;  // id serie catalogo per calcolo taglio
   glassType: string | null;        // tipo vetro (es. Doppio 4/16/4 Ar)
   photos: Photo[];
   textNote: string;
@@ -82,6 +83,7 @@ export interface Project {
   gps: GpsCoords | null;
   openings: Opening[];
   parentId: string | null;
+  catalogSeriesId: string | null;  // serie profilo per distinta di taglio
   createdAt: string;
   updatedAt: string;
 }
@@ -104,4 +106,6 @@ export type RootStackParamList = {
   Stats:       undefined;
   CompanySetup: undefined;
   Paywall: undefined;
+  SeriesEditor:  { seriesId?: string };
+  VariantEditor: { seriesId: string; variantId?: string; leafCount?: number };
 };

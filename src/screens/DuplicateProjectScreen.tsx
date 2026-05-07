@@ -7,9 +7,11 @@ import * as AppAlert from '../components/AppAlert';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
-import { RootStackParamList, Opening, OpeningStyle } from '../types';
+import { RootStackParamList, Opening, OpeningStyle, Project } from '../types';
 import { getProject, saveProject } from '../storage/database';
+import { getCatalogSeries, getDefaultCatalogSeriesId, CatalogSeries } from '../storage/settings';
 import StyleLabel from '../components/StyleLabel';
+import { Modal, Pressable } from 'react-native';
 
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'DuplicateProject'>;
 type Route = RouteProp<RootStackParamList, 'DuplicateProject'>;
@@ -65,9 +67,12 @@ export default function DuplicateProjectScreen() {
   const route      = useRoute<Route>();
   const { projectId } = route.params;
 
-  const [projectName, setProjectName] = useState('');
-  const [drafts, setDrafts]           = useState<DraftOpening[]>([]);
-  const [saving, setSaving]           = useState(false);
+  const [projectName,      setProjectName]      = useState('');
+  const [drafts,           setDrafts]           = useState<DraftOpening[]>([]);
+  const [saving,           setSaving]           = useState(false);
+  const [allSeries,        setAllSeries]        = useState<CatalogSeries[]>([]);
+  const [catalogSeriesId,  setCatalogSeriesId]  = useState<string | null>(null);
+  const [showSeriesPicker, setShowSeriesPicker] = useState(false);
 
   useEffect(() => {
     getProject(projectId).then(p => {
@@ -78,7 +83,15 @@ export default function DuplicateProjectScreen() {
         id: uuidv4(),
         _category: categoryOf(o.style),
       })));
+      // Default: stesso della serie del progetto originale, altrimenti default globale
+      const seriesId = p.catalogSeriesId;
+      if (seriesId) {
+        setCatalogSeriesId(seriesId);
+      } else {
+        getDefaultCatalogSeriesId().then(id => setCatalogSeriesId(id));
+      }
     });
+    getCatalogSeries().then(setAllSeries);
   }, [projectId]);
 
   const updateDraft = (index: number, patch: Partial<DraftOpening>) => {
@@ -104,14 +117,15 @@ export default function DuplicateProjectScreen() {
       // Se l'originale è già un figlio → la copia diventa fratello (stesso parent).
       // Se l'originale è un progetto madre → la copia diventa figlio (parent = originale).
       const parentId = original.parentId ?? original.id;
-      const newProject = {
+      const newProject: Project = {
         ...original,
-        id:        uuidv4(),
-        name:      projectName.trim(),
+        id:              uuidv4(),
+        name:            projectName.trim(),
         parentId,
-        openings:  drafts.map(({ _category, ...o }) => ({ ...o, updatedAt: now })),
-        createdAt: now,
-        updatedAt: now,
+        catalogSeriesId: catalogSeriesId ?? null,
+        openings:        drafts.map(({ _category, ...o }) => ({ ...o, updatedAt: now })),
+        createdAt:       now,
+        updatedAt:       now,
       };
       await saveProject(newProject);
       AppAlert.show('Copia creata!', `"${newProject.name}" è stato creato.`, [
@@ -138,6 +152,19 @@ export default function DuplicateProjectScreen() {
             autoCapitalize="words"
           />
         </View>
+
+        {/* Serie catalogo */}
+        {allSeries.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Serie catalogo taglio</Text>
+            <TouchableOpacity style={s.seriesBtn} onPress={() => setShowSeriesPicker(true)}>
+              <Text style={[s.seriesBtnText, !catalogSeriesId && { color: '#aaa' }]}>
+                {allSeries.find(x => x.id === catalogSeriesId)?.name ?? 'Nessuna serie selezionata'}
+              </Text>
+              <Text style={{ color: '#888', fontSize: 16 }}>›</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Aperture */}
         <View style={s.section}>
@@ -213,6 +240,35 @@ export default function DuplicateProjectScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      {/* Modal picker serie */}
+      <Modal visible={showSeriesPicker} transparent animationType="slide" onRequestClose={() => setShowSeriesPicker(false)}>
+        <Pressable style={s.overlay} onPress={() => setShowSeriesPicker(false)}>
+          <Pressable style={s.pickerSheet}>
+            <Text style={s.pickerTitle}>Serie catalogo</Text>
+            <TouchableOpacity
+              style={[s.pickerRow, !catalogSeriesId && s.pickerRowActive]}
+              onPress={() => { setCatalogSeriesId(null); setShowSeriesPicker(false); }}
+            >
+              <Text style={s.pickerName}>Nessuna</Text>
+              {!catalogSeriesId && <Text style={s.pickerCheck}>✓</Text>}
+            </TouchableOpacity>
+            {allSeries.map(x => (
+              <TouchableOpacity
+                key={x.id}
+                style={[s.pickerRow, catalogSeriesId === x.id && s.pickerRowActive]}
+                onPress={() => { setCatalogSeriesId(x.id); setShowSeriesPicker(false); }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={s.pickerName}>{x.name}</Text>
+                  <Text style={s.pickerSub}>{x.variants.length} varianti</Text>
+                </View>
+                {catalogSeriesId === x.id && <Text style={s.pickerCheck}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -267,4 +323,16 @@ const s = StyleSheet.create({
     elevation: 3, shadowColor: BLUE, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
   },
   btnCreateText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+
+  seriesBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDE3ED', paddingHorizontal: 14, paddingVertical: 12 },
+  seriesBtnText: { fontSize: 14, fontWeight: '600', color: '#1a2a3a', flex: 1 },
+
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  pickerSheet: { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 40 },
+  pickerTitle: { fontSize: 13, fontWeight: '900', color: '#1a2a3a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
+  pickerRow:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F0F4F8' },
+  pickerRowActive:{ backgroundColor: '#EEF4FF' },
+  pickerName:     { fontSize: 15, fontWeight: '700', color: '#1a2a3a', flex: 1 },
+  pickerSub:      { fontSize: 11, color: '#aaa', marginTop: 2 },
+  pickerCheck:    { color: '#0c2d75', fontWeight: '800', fontSize: 16 },
 });

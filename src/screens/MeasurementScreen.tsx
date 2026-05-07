@@ -13,7 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { v4 as uuidv4 } from 'uuid';
 import { Opening, Photo, RootStackParamList, OpeningStyle, OpeningSide } from '../types';
 import { getProject, saveOpening } from '../storage/database';
-import { getToleranceW, getToleranceH, getDimMode } from '../storage/settings';
+import { getToleranceW, getToleranceH, getDimMode, getCatalogSeries, CatalogSeries } from '../storage/settings';
 
 const parseMm = (t: string): number | null => {
   const clean = t.replace(/[^0-9]/g, '');
@@ -80,6 +80,7 @@ const emptyOpening = (): Opening => ({
   heightRight: null,
   style: null,
   profileSeries: null,
+  catalogSeriesId: null,
   glassType: null,
   photos: [],
   textNote: '',
@@ -104,6 +105,8 @@ export default function MeasurementScreen() {
   const [tourVisible, setTourVisible] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying,   setIsPlaying]   = useState(false);
+  const [catalogSeries,     setCatalogSeriesList] = useState<CatalogSeries[]>([]);
+  const [showSeriesPicker,  setShowSeriesPicker]  = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef     = useRef<Audio.Sound | null>(null);
 
@@ -152,17 +155,19 @@ export default function MeasurementScreen() {
 
   const normalizeOpening = (o: Opening): Opening => ({
     ...o,
-    sopraluce:       o.sopraluce       ?? false,
-    sopraluceHeight: o.sopraluceHeight ?? null,
-    outOfSquare:     o.outOfSquare     ?? false,
-    heightLeft:      o.heightLeft      ?? null,
-    heightRight:     o.heightRight     ?? null,
+    sopraluce:        o.sopraluce        ?? false,
+    sopraluceHeight:  o.sopraluceHeight  ?? null,
+    outOfSquare:      o.outOfSquare      ?? false,
+    heightLeft:       o.heightLeft       ?? null,
+    heightRight:      o.heightRight      ?? null,
+    catalogSeriesId:  o.catalogSeriesId  ?? null,
   });
 
   useEffect(() => {
     getToleranceW().then(setToleranceW);
     getToleranceH().then(setToleranceH);
     getDimMode().then(setDimMode);
+    getCatalogSeries().then(setCatalogSeriesList);
     if (openingId) {
       getProject(projectId).then(p => {
         const existing = p?.openings.find(o => o.id === openingId);
@@ -754,6 +759,8 @@ export default function MeasurementScreen() {
         </>
       )}
 
+      {/* Serie catalogo: gestita a livello progetto, non per singola apertura */}
+
       {/* ── Note ── */}
       <Text style={styles.label}>Note</Text>
       <TextInput
@@ -930,6 +937,18 @@ const styles = StyleSheet.create({
     fontSize: 16, borderWidth: 1, borderColor: '#E0E0E0',
   },
   textArea: { height: 90, textAlignVertical: 'top' },
+
+  seriesPickerBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDE3ED', paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
+  seriesPickerText: { fontSize: 14, fontWeight: '600', color: '#1a2a3a', flex: 1 },
+  seriesOverlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  seriesSheet:      { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36 },
+  seriesSheetTitle: { fontSize: 13, fontWeight: '900', color: '#1a2a3a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
+  seriesSheetRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F0F4F8' },
+  seriesSheetRowActive: { backgroundColor: '#EEF4FF' },
+  seriesSheetName:  { fontSize: 15, fontWeight: '700', color: '#1a2a3a' },
+  seriesSheetSub:   { fontSize: 11, color: '#aaa', marginTop: 2 },
+  seriesSheetCancel:     { marginTop: 16, alignItems: 'center', paddingVertical: 12 },
+  seriesSheetCancelText: { fontSize: 15, fontWeight: '700', color: '#DC2626' },
 
   unit: { fontSize: 13, color: '#999', marginLeft: 4, fontWeight: '600' },
   taglioValue: { fontSize: 20, fontWeight: '800', color: '#1565C0', textAlign: 'right' },

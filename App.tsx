@@ -35,6 +35,8 @@ import StatsScreen             from './src/screens/StatsScreen';
 import CuttingListScreen        from './src/screens/CuttingListScreen';
 import CuttingProjectsScreen   from './src/screens/CuttingProjectsScreen';
 import PaywallScreen           from './src/screens/PaywallScreen';
+import SeriesEditorScreen      from './src/screens/SeriesEditorScreen';
+import VariantEditorScreen     from './src/screens/VariantEditorScreen';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -82,6 +84,8 @@ function AppNavigator() {
         <Stack.Screen name="CuttingList"       component={CuttingListScreen}      options={{ title: 'Distinta di taglio' }}/>
         <Stack.Screen name="CompanySetup"      component={CompanySetupScreen}     options={{ headerShown: false }}/>
         <Stack.Screen name="Paywall"           component={PaywallScreen}          options={{ title: 'Piano e abbonamento', presentation: 'modal' }}/>
+        <Stack.Screen name="SeriesEditor"  component={SeriesEditorScreen}  options={({ route }) => ({ title: route.params?.seriesId ? 'Modifica serie' : 'Nuova serie' })}/>
+        <Stack.Screen name="VariantEditor" component={VariantEditorScreen} options={({ route }) => ({ title: route.params?.variantId ? 'Modifica variante' : 'Nuova variante' })}/>
       </Stack.Navigator>
     </NavigationContainer>
   );

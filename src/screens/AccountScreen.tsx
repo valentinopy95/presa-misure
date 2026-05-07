@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as AppAlert from '../components/AppAlert';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   supabase, fetchProfile, fetchCompany, Company,
   inviteToCompany, listPendingInvites, revokeInvite, CompanyInvite,
-  checkAndAcceptInvite, listInvitesForMe, MyInvite,
+  checkAndAcceptInvite, listInvitesForMe, MyInvite, uploadCompanyLogo,
 } from '../lib/supabase';
 import { clearDbCache } from '../storage/database';
 import { RootStackParamList } from '../types';
@@ -29,6 +31,7 @@ export default function AccountScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [sending,     setSending]     = useState(false);
   const [accepting,   setAccepting]   = useState<string | null>(null); // invite id being accepted
+  const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => {
     load();
@@ -120,6 +123,39 @@ export default function AccountScreen() {
         },
       ]
     );
+  };
+
+  const handlePickLogo = async () => {
+    if (!company) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      AppAlert.show('Permesso negato', 'Abilita l\'accesso alla libreria foto nelle impostazioni.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [3, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    const mimeType = asset.mimeType ?? (asset.uri.endsWith('.png') ? 'image/png' : 'image/jpeg');
+    setLogoUploading(true);
+    try {
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const url = await uploadCompanyLogo(company.id, base64, mimeType);
+      if (url) {
+        setCompany(prev => prev ? { ...prev, logo_url: url } : prev);
+        AppAlert.show('Logo aggiornato', 'Il logo aziendale è stato salvato.');
+      } else {
+        AppAlert.show('Errore', 'Impossibile caricare il logo. Riprova.');
+      }
+    } finally {
+      setLogoUploading(false);
+    }
   };
 
   const handleLeaveCompany = () => {
@@ -229,6 +265,30 @@ export default function AccountScreen() {
                   <View style={s.rowInfo}>
                     <Text style={s.rowLabel}>Nome</Text>
                     <Text style={s.rowValue}>{company.name}</Text>
+                  </View>
+                </View>
+                <View style={[s.row, s.rowBorder]}>
+                  <View style={s.rowInfo}>
+                    <Text style={s.rowLabel}>Logo aziendale</Text>
+                    <Text style={s.rowHint}>Apparirà nei PDF generati</Text>
+                  </View>
+                  <View style={{ alignItems: 'center', gap: 8 }}>
+                    {company.logo_url ? (
+                      <Image
+                        source={{ uri: company.logo_url }}
+                        style={s.logoPreview}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={s.logoPlaceholder}>
+                        <Text style={s.logoPlaceholderText}>Nessun logo</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity style={s.logoBtn} onPress={handlePickLogo} disabled={logoUploading}>
+                      {logoUploading
+                        ? <ActivityIndicator color="#fff" size="small"/>
+                        : <Text style={s.logoBtnText}>{company.logo_url ? 'Cambia' : 'Carica'}</Text>}
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -406,4 +466,10 @@ const s = StyleSheet.create({
   pastDueBadgeText: { fontSize: 11, fontWeight: '700', color: '#E65100' },
   upgradePillBtn: { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   upgradePillText:{ color: '#fff', fontWeight: '800', fontSize: 13 },
+
+  logoPreview:        { width: 90, height: 36, borderRadius: 6, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC' },
+  logoPlaceholder:    { width: 90, height: 36, borderRadius: 6, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
+  logoPlaceholderText:{ fontSize: 10, color: '#bbb' },
+  logoBtn:            { backgroundColor: '#0c2d75', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, minWidth: 72, alignItems: 'center' },
+  logoBtnText:        { color: '#fff', fontWeight: '800', fontSize: 13 },
 });

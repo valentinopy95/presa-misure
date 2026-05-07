@@ -62,16 +62,17 @@ async function getCurrentIds(): Promise<{ userId: string; companyId: string } | 
 
 function rowToProject(row: Record<string, unknown>): Project {
   return {
-    id:          row.id           as string,
-    name:        row.name         as string,
-    clientName:  row.client_name  as string,
-    clientPhone: row.client_phone as string,
-    address:     row.address      as string,
-    gps:         row.gps          as Project['gps'],
-    openings:   (row.openings     as Opening[]) ?? [],
-    parentId:   (row.parent_id    as string | null) ?? null,
-    createdAt:   row.created_at   as string,
-    updatedAt:   row.updated_at   as string,
+    id:              row.id              as string,
+    name:            row.name            as string,
+    clientName:      row.client_name     as string,
+    clientPhone:     row.client_phone    as string,
+    address:         row.address         as string,
+    gps:             row.gps             as Project['gps'],
+    openings:       (row.openings        as Opening[]) ?? [],
+    parentId:       (row.parent_id       as string | null) ?? null,
+    catalogSeriesId:(row.catalog_series_id as string | null) ?? null,
+    createdAt:       row.created_at      as string,
+    updatedAt:       row.updated_at      as string,
   };
 }
 
@@ -188,18 +189,19 @@ export async function saveProject(project: Project): Promise<void> {
   if (!ids) return;
 
   await upsertProject({
-    id:           project.id,
-    company_id:   ids.companyId,
-    user_id:      ids.userId,
-    name:         project.name,
-    client_name:  project.clientName,
-    client_phone: project.clientPhone,
-    address:      project.address,
-    gps:          project.gps,
-    openings:     project.openings,
-    parent_id:    project.parentId ?? null,
-    created_at:   project.createdAt,
-    updated_at:   project.updatedAt,
+    id:                 project.id,
+    company_id:         ids.companyId,
+    user_id:            ids.userId,
+    name:               project.name,
+    client_name:        project.clientName,
+    client_phone:       project.clientPhone,
+    address:            project.address,
+    gps:                project.gps,
+    openings:           project.openings,
+    parent_id:          project.parentId ?? null,
+    catalog_series_id:  project.catalogSeriesId ?? null,
+    created_at:         project.createdAt,
+    updated_at:         project.updatedAt,
   });
 
   // Aggiorna cache
@@ -231,18 +233,19 @@ export async function saveOpening(projectId: string, opening: Opening): Promise<
   const ids = await getCurrentIds();
   if (!ids) return;
   await upsertProject({
-    id:           project.id,
-    company_id:   ids.companyId,
-    user_id:      ids.userId,
-    name:         project.name,
-    client_name:  project.clientName,
-    client_phone: project.clientPhone,
-    address:      project.address,
-    gps:          project.gps,
-    openings:     project.openings,
-    parent_id:    project.parentId ?? null,
-    created_at:   project.createdAt,
-    updated_at:   project.updatedAt,
+    id:                 project.id,
+    company_id:         ids.companyId,
+    user_id:            ids.userId,
+    name:               project.name,
+    client_name:        project.clientName,
+    client_phone:       project.clientPhone,
+    address:            project.address,
+    gps:                project.gps,
+    openings:           project.openings,
+    parent_id:          project.parentId ?? null,
+    catalog_series_id:  project.catalogSeriesId ?? null,
+    created_at:         project.createdAt,
+    updated_at:         project.updatedAt,
   });
   _projectCache.set(project.id, project);
 }
@@ -273,18 +276,19 @@ export async function deleteOpening(projectId: string, openingId: string): Promi
   const ids = await getCurrentIds();
   if (!ids) return;
   await upsertProject({
-    id:           project.id,
-    company_id:   ids.companyId,
-    user_id:      ids.userId,
-    name:         project.name,
-    client_name:  project.clientName,
-    client_phone: project.clientPhone,
-    address:      project.address,
-    gps:          project.gps,
-    openings:     project.openings,
-    parent_id:    project.parentId ?? null,
-    created_at:   project.createdAt,
-    updated_at:   project.updatedAt,
+    id:                 project.id,
+    company_id:         ids.companyId,
+    user_id:            ids.userId,
+    name:               project.name,
+    client_name:        project.clientName,
+    client_phone:       project.clientPhone,
+    address:            project.address,
+    gps:                project.gps,
+    openings:           project.openings,
+    parent_id:          project.parentId ?? null,
+    catalog_series_id:  project.catalogSeriesId ?? null,
+    created_at:         project.createdAt,
+    updated_at:         project.updatedAt,
   });
   _projectCache.set(project.id, project);
 }

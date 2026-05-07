@@ -1,4 +1,5 @@
 import { Opening } from '../types';
+import { CatalogSeries, findBestVariant } from '../storage/settings';
 
 const DEFAULT_BAR_MM  = 6400;
 const DEFAULT_KERF_90 = 4;
@@ -429,4 +430,105 @@ export function calculateCuttingList(
   );
 
   return { profiles45, profiles90, warnings, barLength };
+}
+
+// ─── Catalog cutting list ──────────────────────────────────────────────────────
+
+function isSeriesEligible(o: Opening): boolean {
+  if (!o.width || !o.height || !o.style) return false;
+  const s = o.style;
+  return (s.startsWith('window') || s.startsWith('door') || s.startsWith('shutter'))
+    && s !== 'window_fixed';
+}
+
+export function calculateCatalogCuttingList(
+  openings: Opening[],
+  series: CatalogSeries,
+  toleranceW: number,
+  toleranceH: number,
+  config: MaterialsConfig = {},
+): CuttingListResult {
+  const {
+    riattestattura = 25,
+    barLength      = DEFAULT_BAR_MM,
+    kerf90         = DEFAULT_KERF_90,
+  } = config;
+
+  const b45: Record<string, number[]> = {};
+  const b90: Record<string, number[]> = {};
+  const warnings: string[] = [];
+
+  for (const o of openings) {
+    if (!isSeriesEligible(o)) continue;
+    const variant = findBestVariant(series, o.leafCount);
+    if (!variant || !variant.pieces.length) continue;
+
+    const pcL = o.width!  - toleranceW;
+    const pcH = o.height! - toleranceH;
+    const hasSoglia = o.hasSoglia === true;
+
+    for (const piece of variant.pieces) {
+      const cond = piece.condition ?? 'always';
+      if (cond === 'no_soglia'   &&  hasSoglia) continue;
+      if (cond === 'with_soglia' && !hasSoglia) continue;
+
+      const base   = piece.baseVar === 'L' ? pcL : pcH;
+      const length = Math.round(((base - piece.offset) / piece.divisor) * 2) / 2;
+      if (length <= 0) continue;
+
+      const is90 = piece.cutAngle1 === 90 && piece.cutAngle2 === 90;
+      for (let q = 0; q < piece.quantity; q++) {
+        if (length > barLength) {
+          warnings.push(`${piece.name}: ${length}mm supera la barra (${barLength}mm)`);
+          continue;
+        }
+        if (is90) b90[piece.name] = [...(b90[piece.name] ?? []), length];
+        else      b45[piece.name] = [...(b45[piece.name] ?? []), length];
+      }
+    }
+  }
+
+  const profiles45 = Object.entries(b45)
+    .map(([label, pieces]): CuttingProfile | null => {
+      const { binDetails } = calcBars(pieces, barLength, riattestattura, false);
+      return binDetails.length ? { label, cutAngle: 45, bins: binDetails } : null;
+    }).filter(Boolean) as CuttingProfile[];
+
+  const profiles90 = Object.entries(b90)
+    .map(([label, pieces]): CuttingProfile | null => {
+      const { binDetails } = calcBars(pieces, barLength, kerf90, true);
+      return binDetails.length ? { label, cutAngle: 90, bins: binDetails } : null;
+    }).filter(Boolean) as CuttingProfile[];
+
+  return { profiles45, profiles90, warnings, barLength };
+}
+
+// Converte CuttingListResult → MaterialsResult (per la schermata sviluppo)
+export function catalogCuttingToMaterials(
+  cuttingResult: CuttingListResult,
+  safetyMarginPct = 5,
+): MaterialsResult {
+  function applyMargin(n: number) {
+    return safetyMarginPct <= 0 ? n : n + Math.round(n * safetyMarginPct / 100);
+  }
+  const toProfile = (cp: CuttingProfile): ProfileResult => ({
+    label:     cp.label,
+    bars:      applyMargin(cp.bins.length),
+    offcuts:   cp.bins.map(b => b.remaining).filter(r => r >= MIN_REMNANT_MM),
+    nearLimit: cp.bins.some(b => b.remaining > 0 && b.remaining < NEAR_LIMIT_THRESHOLD),
+  });
+  const p45 = cuttingResult.profiles45.map(toProfile);
+  const p90 = cuttingResult.profiles90.map(toProfile);
+  return {
+    profiles45:  p45,
+    profiles90:  p90,
+    totalBars45: p45.reduce((s, p) => s + p.bars, 0),
+    totalBars90: p90.reduce((s, p) => s + p.bars, 0),
+    warnings:    cuttingResult.warnings,
+  };
+}
+
+// Aperture non coperte dalla serie → calcolo default
+export function openingsWithoutSeries(openings: Opening[]): Opening[] {
+  return openings.filter(o => !isSeriesEligible(o));
 }

@@ -12,8 +12,12 @@ import {
   getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail,
   getToleranceW, getToleranceH,
   SettingsPreset, getPresets, applyPreset,
+  CatalogSeries, getCatalogSeries,
 } from '../storage/settings';
-import { calculateMaterials, MaterialsResult, MaterialsConfig, ProfileResult, MIN_REMNANT_MM } from '../utils/calculateMaterials';
+import {
+  calculateMaterials, calculateCatalogCuttingList, catalogCuttingToMaterials, openingsWithoutSeries,
+  MaterialsResult, MaterialsConfig, ProfileResult, MIN_REMNANT_MM,
+} from '../utils/calculateMaterials';
 import { generateHTML } from '../utils/pdfExport';
 import { getLogoBase64, sharePdf, saveToDevice } from '../utils/pdfActions';
 import * as AppAlert from '../components/AppAlert';
@@ -35,16 +39,17 @@ export default function MaterialsScreen() {
   const navigation = useNavigation<Nav>();
   const { projectId } = route.params;
 
-  const [project,      setProject]      = useState<Project | null>(null);
-  const [result,       setResult]       = useState<MaterialsResult | null>(null);
-  const [matConfig,    setMatConfig]    = useState<MaterialsConfig | null>(null);
-  const [presets,      setPresets]      = useState<SettingsPreset[]>([]);
-  const [activeId,     setActiveId]     = useState<string | null>(null);
-  const [tourVisible,  setTourVisible]  = useState(false);
-  const [showPdfModal, setShowPdfModal] = useState(false);
-  const [pdfBusy,      setPdfBusy]      = useState(false);
-  // extraBars: quante barre extra l'utente ha aggiunto manualmente label→count
-  const [extraBars,    setExtraBars]    = useState<Record<string, number>>({});
+  const [project,        setProject]        = useState<Project | null>(null);
+  const [result,         setResult]         = useState<MaterialsResult | null>(null);
+  const [catalogResult,  setCatalogResult]  = useState<MaterialsResult | null>(null);
+  const [catalogSeries,  setCatalogSeries]  = useState<CatalogSeries | null>(null);
+  const [matConfig,      setMatConfig]      = useState<MaterialsConfig | null>(null);
+  const [presets,        setPresets]        = useState<SettingsPreset[]>([]);
+  const [activeId,       setActiveId]       = useState<string | null>(null);
+  const [tourVisible,    setTourVisible]    = useState(false);
+  const [showPdfModal,   setShowPdfModal]   = useState(false);
+  const [pdfBusy,        setPdfBusy]        = useState(false);
+  const [extraBars,      setExtraBars]      = useState<Record<string, number>>({});
 
   const projectRef   = useRef(project);
   const matConfigRef = useRef(matConfig);
@@ -86,9 +91,10 @@ export default function MaterialsScreen() {
   }, [navigation]);
 
   const loadAndCalculate = useCallback(async () => {
-    const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop] = await Promise.all([
+    const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, tolW, tolH, allSeries] = await Promise.all([
       getProject(projectId), getRiattestattura(), getBarLength(), getKerf90(),
       getSafetyMargin(), getSlatPitch(), getZoccoloH(), getFasciaH(), getAntaReduction(), getAntaTopRail(),
+      getToleranceW(), getToleranceH(), getCatalogSeries(),
     ]);
     if (!p) return;
     const cfg: MaterialsConfig = {
@@ -98,7 +104,18 @@ export default function MaterialsScreen() {
     };
     setProject(p);
     setMatConfig(cfg);
-    setResult(calculateMaterials(p.openings, cfg));
+
+    const series = p.catalogSeriesId ? allSeries.find(s => s.id === p.catalogSeriesId) ?? null : null;
+    setCatalogSeries(series);
+
+    if (series) {
+      const catCutting = calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg);
+      setCatalogResult(catalogCuttingToMaterials(catCutting, margin));
+      setResult(calculateMaterials(openingsWithoutSeries(p.openings), cfg));
+    } else {
+      setCatalogResult(null);
+      setResult(calculateMaterials(p.openings, cfg));
+    }
   }, [projectId]);
 
   useEffect(() => {
@@ -110,6 +127,7 @@ export default function MaterialsScreen() {
     await applyPreset(preset);
     setActiveId(preset.id);
     setResult(null);
+    setCatalogResult(null);
     setExtraBars({});
     await loadAndCalculate();
   };
@@ -132,8 +150,9 @@ export default function MaterialsScreen() {
          o.style !== 'roller_blind' && !o.style.startsWith('mosquito') && o.style !== 'custom',
   ).length;
 
-  const allOffcuts = [...result.profiles45, ...result.profiles90].filter(p => p.offcuts.length > 0);
-  const nearLimitProfiles = [...result.profiles45, ...result.profiles90].filter(p => p.nearLimit);
+  const allCatalogProfiles = catalogResult ? [...catalogResult.profiles45, ...catalogResult.profiles90] : [];
+  const allOffcuts = [...(catalogResult?.profiles45 ?? []), ...(catalogResult?.profiles90 ?? []), ...result.profiles45, ...result.profiles90].filter(p => p.offcuts.length > 0);
+  const nearLimitProfiles = [...allCatalogProfiles, ...result.profiles45, ...result.profiles90].filter(p => p.nearLimit);
 
   return (
     <>
@@ -226,18 +245,37 @@ export default function MaterialsScreen() {
         </View>
       )}
 
-      {/* ── Sezione 45° ── */}
-      {result.profiles45.length > 0 && (
+      {/* ── Sezione catalogo ── */}
+      {catalogResult && allCatalogProfiles.length > 0 && (
         <>
-          <SectionHeader label="Taglio a 45°" color="#1565C0"/>
-          <ProfileTable rows={result.profiles45} extraBars={extraBars}/>
+          <SectionHeader label={`Serie: ${catalogSeries?.name ?? 'Catalogo'}`} color="#6A1B9A"/>
+          {catalogResult.profiles45.length > 0 && (
+            <>
+              <SectionHeader label="Taglio a 45°" color="#1565C0"/>
+              <ProfileTable rows={catalogResult.profiles45} extraBars={extraBars}/>
+            </>
+          )}
+          {catalogResult.profiles90.length > 0 && (
+            <>
+              <SectionHeader label="Taglio a 90°" color="#2E7D32"/>
+              <ProfileTable rows={catalogResult.profiles90} extraBars={extraBars}/>
+            </>
+          )}
         </>
       )}
 
-      {/* ── Sezione 90° ── */}
+      {/* ── Sezione generica ── */}
+      {result.profiles45.length > 0 && (
+        <>
+          {allCatalogProfiles.length > 0 && <SectionHeader label="Altri profili (calcolo generico)" color="#37474F"/>}
+          {!allCatalogProfiles.length && <SectionHeader label="Taglio a 45°" color="#1565C0"/>}
+          <ProfileTable rows={result.profiles45} extraBars={extraBars}/>
+        </>
+      )}
       {result.profiles90.length > 0 && (
         <>
-          <SectionHeader label="Taglio a 90°" color="#2E7D32"/>
+          {allCatalogProfiles.length > 0 && !result.profiles45.length && <SectionHeader label="Altri profili (calcolo generico)" color="#37474F"/>}
+          {!allCatalogProfiles.length && <SectionHeader label="Taglio a 90°" color="#2E7D32"/>}
           <ProfileTable rows={result.profiles90} extraBars={extraBars}/>
         </>
       )}
@@ -257,7 +295,7 @@ export default function MaterialsScreen() {
                 <Text style={off.label}>{p.label}</Text>
                 <View style={off.right}>
                   <Text style={off.count}>{p.offcuts.length}×</Text>
-                  <Text style={off.lengths}>{p.offcuts.map(l => `${Math.round(l)}mm`).join(', ')}</Text>
+                  <Text style={off.lengths}>{p.offcuts.map(l => `${l.toFixed(1)}mm`).join(', ')}</Text>
                 </View>
               </View>
             ))}

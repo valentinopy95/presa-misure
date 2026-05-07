@@ -1,6 +1,6 @@
 import { Project, Opening, OpeningStyle } from '../types';
 import { calculateMaterials, MaterialsResult, MaterialsConfig, CuttingListResult, CuttingProfile } from './calculateMaterials';
-import { PriceConfig, priceForStyle } from '../storage/settings';
+import { PriceConfig, priceForStyle, CatalogSeries, findBestVariant } from '../storage/settings';
 
 export type PdfMode = 'both' | 'misure' | 'materiale';
 
@@ -39,46 +39,123 @@ const FRAME = `
 
 // ─── Style indicators ─────────────────────────────────────────────────────────
 function indicator(style: OpeningStyle, boxHeight: number | null): string {
-  const col = '#1a5296';
+  const col = '#1565C0';
   const da = 'stroke-dasharray="5,3"';
-  const arcFill = 'fill="rgba(26,82,150,0.08)"';
+
+  // Helper: 3 hinge marks along the vertical edge
+  const hingeMarks = (x: number) =>
+    [GY + GH*0.18, GY + GH*0.5, GY + GH*0.82].map(y =>
+      `<rect x="${(x-3).toFixed(1)}" y="${(y-4).toFixed(1)}" width="6" height="8" rx="1.5"
+             fill="white" stroke="${col}" stroke-width="1.2"/>
+       <line x1="${(x-3).toFixed(1)}" y1="${y.toFixed(1)}"
+             x2="${(x+3).toFixed(1)}" y2="${y.toFixed(1)}"
+             stroke="${col}" stroke-width="0.6"/>`
+    ).join('');
+
+  // Helper: simplified cremonese lock (vertical rod + T-handle)
+  const cremonese = (hx: number, flipLeft = false) => {
+    const lx = flipLeft ? hx - 10 : hx + 2;
+    const kx = flipLeft ? hx - 14 : hx + 14;
+    return `
+      <line x1="${hx}" y1="${GY+10}" x2="${hx}" y2="${GY2-10}"
+            stroke="${col}" stroke-width="1.5"/>
+      <rect x="${hx-4}" y="${GY+6}" width="8" height="7" rx="1.5" fill="${col}"/>
+      <rect x="${hx-4}" y="${GY2-13}" width="8" height="7" rx="1.5" fill="${col}"/>
+      <rect x="${hx-3}" y="${CY-14}" width="6" height="28" rx="2" fill="${col}"/>
+      <rect x="${lx}" y="${CY-3}" width="10" height="6" rx="3" fill="${col}"/>
+      <circle cx="${kx}" cy="${CY}" r="4" fill="${col}"/>`;
+  };
+
+  // Helper: door lever handle with rosette + cylinder
+  const doorHandle = (hx: number, leverRight: boolean) => {
+    const lx = leverRight ? hx + 8 : hx - 20;
+    const kx = leverRight ? hx + 20 : hx - 20;
+    return `
+      <circle cx="${hx}" cy="${CY}" r="7" fill="${col}"/>
+      <circle cx="${hx}" cy="${CY}" r="4.5" fill="rgba(255,255,255,0.18)"/>
+      <rect x="${lx}" y="${CY-3}" width="12" height="6" rx="3" fill="${col}"/>
+      <circle cx="${kx}" cy="${CY}" r="4.5" fill="${col}"/>
+      <rect x="${hx-5}" y="${CY+10}" width="10" height="14" rx="3" fill="${col}"/>
+      <circle cx="${hx}" cy="${CY+15}" r="3" fill="rgba(255,255,255,0.2)"/>`;
+  };
 
   switch (style) {
+    case 'window_fixed':
+      return `
+        <rect x="${GX}" y="${GY}" width="${GW}" height="5" fill="#c8d4df" stroke="#4a6070" stroke-width="0.8"/>
+        <rect x="${GX}" y="${GY2-5}" width="${GW}" height="5" fill="#c8d4df" stroke="#4a6070" stroke-width="0.8"/>
+        <rect x="${GX}" y="${GY}" width="5" height="${GH}" fill="#c8d4df" stroke="#4a6070" stroke-width="0.8"/>
+        <rect x="${GX2-5}" y="${GY}" width="5" height="${GH}" fill="#c8d4df" stroke="#4a6070" stroke-width="0.8"/>
+        <rect x="${CX-22}" y="${CY-9}" width="44" height="18" rx="4"
+              fill="rgba(21,101,192,0.10)" stroke="${col}" stroke-width="1.2"/>
+        <text x="${CX}" y="${CY+5}" text-anchor="middle" font-size="9" fill="${col}"
+              font-weight="800" font-family="Arial,sans-serif">FISSO</text>`;
+
     case 'window_single':
       return `
-        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M ${GX+3} ${GY} Q ${GX2-3} ${GY} ${GX2-3} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
-        <line x1="${GX2-14}" y1="${CY-4}" x2="${GX2-14}" y2="${CY+4}" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`;
+        ${hingeMarks(GX+3)}
+        <line x1="${GX2-10}" y1="${CY}" x2="${GX+10}" y2="${GY+10}"
+              stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="${GX2-10}" y1="${CY}" x2="${GX+10}" y2="${GY2-10}"
+              stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>
+        ${cremonese(GX2-8, true)}`;
+
+    case 'window_double':
+      return `
+        ${hingeMarks(GX+3)}
+        ${hingeMarks(GX2-3)}
+        <line x1="${CX-6}" y1="${CY}" x2="${GX+10}" y2="${GY+10}"
+              stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="${CX-6}" y1="${CY}" x2="${GX+10}" y2="${GY2-10}"
+              stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="${CX+6}" y1="${CY}" x2="${GX2-10}" y2="${GY+10}"
+              stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="${CX+6}" y1="${CY}" x2="${GX2-10}" y2="${GY2-10}"
+              stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>
+        ${cremonese(CX-6, false)}
+        ${cremonese(CX+6, true)}`;
 
     case 'window_sliding':
       return `
-        <rect x="${GX}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(26,82,150,0.06)" stroke="${col}" stroke-width="1"/>
-        <rect x="${CX-6}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(255,255,255,0.15)" stroke="${col}" stroke-width="2"/>
+        <rect x="${GX}" y="${GY}" width="${GW/2+6}" height="${GH}"
+              fill="rgba(21,101,192,0.06)" stroke="${col}" stroke-width="1"/>
+        <rect x="${CX-6}" y="${GY}" width="${GW/2+6}" height="${GH}"
+              fill="rgba(255,255,255,0.15)" stroke="${col}" stroke-width="2"/>
         <line x1="${CX+4}" y1="${CY}" x2="${GX2-12}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>
         <polygon points="${GX2-12},${CY-5} ${GX2-6},${CY} ${GX2-12},${CY+5}" fill="${col}"/>
-        <text x="${CX}" y="${GY2-6}" text-anchor="middle" font-size="7" fill="${col}" font-weight="700" font-family="Arial,sans-serif">SCOR.</text>`;
+        <rect x="${CX-7}" y="${CY-8}" width="4" height="16" rx="2" fill="${col}"/>
+        <text x="${CX}" y="${GY2-6}" text-anchor="middle" font-size="7" fill="${col}"
+              font-weight="700" font-family="Arial,sans-serif">SCOR.</text>`;
 
     case 'window_tilt_turn':
       return `
         <line x1="${GX+4}" y1="${GY+4}" x2="${CX}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>
         <line x1="${GX2-4}" y1="${GY+4}" x2="${CX}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>
         <line x1="${CX}" y1="${GY2-4}" x2="${CX}" y2="${CY}" stroke="${col}" stroke-width="1.5"/>
-        <line x1="${GX+4}" y1="${GY}" x2="${GX+4}" y2="${GY2}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <line x1="${CX-10}" y1="${GY2-4}" x2="${CX+10}" y2="${GY2-4}" stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
-        <text x="${CX}" y="${GY2-10}" text-anchor="middle" font-size="7" fill="${col}" font-weight="700" font-family="Arial,sans-serif">VAS.</text>`;
+        <line x1="${GX+4}" y1="${GY}" x2="${GX+4}" y2="${GY2}"
+              stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="${GX+6}" y1="${GY2-4}" x2="${GX2-6}" y2="${GY2-4}"
+              stroke="${col}" stroke-width="2.5" stroke-linecap="round"/>
+        ${cremonese(CX, false)}`;
 
     case 'door_single':
       return `
-        <line x1="${GX+3}" y1="${GY}" x2="${GX+3}" y2="${GY2}" stroke="${col}" stroke-width="3" stroke-linecap="round"/>
-        <path d="M ${GX+3} ${GY2} A ${GH*0.85} ${GH*0.85} 0 0 1 ${Math.min(GX2-3, GX+3+GH*0.85)} ${GY2}" ${arcFill} stroke="${col}" stroke-width="1.5" ${da}/>
-        <rect x="${GX2-12}" y="${CY-8}" width="5" height="16" rx="2.5" fill="${col}"/>`;
+        ${hingeMarks(GX+3)}
+        <line x1="${GX2-12}" y1="${CY}" x2="${GX+12}" y2="${GY+14}"
+              stroke="${col}" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="${GX2-12}" y1="${CY}" x2="${GX+12}" y2="${GY2-10}"
+              stroke="${col}" stroke-width="1.8" stroke-linecap="round"/>
+        ${doorHandle(GX2-14, false)}`;
 
     case 'door_sliding':
       return `
-        <rect x="${GX}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(26,82,150,0.06)" stroke="${col}" stroke-width="1"/>
-        <rect x="${CX-6}" y="${GY}" width="${GW/2+6}" height="${GH}" fill="rgba(255,255,255,0.15)" stroke="${col}" stroke-width="2"/>
+        <rect x="${GX}" y="${GY}" width="${GW/2+6}" height="${GH}"
+              fill="rgba(21,101,192,0.06)" stroke="${col}" stroke-width="1"/>
+        <rect x="${CX-6}" y="${GY}" width="${GW/2+6}" height="${GH}"
+              fill="rgba(255,255,255,0.15)" stroke="${col}" stroke-width="2"/>
         <rect x="${CX-3}" y="${CY-8}" width="4" height="16" rx="2" fill="${col}"/>
-        <text x="${CX}" y="${GY2-6}" text-anchor="middle" font-size="7" fill="${col}" font-weight="700" font-family="Arial,sans-serif">SCOR.</text>`;
+        <text x="${CX}" y="${GY2-6}" text-anchor="middle" font-size="7" fill="${col}"
+              font-weight="700" font-family="Arial,sans-serif">SCOR.</text>`;
 
     case 'shutter_single': {
       const slats = 7, slH = FH / slats;
@@ -740,14 +817,14 @@ function cuttingProfileHTML(profile: CuttingProfile, barLength: number): string 
       const color = CUTTING_COLORS[pi % CUTTING_COLORS.length];
       return `<span style="display:inline-flex;align-items:center;gap:4px;background:#F0F4F8;border-radius:5px;padding:3px 8px;margin:2px;">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color};"></span>
-        <span style="font-size:10px;font-weight:700;color:#1a2a3a;">${piece} mm</span>
+        <span style="font-size:10px;font-weight:700;color:#1a2a3a;">${piece.toFixed(1)} mm</span>
       </span>`;
     }).join('');
 
     const remTag = bin.remaining > 0
       ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#F0F4F8;border-radius:5px;padding:3px 8px;margin:2px;">
           <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#C8D4E0;"></span>
-          <span style="font-size:10px;font-weight:600;color:#8A9AB0;">${Math.round(bin.remaining)} mm avanzo</span>
+          <span style="font-size:10px;font-weight:600;color:#8A9AB0;">${bin.remaining.toFixed(1)} mm avanzo</span>
         </span>`
       : '';
 
@@ -767,7 +844,7 @@ function cuttingProfileHTML(profile: CuttingProfile, barLength: number): string 
         <!-- Tags -->
         <div style="display:flex;flex-wrap:wrap;">${tagsHtml}${remTag}</div>
         <div style="font-size:9px;color:#A0B0C8;margin-top:5px;">
-          Usata: ${Math.round(usedMm)} / ${barLength} mm${bin.remaining === 0 ? ' — barra piena' : ''}
+          Usata: ${usedMm.toFixed(1)} / ${barLength} mm${bin.remaining === 0 ? ' — barra piena' : ''}
         </div>
       </td>
     </tr>`;
@@ -912,4 +989,100 @@ export function generateCuttingListHTML(
 </div>
 </body>
 </html>`;
+}
+
+// ─── CSV Export ───────────────────────────────────────────────────────────────
+// Se le aperture hanno una serie catalogo assegnata, genera CSV con formule
+// reali da catalogo. Altrimenti usa la distinta di taglio generica.
+export function generateCuttingListCSV(
+  projectName: string,
+  cuttingResult: CuttingListResult,
+  openings?: Opening[],
+  catalogSeries?: CatalogSeries[],
+  toleranceW?: number,
+  toleranceH?: number,
+  projectSeriesId?: string | null,
+): string {
+  const lines: string[] = [];
+  lines.push('sep=;');
+  lines.push(`Progetto;${projectName}`);
+  lines.push(`Data;${new Date().toLocaleDateString('it-IT')}`);
+  lines.push('');
+
+  // Usa la serie del progetto (unica per tutto il progetto)
+  // Le aperture fisse (style === 'window_fixed') usano la regola +50mm, non il catalogo
+  const projectSeries = projectSeriesId && catalogSeries
+    ? catalogSeries.find(s => s.id === projectSeriesId) ?? null
+    : null;
+  const seriesEligible = (o: Opening) => {
+    if (!o.width || !o.height || !o.style) return false;
+    const s = o.style;
+    // Serie valida solo per infissi, porte e persiane — escluso fisso (nessuna anta da tagliare)
+    return (s.startsWith('window') || s.startsWith('door') || s.startsWith('shutter'))
+      && s !== 'window_fixed';
+  };
+  const seriesOpenings = projectSeries
+    ? (openings ?? []).filter(seriesEligible)
+    : (openings ?? []).filter(o => o.catalogSeriesId && seriesEligible(o));
+
+  if (seriesOpenings.length > 0) {
+    const seriesName = projectSeries?.name ?? 'Da catalogo';
+    lines.push(`DISTINTA TAGLIO - ${seriesName}`);
+    lines.push('Vano;Tipologia;Ante;Variante usata;Pezzo;Qtà;Misura (mm);Ang.A;Ang.B');
+    const tolW = toleranceW ?? 0;
+    const tolH = toleranceH ?? 0;
+
+    for (const o of seriesOpenings) {
+      // Usa serie progetto se disponibile, altrimenti serie per-apertura (retrocompat)
+      const series = projectSeries ?? catalogSeries?.find(s => s.id === o.catalogSeriesId);
+      if (!series || !o.width || !o.height) continue;
+
+      const variant = findBestVariant(series, o.leafCount);
+      if (!variant || !variant.pieces.length) continue;
+
+      const pcL = o.width  - tolW;
+      const pcH = o.height - tolH;
+      const styleLabel   = STYLE_LABELS[o.style ?? 'custom' as OpeningStyle] ?? o.style ?? '';
+      const variantLabel = variant.leafCount === 1 ? '1 anta' : `${variant.leafCount} ante`;
+
+      const hasSoglia = o.hasSoglia === true;
+      for (const piece of variant.pieces) {
+        const cond = piece.condition ?? 'always';
+        if (cond === 'no_soglia'   &&  hasSoglia) continue;
+        if (cond === 'with_soglia' && !hasSoglia) continue;
+        const base   = piece.baseVar === 'L' ? pcL : pcH;
+        const length = Math.round(((base - piece.offset) / piece.divisor) * 2) / 2;
+        const angA   = piece.cutAngle1 === 45 ? '45°' : '90°';
+        const angB   = piece.cutAngle2 === 45 ? '45°' : '90°';
+        lines.push(`${o.name};${styleLabel};${o.leafCount ?? '—'};${variantLabel};${piece.name};${piece.quantity};${length};${angA};${angB}`);
+      }
+    }
+    lines.push('');
+  }
+
+  // Sezione distinta generica — aperture non coperte dalla serie
+  // (zanzariere, monoblocchi, controtelai, fissi, e tutto ciò senza serie assegnata)
+  const genericOpenings = openings?.filter(o => !seriesEligible(o) || (!projectSeries && !o.catalogSeriesId)) ?? [];
+  const hasGeneric = genericOpenings.length > 0 || !openings;
+
+  if (hasGeneric) {
+    const { profiles45, profiles90, barLength } = cuttingResult;
+    lines.push(`DISTINTA TAGLIO GENERICA (barre da ${barLength} mm)`);
+    lines.push('Profilo;Angolo;Barra N.;Pezzo N.;Lunghezza (mm);Avanzo barra (mm)');
+
+    const addProfile = (profile: CuttingProfile) => {
+      const angle = profile.cutAngle === 45 ? '45°' : '90°';
+      profile.bins.forEach((bin, barIdx) => {
+        bin.pieces.forEach((len, pieceIdx) => {
+          const avanzo = pieceIdx === bin.pieces.length - 1 ? bin.remaining.toString() : '';
+          lines.push(`${profile.label};${angle};${barIdx + 1};${pieceIdx + 1};${len};${avanzo}`);
+        });
+      });
+    };
+
+    if (profiles45.length > 0) { lines.push(''); lines.push('--- 45° ---'); profiles45.forEach(addProfile); }
+    if (profiles90.length > 0) { lines.push(''); lines.push('--- 90° ---'); profiles90.forEach(addProfile); }
+  }
+
+  return lines.join('\r\n');
 }

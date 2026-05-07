@@ -11,10 +11,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
 import { Project, Opening, OpeningStyle, RootStackParamList } from '../types';
 import { getProject, getProjectFamily, deleteOpening, saveOpening, deleteProject, saveProject } from '../storage/database';
-import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail } from '../storage/settings';
-import { generateHTML, generateCuttingListHTML, generateFullPDF } from '../utils/pdfExport';
+import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail, getCatalogSeries, CatalogSeries, getDefaultCatalogSeriesId } from '../storage/settings';
+import { generateHTML, generateCuttingListHTML, generateFullPDF, generateCuttingListCSV } from '../utils/pdfExport';
 import { calculateCuttingList } from '../utils/calculateMaterials';
-import { getLogoBase64, sharePdf, saveToDevice } from '../utils/pdfActions';
+import { getLogoBase64, sharePdf, saveToDevice, shareCSV } from '../utils/pdfActions';
 import OpeningCard from '../components/OpeningCard';
 import { useTheme } from '../contexts/ThemeContext';
 import TourModal, { TourStep, SpotRect } from '../components/TourModal';
@@ -42,6 +42,8 @@ export default function ProjectScreen() {
   const [editAddress,     setEditAddress]     = useState('');
   const [editSaving,      setEditSaving]      = useState(false);
   const [prices,          setPricesState]     = useState<PriceConfig>({ interni: 0, persiane: 0, controtelai: 0, zanzariere: 0, monoblocchi: 0 });
+  const [allSeries,       setAllSeries]       = useState<CatalogSeries[]>([]);
+  const [showSeriesPicker, setShowSeriesPicker] = useState(false);
 
   const headerRef           = useRef<any>(null);
   const pdfBtnRef           = useRef<any>(null);
@@ -68,6 +70,7 @@ export default function ProjectScreen() {
   useFocusEffect(useCallback(() => {
     loadFamily();
     getPrices().then(setPricesState);
+    getCatalogSeries().then(setAllSeries);
   }, [loadFamily]));
 
   // Ricarica solo il progetto attivo dopo cambio tab
@@ -173,6 +176,46 @@ export default function ProjectScreen() {
   }, [family, activeProjectId, navigation, openTour]);
 
   // ── PDF ────────────────────────────────────────────────────────────────────
+  const handleCsvExport = async () => {
+    if (!activeProject) return;
+    setShowExportModal(false);
+    setExporting(true);
+    try {
+      const matConfig = {
+        riattestattura: await getRiattestattura(),
+        barLength:      await getBarLength(),
+        kerf90:         await getKerf90(),
+        safetyMargin:   await getSafetyMargin(),
+        slatPitch:      await getSlatPitch(),
+        zoccoloH:       await getZoccoloH(),
+        fasciaH:        await getFasciaH(),
+        antaReduction:  await getAntaReduction(),
+        antaTopRail:    await getAntaTopRail(),
+      };
+      const [cuttingResult, allSeriesList, tolW, tolH] = await Promise.all([
+        Promise.resolve(calculateCuttingList(activeProject.openings, matConfig)),
+        getCatalogSeries(),
+        getToleranceW(),
+        getToleranceH(),
+      ]);
+      // Usa la serie del progetto se impostata
+      const projectSeries = activeProject.catalogSeriesId
+        ? allSeriesList.filter(s => s.id === activeProject.catalogSeriesId)
+        : allSeriesList;
+      const csv = generateCuttingListCSV(
+        activeProject.name, cuttingResult,
+        activeProject.openings, projectSeries, tolW, tolH,
+        activeProject.catalogSeriesId,
+      );
+      const safe = activeProject.name.replace(/[^a-zA-Z0-9_\-À-ÿ ]/g, '_').trim();
+      await shareCSV(csv, `${safe}_distinta`);
+    } catch (e) {
+      AppAlert.show('Errore', 'Impossibile esportare il CSV.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handlePdfAction = async (
     pdfType: 'rilievo' | 'sviluppo' | 'distinta' | 'completo',
     action: 'share' | 'save',
@@ -478,6 +521,31 @@ export default function ProjectScreen() {
               </View>
             ))}
 
+            {/* Serie catalogo per il progetto */}
+            {allSeries.length > 0 && (
+              <View style={styles.editField}>
+                <Text style={styles.editLabel}>Serie catalogo taglio</Text>
+                <TouchableOpacity
+                  style={[styles.editInput, { justifyContent: 'center', paddingVertical: 10 }]}
+                  onPress={() => setShowSeriesPicker(true)}
+                >
+                  <Text style={{ fontSize: 14, color: activeProject?.catalogSeriesId ? t.textPrimary : '#aab' }}>
+                    {allSeries.find(s => s.id === activeProject?.catalogSeriesId)?.name ?? 'Nessuna serie selezionata'}
+                  </Text>
+                </TouchableOpacity>
+                {activeProject?.catalogSeriesId && (
+                  <TouchableOpacity onPress={async () => {
+                    if (!activeProject) return;
+                    const updated = { ...activeProject, catalogSeriesId: null, updatedAt: new Date().toISOString() };
+                    await saveProject(updated);
+                    setFamily(prev => prev.map((f, i) => i === activeIdx ? updated : f));
+                  }}>
+                    <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: '600', marginTop: 4 }}>Rimuovi serie</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             <TouchableOpacity style={styles.optBtn} onPress={handleSaveEdit} disabled={editSaving} activeOpacity={0.8}>
               {editSaving
                 ? <ActivityIndicator color="#fff" />
@@ -488,6 +556,48 @@ export default function ProjectScreen() {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal picker serie catalogo */}
+      <Modal visible={showSeriesPicker} transparent animationType="slide" onRequestClose={() => setShowSeriesPicker(false)}>
+        <Pressable style={styles.overlay} onPress={() => setShowSeriesPicker(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: t.card, paddingBottom: 36 }]}>
+            <View style={styles.handle} />
+            <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Serie catalogo</Text>
+            <TouchableOpacity
+              style={[styles.seriesPickerRow, !activeProject?.catalogSeriesId && styles.seriesPickerRowActive]}
+              onPress={async () => {
+                if (!activeProject) return;
+                const updated = { ...activeProject, catalogSeriesId: null, updatedAt: new Date().toISOString() };
+                await saveProject(updated);
+                setFamily(prev => prev.map((f, i) => i === activeIdx ? updated : f));
+                setShowSeriesPicker(false);
+              }}
+            >
+              <Text style={styles.seriesPickerName}>Nessuna</Text>
+              {!activeProject?.catalogSeriesId && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
+            </TouchableOpacity>
+            {allSeries.map(s => (
+              <TouchableOpacity
+                key={s.id}
+                style={[styles.seriesPickerRow, activeProject?.catalogSeriesId === s.id && styles.seriesPickerRowActive]}
+                onPress={async () => {
+                  if (!activeProject) return;
+                  const updated = { ...activeProject, catalogSeriesId: s.id, updatedAt: new Date().toISOString() };
+                  await saveProject(updated);
+                  setFamily(prev => prev.map((f, i) => i === activeIdx ? updated : f));
+                  setShowSeriesPicker(false);
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.seriesPickerName}>{s.name}</Text>
+                  <Text style={styles.seriesPickerSub}>{s.variants.length} varianti</Text>
+                </View>
+                {activeProject?.catalogSeriesId === s.id && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* ── Export Modal ── */}
@@ -569,6 +679,27 @@ export default function ProjectScreen() {
               </>
             )}
 
+                {/* ── CSV Distinta ── */}
+                <View style={[styles.pdfTypeRow, { borderTopWidth: 1, borderTopColor: '#eef2f7', marginTop: 6, paddingTop: 12 }]}>
+                  <View style={styles.pdfTypeLabel}>
+                    <Text style={styles.pdfTypeIcon}>📋</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pdfTypeTitle}>Esporta CSV taglio</Text>
+                      <Text style={styles.pdfTypeSub}>Per software troncatrici / CNC (Opticut, WinTec…)</Text>
+                    </View>
+                  </View>
+                  <View style={styles.pdfTypeActions}>
+                    <TouchableOpacity
+                      style={styles.pdfActionBtn}
+                      onPress={handleCsvExport}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.pdfActionIcon}>📤</Text>
+                      <Text style={styles.pdfActionText}>Condividi</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
             <TouchableOpacity style={styles.cancel} onPress={() => setShowExportModal(false)} disabled={exporting}>
               <Text style={styles.cancelText}>Annulla</Text>
             </TouchableOpacity>
@@ -594,6 +725,10 @@ const styles = StyleSheet.create({
   editField:   { marginBottom: 12 },
   editLabel:   { fontSize: 11, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 5 },
   editInput:   { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 },
+  seriesPickerRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F0F4F8' },
+  seriesPickerRowActive: { backgroundColor: '#EEF4FF' },
+  seriesPickerName:      { fontSize: 15, fontWeight: '700', color: '#1a2a3a', flex: 1 },
+  seriesPickerSub:       { fontSize: 11, color: '#aaa', marginTop: 2 },
   countBadge:  {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20,

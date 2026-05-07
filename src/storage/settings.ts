@@ -218,6 +218,115 @@ export async function getTolerance(): Promise<number> {
   return getToleranceW();
 }
 
+// ─── Serie catalogo ───────────────────────────────────────────────────────────
+
+export interface CatalogPiece {
+  id:         string;
+  name:       string;      // es. "Montanti telaio fisso"
+  quantity:   number;      // pezzi per questa configurazione
+  baseVar:    'L' | 'H';  // punta corta L o H
+  offset:     number;      // mm da sottrarre (0 = nessuno)
+  divisor:    number;      // 1 = nessuna divisione, 2 = dividi per 2
+  cutAngle1:  45 | 90;    // angolo lato A
+  cutAngle2:  45 | 90;    // angolo lato B
+  condition?: 'always' | 'no_soglia' | 'with_soglia'; // default = 'always'
+}
+
+// Una variante = tabella pezzi per un numero specifico di ante
+export interface CatalogVariant {
+  id:        string;
+  leafCount: number;       // numero ante: 1, 2, 3, 4, 6, 8...
+  pieces:    CatalogPiece[];
+}
+
+export interface CatalogSeries {
+  id:       string;
+  name:     string;
+  variants: CatalogVariant[];
+}
+
+export const CATALOG_SERIES_KEY     = '@measure_catalog_series';
+export const DEFAULT_SERIES_KEY     = '@measure_default_series_id';
+
+export async function getDefaultCatalogSeriesId(): Promise<string | null> {
+  return AsyncStorage.getItem(DEFAULT_SERIES_KEY);
+}
+export async function setDefaultCatalogSeriesId(id: string | null): Promise<void> {
+  if (id) await AsyncStorage.setItem(DEFAULT_SERIES_KEY, id);
+  else await AsyncStorage.removeItem(DEFAULT_SERIES_KEY);
+}
+
+export async function getCatalogSeries(): Promise<CatalogSeries[]> {
+  const raw = await AsyncStorage.getItem(CATALOG_SERIES_KEY);
+  if (!raw) return [];
+  try {
+    const list = JSON.parse(raw) as any[];
+    // Migrazione: vecchio formato aveva pieces[] al top-level invece di variants[]
+    return list.map(s => {
+      if (Array.isArray(s.variants)) return s as CatalogSeries;
+      const pieces: CatalogPiece[] = Array.isArray(s.pieces) ? s.pieces.map((p: any) => ({
+        ...p,
+        cutAngle1: p.cutAngle1 ?? p.cutAngle ?? 45,
+        cutAngle2: p.cutAngle2 ?? p.cutAngle ?? 45,
+      })) : [];
+      return {
+        id: s.id,
+        name: s.name,
+        variants: pieces.length > 0
+          ? [{ id: `${s.id}_v1`, leafCount: 1, pieces }]
+          : [],
+      } as CatalogSeries;
+    });
+  } catch { return []; }
+}
+
+export async function saveCatalogSeries(series: CatalogSeries[]): Promise<void> {
+  await AsyncStorage.setItem(CATALOG_SERIES_KEY, JSON.stringify(series));
+}
+
+export async function upsertCatalogSeries(s: CatalogSeries): Promise<void> {
+  const existing = await getCatalogSeries();
+  const idx = existing.findIndex(x => x.id === s.id);
+  if (idx >= 0) existing[idx] = s;
+  else existing.push(s);
+  await saveCatalogSeries(existing);
+}
+
+export async function deleteCatalogSeries(id: string): Promise<void> {
+  const existing = await getCatalogSeries();
+  await saveCatalogSeries(existing.filter(s => s.id !== id));
+}
+
+export async function upsertCatalogVariant(seriesId: string, variant: CatalogVariant): Promise<void> {
+  const series = await getCatalogSeries();
+  const sIdx = series.findIndex(s => s.id === seriesId);
+  if (sIdx < 0) return;
+  const vIdx = series[sIdx].variants.findIndex(v => v.id === variant.id);
+  if (vIdx >= 0) series[sIdx].variants[vIdx] = variant;
+  else series[sIdx].variants.push(variant);
+  await saveCatalogSeries(series);
+}
+
+export async function deleteCatalogVariant(seriesId: string, variantId: string): Promise<void> {
+  const series = await getCatalogSeries();
+  const sIdx = series.findIndex(s => s.id === seriesId);
+  if (sIdx < 0) return;
+  series[sIdx].variants = series[sIdx].variants.filter(v => v.id !== variantId);
+  await saveCatalogSeries(series);
+}
+
+// Trova la variante più adatta per un dato numero di ante
+export function findBestVariant(series: CatalogSeries, leafCount: number | null): CatalogVariant | null {
+  if (!series.variants.length) return null;
+  if (!leafCount) return series.variants[0];
+  const exact = series.variants.find(v => v.leafCount === leafCount);
+  if (exact) return exact;
+  // Usa la variante con leafCount più vicino
+  return series.variants.reduce((best, v) =>
+    Math.abs(v.leafCount - leafCount) < Math.abs(best.leafCount - leafCount) ? v : best
+  );
+}
+
 // ─── Preset impostazioni ──────────────────────────────────────────────────────
 
 export const PRESETS_KEY = '@measure_presets';

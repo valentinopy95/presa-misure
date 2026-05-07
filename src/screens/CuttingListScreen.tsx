@@ -12,10 +12,13 @@ import { getProject } from '../storage/database';
 import {
   getRiattestattura, getBarLength, getKerf90, getSafetyMargin,
   getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail,
+  getToleranceW, getToleranceH,
   SettingsPreset, getPresets, applyPreset,
+  CatalogSeries, getCatalogSeries,
 } from '../storage/settings';
 import {
-  calculateCuttingList, CuttingListResult, CuttingProfile, CuttingBin,
+  calculateCuttingList, calculateCatalogCuttingList, openingsWithoutSeries,
+  CuttingListResult, CuttingProfile, CuttingBin,
 } from '../utils/calculateMaterials';
 import { generateCuttingListHTML } from '../utils/pdfExport';
 
@@ -34,18 +37,21 @@ export default function CuttingListScreen() {
   const navigation = useNavigation<Nav>();
   const { projectId } = route.params;
 
-  const [project,      setProject]      = useState<Project | null>(null);
-  const [result,       setResult]       = useState<CuttingListResult | null>(null);
-  const [config,       setConfig]       = useState<{ barLength: number; riattestattura: number; kerf90: number; antaReduction: number } | null>(null);
-  const [presets,      setPresets]      = useState<SettingsPreset[]>([]);
-  const [activeId,     setActiveId]     = useState<string | null>(null);
-  const [showPdfModal, setShowPdfModal] = useState(false);
-  const [pdfBusy,      setPdfBusy]      = useState(false);
+  const [project,        setProject]        = useState<Project | null>(null);
+  const [result,         setResult]         = useState<CuttingListResult | null>(null);
+  const [catalogResult,  setCatalogResult]  = useState<CuttingListResult | null>(null);
+  const [catalogSeries,  setCatalogSeries]  = useState<CatalogSeries | null>(null);
+  const [config,         setConfig]         = useState<{ barLength: number; riattestattura: number; kerf90: number; antaReduction: number } | null>(null);
+  const [presets,        setPresets]        = useState<SettingsPreset[]>([]);
+  const [activeId,       setActiveId]       = useState<string | null>(null);
+  const [showPdfModal,   setShowPdfModal]   = useState(false);
+  const [pdfBusy,        setPdfBusy]        = useState(false);
 
   const loadAndCalculate = useCallback(async () => {
-    const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop] = await Promise.all([
+    const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, tolW, tolH, allSeries] = await Promise.all([
       getProject(projectId), getRiattestattura(), getBarLength(), getKerf90(),
       getSafetyMargin(), getSlatPitch(), getZoccoloH(), getFasciaH(), getAntaReduction(), getAntaTopRail(),
+      getToleranceW(), getToleranceH(), getCatalogSeries(),
     ]);
     if (!p) return;
     setProject(p);
@@ -55,7 +61,19 @@ export default function CuttingListScreen() {
       antaReduction: antaRed, antaTopRail: antaTop,
     };
     setConfig({ barLength: barLen, riattestattura: riatt, kerf90: kerf, antaReduction: antaRed });
-    setResult(calculateCuttingList(p.openings, cfg));
+
+    // Serie catalogo
+    const series = p.catalogSeriesId ? allSeries.find(s => s.id === p.catalogSeriesId) ?? null : null;
+    setCatalogSeries(series);
+
+    if (series) {
+      // Catalogo per aperture eligibili, default per il resto
+      setCatalogResult(calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg));
+      setResult(calculateCuttingList(openingsWithoutSeries(p.openings), cfg));
+    } else {
+      setCatalogResult(null);
+      setResult(calculateCuttingList(p.openings, cfg));
+    }
   }, [projectId]);
 
   useEffect(() => {
@@ -108,7 +126,8 @@ export default function CuttingListScreen() {
     return <View style={s.loading}><ActivityIndicator color="#1565C0" size="large"/></View>;
   }
 
-  const hasData = result.profiles45.length > 0 || result.profiles90.length > 0;
+  const hasCatalogData = catalogResult && (catalogResult.profiles45.length > 0 || catalogResult.profiles90.length > 0);
+  const hasData = result.profiles45.length > 0 || result.profiles90.length > 0 || !!hasCatalogData;
 
   return (
     <>
@@ -173,32 +192,58 @@ export default function CuttingListScreen() {
         </View>
       )}
 
-      {/* Tagli a 45° */}
-      {result.profiles45.length > 0 && (
+      {/* ── Sezione catalogo ── */}
+      {hasCatalogData && catalogResult && (
         <>
-          <SectionHeader label="Tagli a 45°" color="#1565C0"/>
-          {result.profiles45.map(profile => (
-            <ProfileBlock key={profile.label} profile={profile} barLength={config.barLength}/>
-          ))}
+          <SectionHeader label={`Serie: ${catalogSeries?.name ?? 'Catalogo'}`} color="#6A1B9A"/>
+          {catalogResult.profiles45.length > 0 && (
+            <>
+              <SectionHeader label="Tagli a 45°" color="#1565C0"/>
+              {catalogResult.profiles45.map(profile => (
+                <ProfileBlock key={`cat45_${profile.label}`} profile={profile} barLength={config.barLength}/>
+              ))}
+            </>
+          )}
+          {catalogResult.profiles90.length > 0 && (
+            <>
+              <SectionHeader label="Tagli a 90°" color="#2E7D32"/>
+              {catalogResult.profiles90.map(profile => (
+                <ProfileBlock key={`cat90_${profile.label}`} profile={profile} barLength={config.barLength}/>
+              ))}
+            </>
+          )}
         </>
       )}
 
-      {/* Tagli a 90° */}
-      {result.profiles90.length > 0 && (
+      {/* ── Sezione generica (zanzariere, monoblocchi, fissi ecc.) ── */}
+      {(result.profiles45.length > 0 || result.profiles90.length > 0) && (
         <>
-          <SectionHeader label="Tagli a 90°" color="#2E7D32"/>
-          {result.profiles90.map(profile => (
-            <ProfileBlock key={profile.label} profile={profile} barLength={config.barLength}/>
-          ))}
+          {hasCatalogData && <SectionHeader label="Altri profili (calcolo generico)" color="#37474F"/>}
+          {result.profiles45.length > 0 && (
+            <>
+              {!hasCatalogData && <SectionHeader label="Tagli a 45°" color="#1565C0"/>}
+              {result.profiles45.map(profile => (
+                <ProfileBlock key={profile.label} profile={profile} barLength={config.barLength}/>
+              ))}
+            </>
+          )}
+          {result.profiles90.length > 0 && (
+            <>
+              {!hasCatalogData && <SectionHeader label="Tagli a 90°" color="#2E7D32"/>}
+              {result.profiles90.map(profile => (
+                <ProfileBlock key={profile.label} profile={profile} barLength={config.barLength}/>
+              ))}
+            </>
+          )}
         </>
       )}
 
       {/* Avvisi */}
-      {result.warnings.length > 0 && (
+      {[...(catalogResult?.warnings ?? []), ...result.warnings].length > 0 && (
         <>
           <SectionHeader label="Avvisi" color="#C62828"/>
           <View style={warn.card}>
-            {result.warnings.map((w, i) => (
+            {[...(catalogResult?.warnings ?? []), ...result.warnings].map((w, i) => (
               <View key={i} style={[warn.row, i % 2 === 1 && warn.rowAlt]}>
                 <Text style={warn.icon}>⚠️</Text>
                 <Text style={warn.text}>{w}</Text>
@@ -330,7 +375,7 @@ function BarRow({
             return (
               <View key={pi} style={br.pieceTag}>
                 <View style={[br.pieceColor, { backgroundColor: color }]}/>
-                <Text style={br.pieceLen}>{piece}</Text>
+                <Text style={br.pieceLen}>{piece.toFixed(1)}</Text>
               </View>
             );
           })}
@@ -338,7 +383,7 @@ function BarRow({
             <View style={br.pieceTag}>
               <View style={[br.pieceColor, br.pieceColorRem]}/>
               <Text style={br.pieceLenRem}>
-                {Math.round(bin.remaining)} avanzo
+                {bin.remaining.toFixed(1)} avanzo
               </Text>
             </View>
           )}
@@ -346,7 +391,7 @@ function BarRow({
 
         {/* Usage bar label */}
         <Text style={br.usageText}>
-          Usata: {Math.round(usedMm)} / {barLength} mm
+          Usata: {usedMm.toFixed(1)} / {barLength} mm
           {bin.remaining === 0 ? ' — barra piena' : ''}
         </Text>
       </View>
