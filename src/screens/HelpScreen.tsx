@@ -109,6 +109,10 @@ const SECTIONS: Section[] = [
         a: 'Puoi accedere dallo sviluppo materiale: dalla schermata principale premi "Sviluppo materiale" e seleziona il rilievo, oppure dall\'interno del rilievo premi il pulsante "Sviluppo materiale".',
       },
       {
+        q: 'Il calcolo usa la serie catalogo?',
+        a: 'Sì. Se al progetto è assegnata una serie catalogo, le aperture idonee (finestre, porte, persiane) usano le formule della serie per calcolare ogni pezzo con precisione al mezzo millimetro. Gli altri elementi (zanzariere, monoblocchi, controtelai) usano il calcolo standard.',
+      },
+      {
         q: 'Cosa significano "Taglio a 45°" e "Taglio a 90°"?',
         a: 'I profili telaio e anta vengono tagliati a 45° agli angoli. I profili accessori (fermavetro, soglia, fascia, coppiglia, lamelle, zoccolo…) vengono tagliati a 90°. L\'app separa i due gruppi perché usano lame e attrezzature diverse.',
       },
@@ -127,6 +131,40 @@ const SECTIONS: Section[] = [
       {
         q: 'Cos\'è la coppiglia?',
         a: 'La coppiglia è il profilo guida superiore/inferiore delle finestre e porte scorrevoli. Ha la lunghezza dell\'anta ed è tagliata a 90°. Viene calcolata una coppiglia per ogni anta.',
+      },
+    ],
+  },
+  {
+    icon: '📋',
+    title: 'Serie catalogo',
+    items: [
+      {
+        q: 'Cos\'è una serie catalogo?',
+        a: 'Una serie catalogo è il tuo listino di taglio personalizzato: definisci ogni pezzo del telaio e dell\'anta (nome, formula di calcolo, angoli di taglio) e l\'app lo usa per generare la distinta e lo sviluppo con misure precise al mezzo millimetro.',
+      },
+      {
+        q: 'Come creo una serie catalogo?',
+        a: 'Vai in Impostazioni → Serie catalogo → "Nuova serie". Dai un nome alla serie (es. "Infisso termico 70mm"), poi premi "+ Aggiungi" per creare le varianti per numero di ante.',
+      },
+      {
+        q: 'Cos\'è una variante?',
+        a: 'Una variante è la tabella pezzi per un dato numero di ante (1, 2, 3 o 4). Ogni variante contiene i pezzi con le loro formule: riferimento (L = larghezza, H = altezza), offset in mm, divisore, angolo A e angolo B.\nL\'app seleziona automaticamente la variante più adatta in base al numero di ante dell\'apertura.',
+      },
+      {
+        q: 'Come funziona la formula di taglio?',
+        a: 'Formula: (Riferimento ± offset) ÷ divisore.\nEsempio: montante telaio con L − 10mm → (larghezza luce − tolleranza − 10) ÷ 1.\nPer un\'anta a 2 ante: L − 15mm ÷ 2 → (larghezza − 15) divisa per 2.\nI valori accettano il mezzo millimetro (es. 10,5 mm).',
+      },
+      {
+        q: 'Come assegno una serie a un progetto?',
+        a: 'Apri il progetto → premi il tasto modifica (matita) → seleziona la serie nel campo "Serie catalogo taglio". Puoi impostare una serie di default in Impostazioni, usata automaticamente sui nuovi progetti.',
+      },
+      {
+        q: 'Cosa sono le condizioni Sempre / Senza soglia / Con soglia?',
+        a: 'Ogni pezzo ha una condizione che decide quando viene incluso nel calcolo:\n• Sempre → il pezzo c\'è sempre\n• Senza soglia → solo se la porta NON ha soglia ribassata (es. traverso inferiore telaio)\n• Con soglia → solo se la porta HA soglia ribassata (es. profilo soglia)\nQuesto permette di avere una sola variante che si adatta automaticamente.',
+      },
+      {
+        q: 'Quali aperture usano la serie catalogo?',
+        a: 'La serie si applica a finestre (tranne fissa), porte e persiane. Zanzariere, monoblocchi con tapparella, controtelai e finestre fisse usano sempre il calcolo standard.',
       },
     ],
   },
@@ -161,6 +199,10 @@ const SECTIONS: Section[] = [
       {
         q: 'Parametri persiane',
         a: 'Passo lamella: distanza tra le lamelle in mm (default 55 mm).\nAltezza zoccolo: profilo inferiore della persiana (default 120 mm).\nAltezza fascia: profilo superiore aggiuntivo per porta-finestra (default 120 mm).',
+      },
+      {
+        q: 'Dove gestisco le serie catalogo?',
+        a: 'In Impostazioni trovi la sezione "Serie catalogo". Puoi creare, modificare ed eliminare le serie. Per ogni serie puoi impostarla come "default", così verrà assegnata automaticamente ai nuovi progetti.',
       },
     ],
   },

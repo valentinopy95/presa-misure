@@ -131,13 +131,19 @@ export default function ProjectScreen() {
       {
         icon: '📦',
         title: 'Sviluppo materiale',
-        body: 'Il tasto "Materiale" calcola il profilo per la scheda attiva. Ogni scheda ha il suo sviluppo separato.',
+        body: 'Il tasto "Materiale" calcola il profilo per la scheda attiva. Se al progetto è assegnata una serie catalogo, lo sviluppo usa le formule della serie per ogni pezzo. Ogni scheda ha il suo sviluppo separato.',
+        spot: null,
+      },
+      {
+        icon: '📋',
+        title: 'Serie catalogo',
+        body: 'Premi il tasto modifica (matita) per assegnare una serie catalogo al progetto. L\'app sceglierà automaticamente la variante giusta in base al numero di ante di ogni apertura e calcolerà distinta e sviluppo con misure precise.',
         spot: null,
       },
       {
         icon: '⧉',
         title: 'Duplica progetto',
-        body: 'Il tasto "Duplica" crea una nuova scheda nella stessa famiglia. Utile per varianti dello stesso cantiere (es. finestre + persiane).',
+        body: 'Il tasto "Duplica" crea una nuova scheda nella stessa famiglia. Utile per varianti dello stesso cantiere (es. finestre + persiane). Puoi cambiare la serie catalogo durante la duplicazione.',
         spot: null,
       },
     ]);

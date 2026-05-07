@@ -43,7 +43,7 @@ const STEPS: Step[] = [
   {
     icon: '⚙️',
     title: 'Opzioni apertura',
-    body: 'Per ogni apertura puoi specificare:\n• Numero ante\n• Sopraluce con altezza\n• Fermavetro\n• Soglia ribassata / Battente\n• Fascia\n• Note e foto',
+    body: 'Per ogni apertura puoi specificare:\n• Numero ante (1–4)\n• Sopraluce con altezza\n• Fermavetro\n• Soglia ribassata / Battente\n• Fascia\n• Note, foto e audio',
   },
   {
     image: require('../../assets/menu_materials.png'),
@@ -56,9 +56,14 @@ const STEPS: Step[] = [
     body: 'La distinta mostra barra per barra come tagliare i profili.\nL\'algoritmo FFD assegna i pezzi più lunghi per primi, riducendo al minimo gli scarti.',
   },
   {
+    icon: '📋',
+    title: 'Serie catalogo',
+    body: 'In Impostazioni crea le tue serie di profili con le formule di taglio per ogni numero di ante (1, 2, 3 o 4).\nAssegna la serie al progetto e l\'app seleziona la variante giusta, calcola ogni pezzo con precisione al mezzo millimetro e genera distinta e sviluppo personalizzati.',
+  },
+  {
     icon: '🛠️',
     title: 'Impostazioni',
-    body: 'In Impostazioni puoi configurare:\n• Tolleranze di taglio\n• Lunghezza barra\n• Kerf e riattestattura\n• Margine di sicurezza\n• Parametri persiane\n• Riduzioni anta e fermavetro',
+    body: 'In Impostazioni puoi configurare:\n• Serie catalogo con varianti per numero ante\n• Tolleranze di taglio\n• Lunghezza barra\n• Kerf e riattestattura\n• Margine di sicurezza\n• Parametri persiane\n• Riduzioni anta e fermavetro',
   },
   {
     icon: '❓',
