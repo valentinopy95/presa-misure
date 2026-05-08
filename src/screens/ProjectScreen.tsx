@@ -35,14 +35,15 @@ export default function ProjectScreen() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [tourVisible,     setTourVisible]     = useState(false);
   const [tourSteps,       setTourSteps]       = useState<TourStep[]>([]);
-  const [showEditModal,   setShowEditModal]   = useState(false);
-  const [editName,        setEditName]        = useState('');
-  const [editClient,      setEditClient]      = useState('');
-  const [editPhone,       setEditPhone]       = useState('');
-  const [editAddress,     setEditAddress]     = useState('');
-  const [editSaving,      setEditSaving]      = useState(false);
-  const [prices,          setPricesState]     = useState<PriceConfig>({ interni: 0, persiane: 0, controtelai: 0, zanzariere: 0, monoblocchi: 0 });
-  const [allSeries,       setAllSeries]       = useState<CatalogSeries[]>([]);
+  const [showEditModal,    setShowEditModal]    = useState(false);
+  const [editName,         setEditName]         = useState('');
+  const [editClient,       setEditClient]       = useState('');
+  const [editPhone,        setEditPhone]        = useState('');
+  const [editAddress,      setEditAddress]      = useState('');
+  const [editSeriesId,     setEditSeriesId]     = useState<string | null>(null);
+  const [editSaving,       setEditSaving]       = useState(false);
+  const [prices,           setPricesState]      = useState<PriceConfig>({ interni: 0, persiane: 0, controtelai: 0, zanzariere: 0, monoblocchi: 0 });
+  const [allSeries,        setAllSeries]        = useState<CatalogSeries[]>([]);
   const [showSeriesPicker, setShowSeriesPicker] = useState(false);
 
   const headerRef           = useRef<any>(null);
@@ -60,7 +61,6 @@ export default function ProjectScreen() {
     setFamily(fam);
     const idx = fam.findIndex(p => p.id === projectId);
     setActiveIdx(prev => {
-      // mantieni tab attivo se ancora valido, altrimenti va al progetto aperto
       if (prev < fam.length) return prev;
       return Math.max(0, idx);
     });
@@ -346,6 +346,7 @@ export default function ProjectScreen() {
     setEditClient(activeProject.clientName);
     setEditPhone(activeProject.clientPhone);
     setEditAddress(activeProject.address);
+    setEditSeriesId(activeProject.catalogSeriesId ?? null);
     setShowEditModal(true);
   };
 
@@ -355,11 +356,12 @@ export default function ProjectScreen() {
     try {
       const updated: Project = {
         ...activeProject,
-        name:        editName.trim(),
-        clientName:  editClient.trim(),
-        clientPhone: editPhone.trim(),
-        address:     editAddress.trim(),
-        updatedAt:   new Date().toISOString(),
+        name:             editName.trim(),
+        clientName:       editClient.trim(),
+        clientPhone:      editPhone.trim(),
+        address:          editAddress.trim(),
+        catalogSeriesId:  editSeriesId,
+        updatedAt:        new Date().toISOString(),
       };
       await saveProject(updated);
       setFamily(prev => prev.map((p, i) => i === activeIdx ? updated : p));
@@ -369,7 +371,11 @@ export default function ProjectScreen() {
     }
   };
 
-  if (!activeProject) return <View style={{ flex: 1, backgroundColor: t.bg }}/>;
+  if (!activeProject) return (
+    <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <ActivityIndicator size="large" color="#1565C0"/>
+    </View>
+  );
 
   const openings = activeProject.openings ?? [];
 
@@ -528,29 +534,22 @@ export default function ProjectScreen() {
             ))}
 
             {/* Serie catalogo per il progetto */}
-            {allSeries.length > 0 && (
-              <View style={styles.editField}>
-                <Text style={styles.editLabel}>Serie catalogo taglio</Text>
-                <TouchableOpacity
-                  style={[styles.editInput, { justifyContent: 'center', paddingVertical: 10 }]}
-                  onPress={() => setShowSeriesPicker(true)}
-                >
-                  <Text style={{ fontSize: 14, color: activeProject?.catalogSeriesId ? t.textPrimary : '#aab' }}>
-                    {allSeries.find(s => s.id === activeProject?.catalogSeriesId)?.name ?? 'Nessuna serie selezionata'}
-                  </Text>
+            <View style={styles.editField}>
+              <Text style={styles.editLabel}>Serie catalogo taglio</Text>
+              <TouchableOpacity
+                style={[styles.editInput, { justifyContent: 'center', paddingVertical: 10 }]}
+                onPress={() => setShowSeriesPicker(true)}
+              >
+                <Text style={{ fontSize: 14, color: editSeriesId ? t.textPrimary : '#aab' }}>
+                  {allSeries.find(s => s.id === editSeriesId)?.name ?? 'Nessuna serie selezionata'}
+                </Text>
+              </TouchableOpacity>
+              {editSeriesId && (
+                <TouchableOpacity onPress={() => setEditSeriesId(null)}>
+                  <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: '600', marginTop: 4 }}>Rimuovi serie</Text>
                 </TouchableOpacity>
-                {activeProject?.catalogSeriesId && (
-                  <TouchableOpacity onPress={async () => {
-                    if (!activeProject) return;
-                    const updated = { ...activeProject, catalogSeriesId: null, updatedAt: new Date().toISOString() };
-                    await saveProject(updated);
-                    setFamily(prev => prev.map((f, i) => i === activeIdx ? updated : f));
-                  }}>
-                    <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: '600', marginTop: 4 }}>Rimuovi serie</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
+              )}
+            </View>
 
             <TouchableOpacity style={styles.optBtn} onPress={handleSaveEdit} disabled={editSaving} activeOpacity={0.8}>
               {editSaving
@@ -571,35 +570,23 @@ export default function ProjectScreen() {
             <View style={styles.handle} />
             <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Serie catalogo</Text>
             <TouchableOpacity
-              style={[styles.seriesPickerRow, !activeProject?.catalogSeriesId && styles.seriesPickerRowActive]}
-              onPress={async () => {
-                if (!activeProject) return;
-                const updated = { ...activeProject, catalogSeriesId: null, updatedAt: new Date().toISOString() };
-                await saveProject(updated);
-                setFamily(prev => prev.map((f, i) => i === activeIdx ? updated : f));
-                setShowSeriesPicker(false);
-              }}
+              style={[styles.seriesPickerRow, !editSeriesId && styles.seriesPickerRowActive]}
+              onPress={() => { setEditSeriesId(null); setShowSeriesPicker(false); }}
             >
               <Text style={styles.seriesPickerName}>Nessuna</Text>
-              {!activeProject?.catalogSeriesId && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
+              {!editSeriesId && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
             </TouchableOpacity>
             {allSeries.map(s => (
               <TouchableOpacity
                 key={s.id}
-                style={[styles.seriesPickerRow, activeProject?.catalogSeriesId === s.id && styles.seriesPickerRowActive]}
-                onPress={async () => {
-                  if (!activeProject) return;
-                  const updated = { ...activeProject, catalogSeriesId: s.id, updatedAt: new Date().toISOString() };
-                  await saveProject(updated);
-                  setFamily(prev => prev.map((f, i) => i === activeIdx ? updated : f));
-                  setShowSeriesPicker(false);
-                }}
+                style={[styles.seriesPickerRow, editSeriesId === s.id && styles.seriesPickerRowActive]}
+                onPress={() => { setEditSeriesId(s.id); setShowSeriesPicker(false); }}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.seriesPickerName}>{s.name}</Text>
                   <Text style={styles.seriesPickerSub}>{s.variants.length} varianti</Text>
                 </View>
-                {activeProject?.catalogSeriesId === s.id && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
+                {editSeriesId === s.id && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
               </TouchableOpacity>
             ))}
           </Pressable>

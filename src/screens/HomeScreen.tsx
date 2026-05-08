@@ -13,7 +13,7 @@ import { listPendingInvites, listInvitesForMe, fetchProfile, supabase } from '..
 import * as AppAlert from '../components/AppAlert';
 import NewProjectModal from '../components/NewProjectModal';
 import TourModal, { TourStep, SpotRect } from '../components/TourModal';
-import { getTourSeen, setTourSeen, getDefaultCatalogSeriesId } from '../storage/settings';
+import { getTourSeen, setTourSeen } from '../storage/settings';
 import { useSubscription } from '../contexts/SubscriptionContext';
 
 
@@ -181,16 +181,22 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
-  const handleCreate = async (name: string, clientName: string, clientPhone: string, address: string) => {
+  const handleCreate = async (name: string, clientName: string, clientPhone: string, address: string, seriesId: string | null) => {
     const now = new Date().toISOString();
-    const defaultSeriesId = await getDefaultCatalogSeriesId();
     const project: Project = {
       id: uuidv4(), name, clientName, clientPhone, address,
       gps: null, openings: [], parentId: null,
-      catalogSeriesId: defaultSeriesId,
+      catalogSeriesId: seriesId,
       createdAt: now, updatedAt: now,
     };
-    await saveProject(project);
+    try {
+      await saveProject(project);
+    } catch (e: any) {
+      if (e?.message === 'NO_IDS') {
+        AppAlert.show('Sessione scaduta', 'Riapri l\'app e riprova. Se il problema persiste, vai su Account e verifica di essere loggato.');
+        return;
+      }
+    }
     setModalVisible(false);
     subscription.refresh();
     navigation.navigate('Project', { projectId: project.id });

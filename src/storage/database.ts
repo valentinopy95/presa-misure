@@ -185,8 +185,12 @@ export async function getProject(id: string): Promise<Project | null> {
 }
 
 export async function saveProject(project: Project): Promise<void> {
+  // Metti subito in cache locale — la UI trova il progetto anche se Supabase è lento
+  _projectCache.set(project.id, project);
+  _listCache = null;
+
   const ids = await getCurrentIds();
-  if (!ids) return;
+  if (!ids) throw new Error('NO_IDS'); // rilancia così HomeScreen può mostrare errore
 
   await upsertProject({
     id:                 project.id,
@@ -204,9 +208,8 @@ export async function saveProject(project: Project): Promise<void> {
     updated_at:         project.updatedAt,
   });
 
-  // Aggiorna cache
+  // Aggiorna cache con eventuale risposta Supabase
   _projectCache.set(project.id, project);
-  _listCache = null; // invalida lista
 }
 
 export async function deleteProject(id: string): Promise<void> {
@@ -256,7 +259,9 @@ export async function getProjectFamily(projectId: string): Promise<Project[]> {
   if (!p) return [];
   const parentId = p.parentId ?? p.id;
   const all = await getAllProjects();
-  const family = all.filter(x => x.id === parentId || x.parentId === parentId);
+  let family = all.filter(x => x.id === parentId || x.parentId === parentId);
+  // Se il progetto appena creato non è ancora nella lista (cache vecchia), aggiungilo
+  if (!family.find(x => x.id === p.id)) family = [p, ...family];
   // Fetch fresco per avere le openings aggiornate
   const fresh = await Promise.all(family.map(x => getProject(x.id).then(r => r ?? x)));
   return fresh.sort((a, b) => {
