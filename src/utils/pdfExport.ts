@@ -399,12 +399,8 @@ function openingRow(
                        border-left:2px solid #FFC107;border-radius:2px;margin-bottom:6px;">${o.textNote}</div>`
         : ''}
       ${photos.length > 0
-        ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">
-            ${photos.map(b64 =>
-              `<img src="data:image/jpeg;base64,${b64}"
-                    style="max-width:160px;max-height:120px;object-fit:cover;border-radius:4px;border:1px solid #ddd;"/>`
-            ).join('')}
-           </div>`
+        ? `<img src="data:image/jpeg;base64,${photos[0]}"
+                style="max-width:160px;max-height:120px;object-fit:cover;border-radius:4px;border:1px solid #ddd;display:block;"/>`
         : o.photos.length > 0
           ? `<div style="font-size:9px;color:#aaa;">📷 ${o.photos.length} foto</div>`
           : ''}

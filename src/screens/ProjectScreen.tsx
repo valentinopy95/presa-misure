@@ -15,6 +15,7 @@ import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig, ge
 import { generateHTML, generateCuttingListHTML, generateFullPDF, generateCuttingListCSV } from '../utils/pdfExport';
 import { calculateCuttingList } from '../utils/calculateMaterials';
 import { getLogoBase64, sharePdf, saveToDevice, shareCSV } from '../utils/pdfActions';
+import * as FileSystem from 'expo-file-system/legacy';
 import OpeningCard from '../components/OpeningCard';
 import { useTheme } from '../contexts/ThemeContext';
 import TourModal, { TourStep, SpotRect } from '../components/TourModal';
@@ -246,7 +247,16 @@ export default function ProjectScreen() {
       let filename: string;
 
       if (pdfType === 'rilievo') {
-        html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'misure', prices });
+        // Carica solo la prima foto di ogni apertura come base64
+        const photoMap: Record<string, string[]> = {};
+        await Promise.all(activeProject!.openings.map(async o => {
+          if (!o.photos?.length) return;
+          try {
+            const b64 = await FileSystem.readAsStringAsync(o.photos[0].uri, { encoding: FileSystem.EncodingType.Base64 });
+            photoMap[o.id] = [b64];
+          } catch { /* foto non più disponibile sul dispositivo */ }
+        }));
+        html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'misure', prices, photoMap });
         filename = `${safe}_rilievo`;
       } else if (pdfType === 'sviluppo') {
         html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'materiale', materialsConfig: matConfig, prices });
