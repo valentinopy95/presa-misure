@@ -113,44 +113,44 @@ export async function migrateLocalToSupabase(): Promise<void> {
 
 /** Lista progetti — mostra cache subito, poi aggiorna in background */
 export async function getAllProjects(): Promise<Project[]> {
-  const ids = await getCurrentIds();
-  if (!ids) return [];
-
-  async function fetch() {
-    // Prova prima con parent_id incluso
-    if (_hasParentId !== false) {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('id, name, client_name, client_phone, address, gps, openings, parent_id, created_at, updated_at')
-        .eq('company_id', ids!.companyId)
-        .order('updated_at', { ascending: false });
-      if (!error && data) {
-        _hasParentId = true;
-        return data.map(row => rowToProject(row as Record<string, unknown>));
-      }
-      // Colonna mancante — fallback
-      _hasParentId = false;
-    }
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id, name, client_name, client_phone, address, gps, openings, created_at, updated_at')
-      .eq('company_id', ids!.companyId)
-      .order('updated_at', { ascending: false });
-    if (error || !data) return null;
-    return data.map(row => rowToProject(row as Record<string, unknown>));
+  // Cache disponibile → restituisci subito e aggiorna in background
+  if (_listCache) {
+    getCurrentIds().then(ids => {
+      if (!ids) return;
+      fetchProjectList(ids.companyId).then(list => { if (list) _listCache = list; }).catch(() => {});
+    });
+    return _listCache;
   }
 
-  // Aggiorna cache in background
-  fetch().then(list => { if (list) _listCache = list; }).catch(() => {});
-
-  // Restituisce la cache subito se disponibile
-  if (_listCache) return _listCache;
-
-  // Prima volta: aspetta il risultato
-  const list = await fetch();
+  // Prima volta: attendi ids e fetch
+  const ids = await getCurrentIds();
+  if (!ids) return [];
+  const list = await fetchProjectList(ids.companyId);
   if (!list) return [];
   _listCache = list;
   return _listCache;
+}
+
+async function fetchProjectList(companyId: string): Promise<Project[] | null> {
+  if (_hasParentId !== false) {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, client_name, client_phone, address, gps, openings, parent_id, created_at, updated_at, catalog_series_id')
+      .eq('company_id', companyId)
+      .order('updated_at', { ascending: false });
+    if (!error && data) {
+      _hasParentId = true;
+      return data.map(row => rowToProject(row as Record<string, unknown>));
+    }
+    _hasParentId = false;
+  }
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, name, client_name, client_phone, address, gps, openings, created_at, updated_at, catalog_series_id')
+    .eq('company_id', companyId)
+    .order('updated_at', { ascending: false });
+  if (error || !data) return null;
+  return data.map(row => rowToProject(row as Record<string, unknown>));
 }
 
 /** Lista progetti con openings — per calcolo materiali */
@@ -187,10 +187,18 @@ export async function getProject(id: string): Promise<Project | null> {
 export async function saveProject(project: Project): Promise<void> {
   // Metti subito in cache locale — la UI trova il progetto anche se Supabase è lento
   _projectCache.set(project.id, project);
-  _listCache = null;
+  // Aggiorna/aggiungi nella lista cache senza aspettare Supabase
+  if (_listCache) {
+    const idx = _listCache.findIndex(p => p.id === project.id);
+    if (idx >= 0) {
+      _listCache = _listCache.map(p => p.id === project.id ? project : p);
+    } else {
+      _listCache = [project, ..._listCache];
+    }
+  }
 
   const ids = await getCurrentIds();
-  if (!ids) throw new Error('NO_IDS'); // rilancia così HomeScreen può mostrare errore
+  if (!ids) throw new Error('NO_IDS');
 
   await upsertProject({
     id:                 project.id,
@@ -208,7 +216,6 @@ export async function saveProject(project: Project): Promise<void> {
     updated_at:         project.updatedAt,
   });
 
-  // Aggiorna cache con eventuale risposta Supabase
   _projectCache.set(project.id, project);
 }
 
