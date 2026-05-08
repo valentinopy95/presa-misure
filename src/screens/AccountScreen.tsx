@@ -135,7 +135,7 @@ export default function AccountScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [3, 1],
+      aspect: [1, 1],
       quality: 0.8,
     });
     if (result.canceled || !result.assets[0]) return;
@@ -467,8 +467,8 @@ const s = StyleSheet.create({
   upgradePillBtn: { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   upgradePillText:{ color: '#fff', fontWeight: '800', fontSize: 13 },
 
-  logoPreview:        { width: 90, height: 36, borderRadius: 6, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC' },
-  logoPlaceholder:    { width: 90, height: 36, borderRadius: 6, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
+  logoPreview:        { width: 64, height: 64, borderRadius: 10, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC' },
+  logoPlaceholder:    { width: 64, height: 64, borderRadius: 10, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
   logoPlaceholderText:{ fontSize: 10, color: '#bbb' },
   logoBtn:            { backgroundColor: '#0c2d75', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7, minWidth: 72, alignItems: 'center' },
   logoBtnText:        { color: '#fff', fontWeight: '800', fontSize: 13 },

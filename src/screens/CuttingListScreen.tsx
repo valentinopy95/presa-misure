@@ -122,6 +122,11 @@ export default function CuttingListScreen() {
     });
   }, [navigation]);
 
+  // Banner serie attiva
+  const seriesBanner = catalogSeries
+    ? { label: `Serie: ${catalogSeries.name}`, color: '#6A1B9A', bg: '#F3E5F5' }
+    : { label: 'Calcolo standard (nessuna serie)', color: '#37474F', bg: '#ECEFF1' };
+
   if (!project || !result || !config) {
     return <View style={s.loading}><ActivityIndicator color="#1565C0" size="large"/></View>;
   }
@@ -132,6 +137,13 @@ export default function CuttingListScreen() {
   return (
     <>
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
+
+      {/* Banner serie attiva */}
+      <View style={{ backgroundColor: seriesBanner.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Text style={{ fontSize: 11, color: seriesBanner.color, fontWeight: '800' }}>●</Text>
+        <Text style={{ fontSize: 12, color: seriesBanner.color, fontWeight: '700', flex: 1 }}>{seriesBanner.label}</Text>
+        {!catalogSeries && <Text style={{ fontSize: 10, color: '#78909C' }}>Assegna una serie dal progetto</Text>}
+      </View>
 
       {/* Preset strip */}
       {presets.length > 0 && (

@@ -108,13 +108,15 @@ export default function MaterialsScreen() {
     const series = p.catalogSeriesId ? allSeries.find(s => s.id === p.catalogSeriesId) ?? null : null;
     setCatalogSeries(series);
 
+    // Calcolo standard sempre su tutte le aperture (telaio e anta sempre presenti)
+    setResult(calculateMaterials(p.openings, cfg));
+
+    // Calcolo catalogo aggiuntivo se serie assegnata
     if (series) {
       const catCutting = calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg);
       setCatalogResult(catalogCuttingToMaterials(catCutting, margin));
-      setResult(calculateMaterials(openingsWithoutSeries(p.openings), cfg));
     } else {
       setCatalogResult(null);
-      setResult(calculateMaterials(p.openings, cfg));
     }
   }, [projectId]);
 
@@ -158,6 +160,20 @@ export default function MaterialsScreen() {
     <>
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <TourModal visible={tourVisible} steps={MATERIALS_TOUR} onClose={() => setTourVisible(false)}/>
+
+      {/* Banner serie attiva */}
+      {(() => {
+        const b = catalogSeries
+          ? { label: `Serie: ${catalogSeries.name}`, color: '#6A1B9A', bg: '#F3E5F5' }
+          : { label: 'Calcolo standard (nessuna serie)', color: '#37474F', bg: '#ECEFF1' };
+        return (
+          <View style={{ backgroundColor: b.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 11, color: b.color, fontWeight: '800' }}>●</Text>
+            <Text style={{ fontSize: 12, color: b.color, fontWeight: '700', flex: 1 }}>{b.label}</Text>
+            {!catalogSeries && <Text style={{ fontSize: 10, color: '#78909C' }}>Assegna una serie dal progetto</Text>}
+          </View>
+        );
+      })()}
 
       {/* ── Preset strip ── */}
       {presets.length > 0 && (
@@ -245,38 +261,36 @@ export default function MaterialsScreen() {
         </View>
       )}
 
-      {/* ── Sezione catalogo ── */}
-      {catalogResult && allCatalogProfiles.length > 0 && (
-        <>
-          <SectionHeader label={`Serie: ${catalogSeries?.name ?? 'Catalogo'}`} color="#6A1B9A"/>
-          {catalogResult.profiles45.length > 0 && (
-            <>
-              <SectionHeader label="Taglio a 45°" color="#1565C0"/>
-              <ProfileTable rows={catalogResult.profiles45} extraBars={extraBars}/>
-            </>
-          )}
-          {catalogResult.profiles90.length > 0 && (
-            <>
-              <SectionHeader label="Taglio a 90°" color="#2E7D32"/>
-              <ProfileTable rows={catalogResult.profiles90} extraBars={extraBars}/>
-            </>
-          )}
-        </>
-      )}
-
-      {/* ── Sezione generica ── */}
+      {/* ── Sezione standard (sempre presente) ── */}
       {result.profiles45.length > 0 && (
         <>
-          {allCatalogProfiles.length > 0 && <SectionHeader label="Altri profili (calcolo generico)" color="#37474F"/>}
-          {!allCatalogProfiles.length && <SectionHeader label="Taglio a 45°" color="#1565C0"/>}
+          <SectionHeader label="Taglio a 45°" color="#1565C0"/>
           <ProfileTable rows={result.profiles45} extraBars={extraBars}/>
         </>
       )}
       {result.profiles90.length > 0 && (
         <>
-          {allCatalogProfiles.length > 0 && !result.profiles45.length && <SectionHeader label="Altri profili (calcolo generico)" color="#37474F"/>}
-          {!allCatalogProfiles.length && <SectionHeader label="Taglio a 90°" color="#2E7D32"/>}
+          <SectionHeader label="Taglio a 90°" color="#2E7D32"/>
           <ProfileTable rows={result.profiles90} extraBars={extraBars}/>
+        </>
+      )}
+
+      {/* ── Sezione catalogo (aggiuntiva se serie assegnata) ── */}
+      {catalogResult && allCatalogProfiles.length > 0 && (
+        <>
+          <SectionHeader label={`Dettaglio serie: ${catalogSeries?.name ?? 'Catalogo'}`} color="#6A1B9A"/>
+          {catalogResult.profiles45.length > 0 && (
+            <>
+              <SectionHeader label="45° — misure precise" color="#1565C0"/>
+              <ProfileTable rows={catalogResult.profiles45} extraBars={extraBars}/>
+            </>
+          )}
+          {catalogResult.profiles90.length > 0 && (
+            <>
+              <SectionHeader label="90° — misure precise" color="#2E7D32"/>
+              <ProfileTable rows={catalogResult.profiles90} extraBars={extraBars}/>
+            </>
+          )}
         </>
       )}
 

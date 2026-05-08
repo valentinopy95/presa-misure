@@ -13,7 +13,7 @@ import { listPendingInvites, listInvitesForMe, fetchProfile, supabase } from '..
 import * as AppAlert from '../components/AppAlert';
 import NewProjectModal from '../components/NewProjectModal';
 import TourModal, { TourStep, SpotRect } from '../components/TourModal';
-import { getTourSeen, setTourSeen } from '../storage/settings';
+import { getTourSeen, setTourSeen, getDefaultCatalogSeriesId } from '../storage/settings';
 import { useSubscription } from '../contexts/SubscriptionContext';
 
 
@@ -63,7 +63,8 @@ export default function HomeScreen() {
   const [tourVisible,    setTourVisible]    = useState(false);
   const [tourSteps,      setTourSteps]      = useState<TourStep[]>([]);
   const [userName,       setUserName]       = useState<string | null>(null);
-  const [hasCompany,     setHasCompany]     = useState(true);
+  const [hasCompany,     setHasCompany]     = useState(false);
+  const [companyLoading, setCompanyLoading] = useState(true);
   const [hasInvites,     setHasInvites]     = useState(false);
 
   const anims      = useRef(MENU_ITEMS.map(() => new Animated.Value(0))).current;
@@ -147,19 +148,21 @@ export default function HomeScreen() {
     getTourSeen('home').then(seen => { if (!seen) setTimeout(openTour, 1100); });
     // Carica badge inviti pendenti + nome utente
     supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
+      if (!user) { setCompanyLoading(false); return; }
       const profile = await fetchProfile(user.id);
       if (profile?.full_name) {
         setUserName(profile.full_name.trim().split(' ')[0]);
       }
       if (!profile?.company_id) {
         setHasCompany(false);
+        setCompanyLoading(false);
         // Controlla se ci sono inviti in arrivo per il badge
         const mine = await listInvitesForMe();
         setHasInvites(mine.length > 0);
         return;
       }
       setHasCompany(true);
+      setCompanyLoading(false);
       const list = await listPendingInvites(profile.company_id);
       setPendingInvites(list.length);
     });
@@ -180,9 +183,11 @@ export default function HomeScreen() {
 
   const handleCreate = async (name: string, clientName: string, clientPhone: string, address: string) => {
     const now = new Date().toISOString();
+    const defaultSeriesId = await getDefaultCatalogSeriesId();
     const project: Project = {
       id: uuidv4(), name, clientName, clientPhone, address,
       gps: null, openings: [], parentId: null,
+      catalogSeriesId: defaultSeriesId,
       createdAt: now, updatedAt: now,
     };
     await saveProject(project);
@@ -193,6 +198,10 @@ export default function HomeScreen() {
 
   const handlePress = (key: string) => {
     if (key === 'create') {
+      if (companyLoading) {
+        AppAlert.show('Caricamento', 'Attendi il caricamento del profilo...');
+        return;
+      }
       if (!hasCompany) {
         AppAlert.show(
           'Azienda richiesta',
