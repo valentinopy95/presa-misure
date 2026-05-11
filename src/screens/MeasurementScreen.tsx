@@ -13,7 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { v4 as uuidv4 } from 'uuid';
 import { Opening, Photo, RootStackParamList, OpeningStyle, OpeningSide } from '../types';
 import { getProject, saveOpening } from '../storage/database';
-import { getToleranceW, getToleranceH, getDimMode, getCatalogSeries, CatalogSeries } from '../storage/settings';
+import { getToleranceW, getToleranceH, getToleranceByType, toleranceForStyle, getDimMode, getCatalogSeries, CatalogSeries } from '../storage/settings';
 
 const parseMm = (t: string): number | null => {
   const clean = t.replace(/[^0-9]/g, '');
@@ -99,6 +99,7 @@ export default function MeasurementScreen() {
   const [opening, setOpening] = useState<Opening>(emptyOpening());
   const [toleranceW, setToleranceW] = useState<number>(10);
   const [toleranceH, setToleranceH] = useState<number>(10);
+  const [tolByTypeState, setTolByTypeState] = useState<import('../storage/settings').ToleranceByType | null>(null);
   const [dimMode, setDimMode] = useState<'taglio' | 'luce'>('taglio');
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -126,7 +127,7 @@ export default function MeasurementScreen() {
     {
       icon: '📏',
       title: 'Larghezza e altezza',
-      body: `Inserisci le misure del vano in millimetri. L'app calcola automaticamente le misure di taglio sottraendo la tolleranza (attuale: L-${toleranceW}mm / H-${toleranceH}mm).`,
+      body: `Inserisci le misure del vano in mm. L'app calcola le misure di taglio sottraendo la tolleranza per tipo: finestre, porte, persiane e zanzariere hanno ciascuna i propri valori configurabili nelle Impostazioni.`,
       spot: null,
     },
     {
@@ -166,6 +167,7 @@ export default function MeasurementScreen() {
   useEffect(() => {
     getToleranceW().then(setToleranceW);
     getToleranceH().then(setToleranceH);
+    getToleranceByType().then(setTolByTypeState);
     getDimMode().then(setDimMode);
     getCatalogSeries().then(setCatalogSeriesList);
     if (openingId) {
@@ -181,6 +183,7 @@ export default function MeasurementScreen() {
     const unsub = navigation.addListener('focus', () => {
       getToleranceW().then(setToleranceW);
       getToleranceH().then(setToleranceH);
+      getToleranceByType().then(setTolByTypeState);
       getDimMode().then(setDimMode);
       getProject(projectId).then(p => {
         const existing = p?.openings.find(o => o.id === currentId);
@@ -193,8 +196,9 @@ export default function MeasurementScreen() {
   const update = (fields: Partial<Opening>) =>
     setOpening(prev => ({ ...prev, ...fields }));
 
-  const taglioW = opening.width  != null ? opening.width  - toleranceW : null;
-  const taglioH = opening.height != null ? opening.height - toleranceH : null;
+  const activeTol = tolByTypeState ? toleranceForStyle(opening.style, tolByTypeState) : { w: toleranceW, h: toleranceH };
+  const taglioW = opening.width  != null ? opening.width  - activeTol.w : null;
+  const taglioH = opening.height != null ? opening.height - activeTol.h : null;
   const isMonoblocco    = opening.style === 'roller_blind';
   const isSubframe      = opening.style === 'subframe_window';
   const isFixed         = opening.style === 'window_fixed';
@@ -442,7 +446,7 @@ export default function MeasurementScreen() {
         <View style={styles.dimRow}>
           <View style={styles.dimLabelCol}>
             <Text style={[styles.dimType, styles.dimTypeTaglio]}>TAGLIO</Text>
-            <Text style={styles.dimDesc}>luce − {toleranceW} mm</Text>
+            <Text style={styles.dimDesc}>luce − {activeTol.w} mm</Text>
           </View>
           <View style={styles.dimInputWrap}>
             <Text style={styles.taglioValue}>{taglioW ?? '—'}</Text>
@@ -476,7 +480,7 @@ export default function MeasurementScreen() {
             <View style={styles.dimRow}>
               <View style={styles.dimLabelCol}>
                 <Text style={[styles.dimType, styles.dimTypeTaglio]}>TAGLIO</Text>
-                <Text style={styles.dimDesc}>luce − {toleranceH} mm</Text>
+                <Text style={styles.dimDesc}>luce − {activeTol.h} mm</Text>
               </View>
               <View style={styles.dimInputWrap}>
                 <Text style={styles.taglioValue}>{taglioH ?? '—'}</Text>

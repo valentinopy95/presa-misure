@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, ActivityIndicator, Modal, Pressable,
@@ -13,9 +13,17 @@ import {
   getCatalogSeries, upsertCatalogSeries, deleteCatalogSeries,
 } from '../storage/settings';
 import { RootStackParamList } from '../types';
+import TourModal, { TourStep } from '../components/TourModal';
 
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'SeriesEditor'>;
 type Route = RouteProp<RootStackParamList, 'SeriesEditor'>;
+
+const SERIES_TOUR: TourStep[] = [
+  { icon: '📋', title: 'Cos\'è una serie catalogo', body: 'Una serie rappresenta un sistema di profili (es. EKOS 100). Contiene una o più varianti, una per ogni numero di ante (1 anta, 2 ante, ecc.).', spot: null },
+  { icon: '🔢', title: 'Varianti per numero di ante', body: 'Per ogni configurazione (1 anta, 2 ante…) crei una variante separata. Quando assegni la serie a un progetto, l\'app sceglie automaticamente la variante giusta per ogni apertura.', spot: null },
+  { icon: '✏️', title: 'Modifica variante', body: 'Tocca una variante esistente per aprire l\'editor e configurare i pezzi (traversi, montanti, fermavetro, riporto) con le formule di calcolo specifiche della serie.', spot: null },
+  { icon: '🏷️', title: 'Assegna al progetto', body: 'Dopo aver creato la serie, torna nel progetto e tocca il badge 📋 nell\'header per assegnarla. Distinta e sviluppo useranno le misure della serie.', spot: null },
+];
 
 const LEAF_OPTIONS = [1, 2, 3, 4];
 
@@ -31,6 +39,7 @@ export default function SeriesEditorScreen() {
 
   // Modal selezione numero ante per nuova variante
   const [showLeafPicker, setShowLeafPicker] = useState(false);
+  const [tourVisible,    setTourVisible]    = useState(false);
 
   useFocusEffect(useCallback(() => {
     const id = currentId;
@@ -107,8 +116,19 @@ export default function SeriesEditorScreen() {
 
   const usedLeafCounts = variants.map(v => v.leafCount);
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={() => setTourVisible(true)} style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
+          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <TourModal visible={tourVisible} steps={SERIES_TOUR} onClose={() => setTourVisible(false)}/>
       <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
 
         {/* Nome serie */}

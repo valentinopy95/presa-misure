@@ -11,7 +11,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
 import { Project, Opening, OpeningStyle, RootStackParamList } from '../types';
 import { getProject, getProjectFamily, deleteOpening, saveOpening, deleteProject, saveProject } from '../storage/database';
-import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail, getCatalogSeries, CatalogSeries, getDefaultCatalogSeriesId } from '../storage/settings';
+import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail, getCatalogSeries, CatalogSeries, getDefaultCatalogSeriesId, getDetailedPrices, priceForStyleDetailed, DetailedPriceConfig } from '../storage/settings';
 import { generateHTML, generateCuttingListHTML, generateFullPDF, generateCuttingListCSV } from '../utils/pdfExport';
 import { calculateCuttingList } from '../utils/calculateMaterials';
 import { getLogoBase64, sharePdf, saveToDevice, shareCSV } from '../utils/pdfActions';
@@ -44,6 +44,7 @@ export default function ProjectScreen() {
   const [editSeriesId,     setEditSeriesId]     = useState<string | null>(null);
   const [editSaving,       setEditSaving]       = useState(false);
   const [prices,           setPricesState]      = useState<PriceConfig>({ interni: 0, persiane: 0, controtelai: 0, zanzariere: 0, monoblocchi: 0 });
+  const [detailedPrices,   setDetailedPricesState] = useState<DetailedPriceConfig>({});
   const [allSeries,        setAllSeries]        = useState<CatalogSeries[]>([]);
   const [showSeriesPicker, setShowSeriesPicker] = useState(false);
 
@@ -71,6 +72,7 @@ export default function ProjectScreen() {
   useFocusEffect(useCallback(() => {
     loadFamily();
     getPrices().then(setPricesState);
+    getDetailedPrices().then(setDetailedPricesState);
     getCatalogSeries().then(setAllSeries);
   }, [loadFamily]));
 
@@ -138,7 +140,7 @@ export default function ProjectScreen() {
       {
         icon: '📋',
         title: 'Serie catalogo',
-        body: 'Premi il tasto modifica (matita) per assegnare una serie catalogo al progetto. L\'app sceglierà automaticamente la variante giusta in base al numero di ante di ogni apertura e calcolerà distinta e sviluppo con misure precise.',
+        body: 'Il badge 📋 nell\'header mostra la serie assegnata. Toccalo per cambiarla: la scelta si salva immediatamente. Con la serie attiva, distinta e sviluppo usano le misure esatte dei profili (traversi, montanti, ecc.) al posto dei nomi generici. La variante giusta per 1, 2 o più ante viene scelta in automatico.',
         spot: null,
       },
       {
@@ -390,7 +392,8 @@ export default function ProjectScreen() {
   const openings = activeProject.openings ?? [];
 
   const totalEstimate = openings.reduce((sum, o) => {
-    const p = priceForStyle(o.style, prices);
+    const p = priceForStyleDetailed(o.style, o.leafCount, detailedPrices)
+           || priceForStyle(o.style, prices);
     if (!p || !o.width || !o.height) return sum;
     return sum + (o.width * o.height / 1_000_000) * p;
   }, 0);
@@ -429,6 +432,14 @@ export default function ProjectScreen() {
               <Text style={styles.estimateText}>~ € {totalEstimate.toFixed(0)}</Text>
             </View>
           )}
+          <TouchableOpacity
+            onPress={() => setShowSeriesPicker(true)}
+            style={[styles.countBadge, { backgroundColor: activeProject.catalogSeriesId ? 'rgba(149,117,205,0.28)' : 'rgba(255,255,255,0.12)' }]}
+          >
+            <Text style={[styles.count, { color: activeProject.catalogSeriesId ? '#CE93D8' : 'rgba(255,255,255,0.55)' }]}>
+              📋 {allSeries.find(s => s.id === activeProject.catalogSeriesId)?.name ?? 'Assegna serie'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Tab strip — visibile solo se ci sono più progetti nella famiglia */}
@@ -543,24 +554,6 @@ export default function ProjectScreen() {
               </View>
             ))}
 
-            {/* Serie catalogo per il progetto */}
-            <View style={styles.editField}>
-              <Text style={styles.editLabel}>Serie catalogo taglio</Text>
-              <TouchableOpacity
-                style={[styles.editInput, { justifyContent: 'center', paddingVertical: 10 }]}
-                onPress={() => setShowSeriesPicker(true)}
-              >
-                <Text style={{ fontSize: 14, color: editSeriesId ? t.textPrimary : '#aab' }}>
-                  {allSeries.find(s => s.id === editSeriesId)?.name ?? 'Nessuna serie selezionata'}
-                </Text>
-              </TouchableOpacity>
-              {editSeriesId && (
-                <TouchableOpacity onPress={() => setEditSeriesId(null)}>
-                  <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: '600', marginTop: 4 }}>Rimuovi serie</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
             <TouchableOpacity style={styles.optBtn} onPress={handleSaveEdit} disabled={editSaving} activeOpacity={0.8}>
               {editSaving
                 ? <ActivityIndicator color="#fff" />
@@ -573,30 +566,40 @@ export default function ProjectScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Modal picker serie catalogo */}
+      {/* Modal picker serie catalogo — salva direttamente sul progetto */}
       <Modal visible={showSeriesPicker} transparent animationType="slide" onRequestClose={() => setShowSeriesPicker(false)}>
         <Pressable style={styles.overlay} onPress={() => setShowSeriesPicker(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: t.card, paddingBottom: 36 }]}>
             <View style={styles.handle} />
             <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Serie catalogo</Text>
             <TouchableOpacity
-              style={[styles.seriesPickerRow, !editSeriesId && styles.seriesPickerRowActive]}
-              onPress={() => { setEditSeriesId(null); setShowSeriesPicker(false); }}
+              style={[styles.seriesPickerRow, !activeProject.catalogSeriesId && styles.seriesPickerRowActive]}
+              onPress={async () => {
+                setShowSeriesPicker(false);
+                const updated = { ...activeProject, catalogSeriesId: null, updatedAt: new Date().toISOString() };
+                setFamily(prev => prev.map(p => p.id === updated.id ? updated : p));
+                await saveProject(updated);
+              }}
             >
               <Text style={styles.seriesPickerName}>Nessuna</Text>
-              {!editSeriesId && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
+              {!activeProject.catalogSeriesId && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
             </TouchableOpacity>
             {allSeries.map(s => (
               <TouchableOpacity
                 key={s.id}
-                style={[styles.seriesPickerRow, editSeriesId === s.id && styles.seriesPickerRowActive]}
-                onPress={() => { setEditSeriesId(s.id); setShowSeriesPicker(false); }}
+                style={[styles.seriesPickerRow, activeProject.catalogSeriesId === s.id && styles.seriesPickerRowActive]}
+                onPress={async () => {
+                  setShowSeriesPicker(false);
+                  const updated = { ...activeProject, catalogSeriesId: s.id, updatedAt: new Date().toISOString() };
+                  setFamily(prev => prev.map(p => p.id === updated.id ? updated : p));
+                  await saveProject(updated);
+                }}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.seriesPickerName}>{s.name}</Text>
                   <Text style={styles.seriesPickerSub}>{s.variants.length} varianti</Text>
                 </View>
-                {editSeriesId === s.id && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
+                {activeProject.catalogSeriesId === s.id && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
               </TouchableOpacity>
             ))}
           </Pressable>

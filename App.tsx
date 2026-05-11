@@ -37,6 +37,12 @@ import CuttingProjectsScreen   from './src/screens/CuttingProjectsScreen';
 import PaywallScreen           from './src/screens/PaywallScreen';
 import SeriesEditorScreen      from './src/screens/SeriesEditorScreen';
 import VariantEditorScreen     from './src/screens/VariantEditorScreen';
+import {
+  SettingsTolleranzeScreen,
+  SettingsParametriScreen,
+  SettingsPrezziScreen,
+  SettingsGenericoScreen,
+} from './src/screens/SettingsSubScreens';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -86,6 +92,10 @@ function AppNavigator() {
         <Stack.Screen name="Paywall"           component={PaywallScreen}          options={{ title: 'Piano e abbonamento', presentation: 'modal' }}/>
         <Stack.Screen name="SeriesEditor"  component={SeriesEditorScreen}  options={({ route }) => ({ title: route.params?.seriesId ? 'Modifica serie' : 'Nuova serie' })}/>
         <Stack.Screen name="VariantEditor" component={VariantEditorScreen} options={({ route }) => ({ title: route.params?.variantId ? 'Modifica variante' : 'Nuova variante' })}/>
+        <Stack.Screen name="SettingsTolleranze" component={SettingsTolleranzeScreen} options={{ title: 'Tolleranze' }}/>
+        <Stack.Screen name="SettingsParametri"  component={SettingsParametriScreen}  options={{ title: 'Parametri barra' }}/>
+        <Stack.Screen name="SettingsPrezzi"     component={SettingsPrezziScreen}     options={{ title: 'Prezzi al m²' }}/>
+        <Stack.Screen name="SettingsGenerico"   component={SettingsGenericoScreen}   options={{ title: 'Calcolo generico' }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -10,13 +10,13 @@ import { getProject } from '../storage/database';
 import {
   getRiattestattura, getBarLength, getKerf90, getSafetyMargin,
   getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail,
-  getToleranceW, getToleranceH,
+  getToleranceW, getToleranceH, getToleranceByType,
   SettingsPreset, getPresets, applyPreset,
   CatalogSeries, getCatalogSeries,
 } from '../storage/settings';
 import {
   calculateMaterials, calculateCatalogCuttingList, catalogCuttingToMaterials, openingsWithoutSeries,
-  MaterialsResult, MaterialsConfig, ProfileResult, MIN_REMNANT_MM,
+  MaterialsResult, MaterialsConfig, ProfileResult, MIN_REMNANT_MM, CuttingListResult,
 } from '../utils/calculateMaterials';
 import { generateHTML } from '../utils/pdfExport';
 import { getLogoBase64, sharePdf, saveToDevice } from '../utils/pdfActions';
@@ -27,11 +27,11 @@ type Route = RouteProp<RootStackParamList, 'Materials'>;
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'Materials'>;
 
 const MATERIALS_TOUR: TourStep[] = [
-  { icon: '📊', title: 'Risultato calcolo', body: 'Questa pagina mostra quante barre ordinare per questo rilievo. Le aperture senza tipologia o misure complete non vengono elaborate.', spot: null },
-  { icon: '📐', title: 'Taglio a 45°', body: 'Profili che compongono i telai (finestre e porte). Il numero di barre è ottimizzato per ridurre gli scarti.', spot: null },
-  { icon: '📏', title: 'Taglio a 90°', body: 'Profili tagliati dritti: zoccolini, fasce, traverse di persiane. Anche questi ottimizzati per barra.', spot: null },
-  { icon: '⚠️', title: 'Barre al limite', body: 'Quando una barra è quasi piena (meno di 250mm liberi) l\'app ti avvisa. Puoi decidere se aggiungere una barra extra di sicurezza.', spot: null },
-  { icon: '⚙️', title: 'Preset impostazioni', body: 'Tocca un preset in alto per cambiare al volo i parametri di calcolo (barra, tolleranze, ecc.) e ricalcolare istantaneamente.', spot: null },
+  { icon: '📊', title: 'Sviluppo materiale', body: 'Questa pagina mostra quante barre ordinare per questo rilievo. Le aperture senza tipologia o misure complete non vengono elaborate.', spot: null },
+  { icon: '📋', title: 'Con serie catalogo', body: 'Se al progetto è assegnata una serie, lo sviluppo mostra i pezzi della serie con le misure esatte (traversi, montanti, fermavetro, ecc.). Le aperture non coperte dalla serie — zanzariere, monoblocchi, fissi — usano ancora il calcolo generico nella sezione "Altri profili".', spot: null },
+  { icon: '📐', title: 'Senza serie (calcolo generico)', body: 'Se nessuna serie è assegnata, lo sviluppo usa i profili standard: Profilo telaio, Profilo anta, ecc. Il numero di barre è ottimizzato con First Fit Decreasing per ridurre gli scarti.', spot: null },
+  { icon: '⚠️', title: 'Barre al limite', body: 'Quando una barra è usata quasi al massimo (meno di 250mm liberi) l\'app ti avvisa. Puoi aggiungere una barra extra di sicurezza premendo "+1 barra".', spot: null },
+  { icon: '⚙️', title: 'Preset impostazioni', body: 'Tocca un preset in alto per cambiare al volo i parametri di calcolo (lunghezza barra, tolleranze, ecc.) e ricalcolare istantaneamente.', spot: null },
 ];
 
 export default function MaterialsScreen() {
@@ -91,10 +91,10 @@ export default function MaterialsScreen() {
   }, [navigation]);
 
   const loadAndCalculate = useCallback(async () => {
-    const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, tolW, tolH, allSeries] = await Promise.all([
+    const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, tolW, tolH, allSeries, tolByType] = await Promise.all([
       getProject(projectId), getRiattestattura(), getBarLength(), getKerf90(),
       getSafetyMargin(), getSlatPitch(), getZoccoloH(), getFasciaH(), getAntaReduction(), getAntaTopRail(),
-      getToleranceW(), getToleranceH(), getCatalogSeries(),
+      getToleranceW(), getToleranceH(), getCatalogSeries(), getToleranceByType(),
     ]);
     if (!p) return;
     const cfg: MaterialsConfig = {
@@ -108,15 +108,15 @@ export default function MaterialsScreen() {
     const series = p.catalogSeriesId ? allSeries.find(s => s.id === p.catalogSeriesId) ?? null : null;
     setCatalogSeries(series);
 
-    // Calcolo standard sempre su tutte le aperture (telaio e anta sempre presenti)
-    setResult(calculateMaterials(p.openings, cfg));
-
-    // Calcolo catalogo aggiuntivo se serie assegnata
     if (series) {
-      const catCutting = calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg);
+      // Con serie: catalogo per le aperture eligibili, generico solo per il resto (zanzariere, ecc.)
+      const catCutting = calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg, tolByType);
       setCatalogResult(catalogCuttingToMaterials(catCutting, margin));
+      setResult(calculateMaterials(openingsWithoutSeries(p.openings), cfg));
     } else {
+      // Senza serie: calcolo standard su tutto
       setCatalogResult(null);
+      setResult(calculateMaterials(p.openings, cfg));
     }
   }, [projectId]);
 
@@ -261,34 +261,42 @@ export default function MaterialsScreen() {
         </View>
       )}
 
-      {/* ── Sezione standard (sempre presente) ── */}
-      {result.profiles45.length > 0 && (
-        <>
-          <SectionHeader label="Taglio a 45°" color="#1565C0"/>
-          <ProfileTable rows={result.profiles45} extraBars={extraBars}/>
-        </>
-      )}
-      {result.profiles90.length > 0 && (
-        <>
-          <SectionHeader label="Taglio a 90°" color="#2E7D32"/>
-          <ProfileTable rows={result.profiles90} extraBars={extraBars}/>
-        </>
-      )}
-
-      {/* ── Sezione catalogo (aggiuntiva se serie assegnata) ── */}
+      {/* ── Con serie: prima catalogo, poi eventuali altri profili ── */}
       {catalogResult && allCatalogProfiles.length > 0 && (
         <>
-          <SectionHeader label={`Dettaglio serie: ${catalogSeries?.name ?? 'Catalogo'}`} color="#6A1B9A"/>
+          <SectionHeader label={`Serie: ${catalogSeries?.name ?? 'Catalogo'}`} color="#6A1B9A"/>
           {catalogResult.profiles45.length > 0 && (
             <>
-              <SectionHeader label="45° — misure precise" color="#1565C0"/>
+              <SectionHeader label="Tagli a 45°" color="#1565C0"/>
               <ProfileTable rows={catalogResult.profiles45} extraBars={extraBars}/>
             </>
           )}
           {catalogResult.profiles90.length > 0 && (
             <>
-              <SectionHeader label="90° — misure precise" color="#2E7D32"/>
+              <SectionHeader label="Tagli a 90°" color="#2E7D32"/>
               <ProfileTable rows={catalogResult.profiles90} extraBars={extraBars}/>
+            </>
+          )}
+        </>
+      )}
+
+      {/* ── Senza serie: calcolo standard; con serie: solo aperture restanti ── */}
+      {(result.profiles45.length > 0 || result.profiles90.length > 0) && (
+        <>
+          {catalogResult
+            ? <SectionHeader label="Altri profili (calcolo generico)" color="#37474F"/>
+            : null
+          }
+          {result.profiles45.length > 0 && (
+            <>
+              {!catalogResult && <SectionHeader label="Tagli a 45°" color="#1565C0"/>}
+              <ProfileTable rows={result.profiles45} extraBars={extraBars}/>
+            </>
+          )}
+          {result.profiles90.length > 0 && (
+            <>
+              {!catalogResult && <SectionHeader label="Tagli a 90°" color="#2E7D32"/>}
+              <ProfileTable rows={result.profiles90} extraBars={extraBars}/>
             </>
           )}
         </>

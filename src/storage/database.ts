@@ -12,6 +12,8 @@ let _projectCache: Map<string, Project> = new Map();
 let _listCache: Project[] | null = null;
 // null = non ancora verificato; true/false = verificato
 let _hasParentId: boolean | null = null;
+// Colonne opzionali non presenti sullo schema Supabase corrente
+const _unsupportedCols = new Set<string>();
 
 export function clearDbCache() {
   _cachedIds    = null;
@@ -19,27 +21,35 @@ export function clearDbCache() {
   _listCache    = null;
 }
 
-// ─── Helper: upsert robusto con fallback se parent_id non esiste ─────────────
+// ─── Helper: upsert robusto, rimuove automaticamente colonne mancanti ─────────
 
 async function upsertProject(payload: Record<string, unknown>): Promise<void> {
-  // Prima prova con parent_id
-  if (_hasParentId !== false) {
-    const { error } = await supabase.from('projects').upsert(payload);
-    if (!error) { _hasParentId = true; return; }
-    // Se l'errore è sulla colonna parent_id, segna come non supportata e riprova
-    const msg = (error as { message?: string }).message ?? '';
-    if (msg.includes('parent_id') || msg.includes('column')) {
-      _hasParentId = false;
-    } else {
-      // Errore reale non legato a parent_id: log e ritorna
-      console.warn('upsertProject error:', error);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    // Costruisci payload senza le colonne già note come mancanti
+    const stripped = Object.fromEntries(
+      Object.entries(payload).filter(([k]) => !_unsupportedCols.has(k))
+    );
+
+    const { error } = await supabase.from('projects').upsert(stripped);
+    if (!error) {
+      // Aggiorna flag _hasParentId usato da fetchProjectList
+      if (!_unsupportedCols.has('parent_id')) _hasParentId = true;
       return;
     }
+
+    const err = error as { code?: string; message?: string };
+    // PGRST204 = colonna non trovata nello schema
+    if (err.code === 'PGRST204') {
+      const m = (err.message ?? '').match(/find the '(\w+)' column/);
+      if (m) {
+        _unsupportedCols.add(m[1]);
+        if (m[1] === 'parent_id') _hasParentId = false;
+        continue; // riprova senza quella colonna
+      }
+    }
+    console.warn('upsertProject error:', error);
+    return;
   }
-  // Fallback senza parent_id
-  const { parent_id: _drop, ...rest } = payload as Record<string, unknown> & { parent_id?: unknown };
-  const { error: e2 } = await supabase.from('projects').upsert(rest);
-  if (e2) console.warn('upsertProject fallback error:', e2);
 }
 
 // ─── Helpers interni ──────────────────────────────────────────────────────────
@@ -135,7 +145,7 @@ async function fetchProjectList(companyId: string): Promise<Project[] | null> {
   if (_hasParentId !== false) {
     const { data, error } = await supabase
       .from('projects')
-      .select('id, name, client_name, client_phone, address, gps, openings, parent_id, created_at, updated_at, catalog_series_id')
+      .select('*')
       .eq('company_id', companyId)
       .order('updated_at', { ascending: false });
     if (!error && data) {
@@ -146,7 +156,7 @@ async function fetchProjectList(companyId: string): Promise<Project[] | null> {
   }
   const { data, error } = await supabase
     .from('projects')
-    .select('id, name, client_name, client_phone, address, gps, openings, created_at, updated_at, catalog_series_id')
+    .select('id, name, client_name, client_phone, address, gps, openings, created_at, updated_at')
     .eq('company_id', companyId)
     .order('updated_at', { ascending: false });
   if (error || !data) return null;
@@ -187,15 +197,12 @@ export async function getProject(id: string): Promise<Project | null> {
 export async function saveProject(project: Project): Promise<void> {
   // Metti subito in cache locale — la UI trova il progetto anche se Supabase è lento
   _projectCache.set(project.id, project);
-  // Aggiorna/aggiungi nella lista cache senza aspettare Supabase
-  if (_listCache) {
-    const idx = _listCache.findIndex(p => p.id === project.id);
-    if (idx >= 0) {
-      _listCache = _listCache.map(p => p.id === project.id ? project : p);
-    } else {
-      _listCache = [project, ..._listCache];
-    }
-  }
+  // Aggiorna/aggiungi nella lista cache (anche se era null, crea una lista con questo progetto)
+  const existing = _listCache ?? [];
+  const idx = existing.findIndex(p => p.id === project.id);
+  _listCache = idx >= 0
+    ? existing.map(p => p.id === project.id ? project : p)
+    : [project, ...existing];
 
   const ids = await getCurrentIds();
   if (!ids) throw new Error('NO_IDS');

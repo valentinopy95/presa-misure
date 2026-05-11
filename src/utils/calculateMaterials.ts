@@ -1,5 +1,5 @@
 import { Opening } from '../types';
-import { CatalogSeries, findBestVariant } from '../storage/settings';
+import { CatalogSeries, findBestVariant, ToleranceByType, toleranceForStyle } from '../storage/settings';
 
 const DEFAULT_BAR_MM  = 6400;
 const DEFAULT_KERF_90 = 4;
@@ -447,6 +447,7 @@ export function calculateCatalogCuttingList(
   toleranceW: number,
   toleranceH: number,
   config: MaterialsConfig = {},
+  toleranceByType?: ToleranceByType,
 ): CuttingListResult {
   const {
     riattestattura = 25,
@@ -463,8 +464,9 @@ export function calculateCatalogCuttingList(
     const variant = findBestVariant(series, o.leafCount);
     if (!variant || !variant.pieces.length) continue;
 
-    const pcL = o.width!  - toleranceW;
-    const pcH = o.height! - toleranceH;
+    const tol = toleranceByType ? toleranceForStyle(o.style, toleranceByType) : { w: toleranceW, h: toleranceH };
+    const pcL = o.width!  - tol.w;
+    const pcH = o.height! - tol.h;
     const hasSoglia = o.hasSoglia === true;
 
     for (const piece of variant.pieces) {
@@ -472,8 +474,20 @@ export function calculateCatalogCuttingList(
       if (cond === 'no_soglia'   &&  hasSoglia) continue;
       if (cond === 'with_soglia' && !hasSoglia) continue;
 
-      const base   = piece.baseVar === 'L' ? pcL : pcH;
-      const length = Math.round(((base - piece.offset) / piece.divisor) * 2) / 2;
+      const cat = piece.pieceCategory ?? 'anta';
+
+      // Fermavetro: salta se l'apertura non ha fermavetro selezionato
+      if (cat === 'fermavetro' && !o.hasFermavetro) continue;
+      // Riporto: solo se ci sono più ante (coprigiunto tra ante)
+      if (cat === 'riporto' && (o.leafCount ?? 1) <= 1) continue;
+
+      const base = piece.baseVar === 'L' ? pcL : pcH;
+      // divideFirst=true:  (base/div) + offset  → "prima dividi, poi applica offset"  ÷−
+      // divideFirst=false or undefined (default): (base + offset) / div → "prima offset, poi dividi"  −÷
+      const df = piece.divideFirst === true;
+      const length = df
+        ? Math.round(((base / piece.divisor) + piece.offset) * 2) / 2
+        : Math.round(((base + piece.offset) / piece.divisor) * 2) / 2;
       if (length <= 0) continue;
 
       const is90 = piece.cutAngle1 === 90 && piece.cutAngle2 === 90;

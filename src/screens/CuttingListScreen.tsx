@@ -12,7 +12,7 @@ import { getProject } from '../storage/database';
 import {
   getRiattestattura, getBarLength, getKerf90, getSafetyMargin,
   getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail,
-  getToleranceW, getToleranceH,
+  getToleranceW, getToleranceH, getToleranceByType,
   SettingsPreset, getPresets, applyPreset,
   CatalogSeries, getCatalogSeries,
 } from '../storage/settings';
@@ -48,10 +48,10 @@ export default function CuttingListScreen() {
   const [pdfBusy,        setPdfBusy]        = useState(false);
 
   const loadAndCalculate = useCallback(async () => {
-    const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, tolW, tolH, allSeries] = await Promise.all([
+    const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, tolW, tolH, allSeries, tolByType] = await Promise.all([
       getProject(projectId), getRiattestattura(), getBarLength(), getKerf90(),
       getSafetyMargin(), getSlatPitch(), getZoccoloH(), getFasciaH(), getAntaReduction(), getAntaTopRail(),
-      getToleranceW(), getToleranceH(), getCatalogSeries(),
+      getToleranceW(), getToleranceH(), getCatalogSeries(), getToleranceByType(),
     ]);
     if (!p) return;
     setProject(p);
@@ -68,7 +68,7 @@ export default function CuttingListScreen() {
 
     if (series) {
       // Catalogo per aperture eligibili, default per il resto
-      setCatalogResult(calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg));
+      setCatalogResult(calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg, tolByType));
       setResult(calculateCuttingList(openingsWithoutSeries(p.openings), cfg));
     } else {
       setCatalogResult(null);

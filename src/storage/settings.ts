@@ -33,6 +33,56 @@ export interface PriceConfig {
 
 export const DEFAULT_TOLERANCE_W    = 10;
 export const DEFAULT_TOLERANCE_H    = 10;
+
+// ─── Tolleranze per tipo apertura ────────────────────────────────────────────
+
+export type ToleranceType = 'finestre' | 'porte' | 'persiane' | 'zanzariere';
+
+export interface TolerancePair { w: number; h: number; }
+
+export interface ToleranceByType {
+  finestre:   TolerancePair;
+  porte:      TolerancePair;
+  persiane:   TolerancePair;
+  zanzariere: TolerancePair;
+}
+
+const TOL_KEY = '@measure_tolerance_by_type';
+
+const DEFAULT_TOL_BY_TYPE: ToleranceByType = {
+  finestre:   { w: 10, h: 10 },
+  porte:      { w: 10, h: 10 },
+  persiane:   { w: 10, h: 10 },
+  zanzariere: { w: 10, h: 10 },
+};
+
+export async function getToleranceByType(): Promise<ToleranceByType> {
+  try {
+    const raw = await AsyncStorage.getItem(TOL_KEY);
+    if (!raw) return { ...DEFAULT_TOL_BY_TYPE };
+    const parsed = JSON.parse(raw) as Partial<ToleranceByType>;
+    return {
+      finestre:   { ...DEFAULT_TOL_BY_TYPE.finestre,   ...(parsed.finestre   ?? {}) },
+      porte:      { ...DEFAULT_TOL_BY_TYPE.porte,      ...(parsed.porte      ?? {}) },
+      persiane:   { ...DEFAULT_TOL_BY_TYPE.persiane,   ...(parsed.persiane   ?? {}) },
+      zanzariere: { ...DEFAULT_TOL_BY_TYPE.zanzariere, ...(parsed.zanzariere ?? {}) },
+    };
+  } catch { return { ...DEFAULT_TOL_BY_TYPE }; }
+}
+
+export async function setToleranceByType(t: ToleranceByType): Promise<void> {
+  await AsyncStorage.setItem(TOL_KEY, JSON.stringify(t));
+}
+
+/** Ritorna la coppia W/H corretta per lo stile apertura dato */
+export function toleranceForStyle(style: string | null, config: ToleranceByType): TolerancePair {
+  if (!style) return config.finestre;
+  if (style.startsWith('window') || style === 'window_fixed') return config.finestre;
+  if (style.startsWith('door'))    return config.porte;
+  if (style.startsWith('shutter')) return config.persiane;
+  if (style.startsWith('mosquito')) return config.zanzariere;
+  return config.finestre;
+}
 export const DEFAULT_RIATTESTATTURA = 25;
 export const DEFAULT_BAR_LENGTH     = 6400;
 export const DEFAULT_KERF_90        = 4;
@@ -197,6 +247,93 @@ export function priceForStyle(style: OpeningStyle | null, prices: PriceConfig): 
   return 0;
 }
 
+// ─── Prezzi dettagliati per tipologia + numero ante ──────────────────────────
+
+export type DetailedPriceConfig = Record<string, number>;
+
+const DETAILED_PRICES_KEY = '@measure_detailed_prices';
+
+export async function getDetailedPrices(): Promise<DetailedPriceConfig> {
+  try {
+    const raw = await AsyncStorage.getItem(DETAILED_PRICES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+export async function setDetailedPrices(prices: DetailedPriceConfig): Promise<void> {
+  await AsyncStorage.setItem(DETAILED_PRICES_KEY, JSON.stringify(prices));
+}
+
+/** Ritorna il prezzo €/m² per lo stile e numero ante dato.
+ *  Prova prima `style_leafCount`, poi `style` senza ante (per mosquito/roller/subframe). */
+export function priceForStyleDetailed(
+  style: string | null,
+  leafCount: number | null,
+  prices: DetailedPriceConfig,
+): number {
+  if (!style) return 0;
+  const n = leafCount ?? 1;
+  const withLeaf = `${style}_${n}`;
+  if (prices[withLeaf] > 0) return prices[withLeaf];
+  if (prices[style] > 0) return prices[style];
+  return 0;
+}
+
+export const PRICE_SECTIONS: {
+  label: string; color: string;
+  items: { key: string; label: string }[];
+}[] = [
+  {
+    label: '🪟 Finestre', color: '#1565C0',
+    items: [
+      { key: 'window_fixed',       label: 'Fissa' },
+      { key: 'window_single_1',    label: 'Battente 1 anta' },
+      { key: 'window_double_2',    label: 'Battente 2 ante' },
+      { key: 'window_tilt_turn_1', label: 'Ribalta 1 anta' },
+      { key: 'window_tilt_turn_2', label: 'Ribalta 2 ante' },
+      { key: 'window_sliding_2',   label: 'Scorrevole 2 ante' },
+      { key: 'window_sliding_3',   label: 'Scorrevole 3 ante' },
+      { key: 'window_sliding_4',   label: 'Scorrevole 4 ante' },
+    ],
+  },
+  {
+    label: '🚪 Porte', color: '#4A148C',
+    items: [
+      { key: 'door_single_1',   label: 'Singola 1 anta' },
+      { key: 'door_single_2',   label: 'Singola 2 ante' },
+      { key: 'door_sliding_2',  label: 'Scorrevole 2 ante' },
+      { key: 'door_sliding_3',  label: 'Scorrevole 3 ante' },
+      { key: 'door_entrance_1', label: 'Blindata 1 anta' },
+    ],
+  },
+  {
+    label: '🪟 Persiane', color: '#1B5E20',
+    items: [
+      { key: 'shutter_single_1', label: '1 anta' },
+      { key: 'shutter_single_2', label: '2 ante' },
+      { key: 'shutter_double_2', label: 'Porta-finestra 2 ante' },
+      { key: 'shutter_double_3', label: '3 ante' },
+      { key: 'shutter_double_4', label: '4 ante' },
+    ],
+  },
+  {
+    label: '🦟 Zanzariere', color: '#E65100',
+    items: [
+      { key: 'mosquito_fixed',   label: 'Fissa' },
+      { key: 'mosquito_rollup',  label: 'Avvolgibile' },
+      { key: 'mosquito_lateral', label: 'Laterale' },
+    ],
+  },
+  {
+    label: '📦 Monoblocchi', color: '#37474F',
+    items: [{ key: 'roller_blind', label: 'Monoblocco con tapparella' }],
+  },
+  {
+    label: '🔲 Controtelai', color: '#546E7A',
+    items: [{ key: 'subframe_window', label: 'Controtelaio' }],
+  },
+];
+
 export async function getTutorialShown(): Promise<boolean> {
   const raw = await AsyncStorage.getItem(KEYS.TUTORIAL_SHOWN);
   return raw === 'true';
@@ -225,11 +362,13 @@ export interface CatalogPiece {
   name:       string;      // es. "Montanti telaio fisso"
   quantity:   number;      // pezzi per questa configurazione
   baseVar:    'L' | 'H';  // punta corta L o H
-  offset:     number;      // mm da sottrarre (0 = nessuno)
+  offset:     number;      // mm da sottrarre (0 = nessuno); per isTelaio può essere negativo (aggiunge punta)
   divisor:    number;      // 1 = nessuna divisione, 2 = dividi per 2
   cutAngle1:  45 | 90;    // angolo lato A
   cutAngle2:  45 | 90;    // angolo lato B
-  condition?: 'always' | 'no_soglia' | 'with_soglia'; // default = 'always'
+  condition?:     'always' | 'no_soglia' | 'with_soglia'; // default = 'always'
+  pieceCategory?: 'telaio' | 'anta' | 'fermavetro' | 'riporto'; // default = 'anta'
+  divideFirst?:   boolean; // true (default) = (L/div)+offset · false = (L+offset)/div
 }
 
 // Una variante = tabella pezzi per un numero specifico di ante

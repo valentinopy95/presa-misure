@@ -33,7 +33,7 @@ export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
 
   const handleCreate = () => {
     if (!clientName.trim()) return;
-    onCreate(name.trim() || clientName.trim(), clientName.trim(), clientPhone.trim(), address.trim(), seriesId);
+    onCreate(name.trim(), clientName.trim(), clientPhone.trim(), address.trim(), seriesId);
     setName(''); setClientName(''); setClientPhone(''); setAddress(''); setSeriesId(null);
   };
 

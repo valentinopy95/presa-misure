@@ -20,9 +20,11 @@ export default function ProjectCard({ project, onPress, onDelete, isSubProject =
 
       {/* Body */}
       <View style={styles.body}>
-        <Text style={styles.name} numberOfLines={1}>{project.name}</Text>
         {!!project.clientName && (
-          <Text style={styles.client} numberOfLines={1}>{project.clientName}</Text>
+          <Text style={styles.name} numberOfLines={1}>{project.clientName}</Text>
+        )}
+        {!!project.name && (
+          <Text style={styles.client} numberOfLines={1}>{project.name}</Text>
         )}
         {!!project.address && (
           <Text style={styles.address} numberOfLines={1}>📍 {project.address}</Text>

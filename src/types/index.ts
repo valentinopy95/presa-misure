@@ -108,4 +108,8 @@ export type RootStackParamList = {
   Paywall: undefined;
   SeriesEditor:  { seriesId?: string };
   VariantEditor: { seriesId: string; variantId?: string; leafCount?: number };
+  SettingsTolleranze: undefined;
+  SettingsParametri:  undefined;
+  SettingsPrezzi:     undefined;
+  SettingsGenerico:   undefined;
 };
