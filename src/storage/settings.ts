@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { OpeningStyle } from '../types';
+import { supabase } from '../lib/supabase';
+import { getCurrentIds } from './database';
 
 export const KEYS = {
   ROLE:            '@measure_user_role',
@@ -384,8 +386,8 @@ export interface CatalogSeries {
   variants: CatalogVariant[];
 }
 
-export const CATALOG_SERIES_KEY     = '@measure_catalog_series';
-export const DEFAULT_SERIES_KEY     = '@measure_default_series_id';
+export const CATALOG_SERIES_KEY = '@measure_catalog_series';
+export const DEFAULT_SERIES_KEY = '@measure_default_series_id';
 
 export async function getDefaultCatalogSeriesId(): Promise<string | null> {
   return AsyncStorage.getItem(DEFAULT_SERIES_KEY);
@@ -395,12 +397,23 @@ export async function setDefaultCatalogSeriesId(id: string | null): Promise<void
   else await AsyncStorage.removeItem(DEFAULT_SERIES_KEY);
 }
 
-export async function getCatalogSeries(): Promise<CatalogSeries[]> {
+// ─── Cache in memoria per le serie ───────────────────────────────────────────
+
+let _seriesCache: CatalogSeries[] | null = null;
+
+export function clearSeriesCache(): void {
+  _seriesCache = null;
+}
+
+const SERIES_MIGRATED_KEY = '@measure_series_migrated_v1';
+
+// ─── Helpers AsyncStorage (fallback offline / migrazione) ─────────────────────
+
+async function _localGet(): Promise<CatalogSeries[]> {
   const raw = await AsyncStorage.getItem(CATALOG_SERIES_KEY);
   if (!raw) return [];
   try {
     const list = JSON.parse(raw) as any[];
-    // Migrazione: vecchio formato aveva pieces[] al top-level invece di variants[]
     return list.map(s => {
       if (Array.isArray(s.variants)) return s as CatalogSeries;
       const pieces: CatalogPiece[] = Array.isArray(s.pieces) ? s.pieces.map((p: any) => ({
@@ -419,39 +432,134 @@ export async function getCatalogSeries(): Promise<CatalogSeries[]> {
   } catch { return []; }
 }
 
-export async function saveCatalogSeries(series: CatalogSeries[]): Promise<void> {
+async function _localSave(series: CatalogSeries[]): Promise<void> {
   await AsyncStorage.setItem(CATALOG_SERIES_KEY, JSON.stringify(series));
 }
 
+// ─── API pubblica ─────────────────────────────────────────────────────────────
+
+export async function getCatalogSeries(): Promise<CatalogSeries[]> {
+  if (_seriesCache !== null) return _seriesCache;
+
+  const ids = await getCurrentIds();
+  if (!ids) return _localGet();
+
+  const { data, error } = await supabase
+    .from('catalog_series')
+    .select('data')
+    .eq('company_id', ids.companyId);
+
+  if (error || !data) return _localGet();
+
+  _seriesCache = data.map(row => row.data as CatalogSeries);
+  return _seriesCache;
+}
+
 export async function upsertCatalogSeries(s: CatalogSeries): Promise<void> {
-  const existing = await getCatalogSeries();
-  const idx = existing.findIndex(x => x.id === s.id);
-  if (idx >= 0) existing[idx] = s;
-  else existing.push(s);
-  await saveCatalogSeries(existing);
+  // Aggiorna cache ottimisticamente
+  if (_seriesCache !== null) {
+    const idx = _seriesCache.findIndex(x => x.id === s.id);
+    if (idx >= 0) _seriesCache[idx] = s;
+    else _seriesCache.push(s);
+  }
+
+  const ids = await getCurrentIds();
+  if (!ids) {
+    const local = await _localGet();
+    const idx = local.findIndex(x => x.id === s.id);
+    if (idx >= 0) local[idx] = s; else local.push(s);
+    await _localSave(local);
+    return;
+  }
+
+  await supabase.from('catalog_series').upsert({
+    id:         s.id,
+    company_id: ids.companyId,
+    user_id:    ids.userId,
+    data:       s,
+    updated_at: new Date().toISOString(),
+  });
 }
 
 export async function deleteCatalogSeries(id: string): Promise<void> {
-  const existing = await getCatalogSeries();
-  await saveCatalogSeries(existing.filter(s => s.id !== id));
+  if (_seriesCache !== null) _seriesCache = _seriesCache.filter(s => s.id !== id);
+
+  const ids = await getCurrentIds();
+  if (!ids) {
+    await _localSave((await _localGet()).filter(s => s.id !== id));
+    return;
+  }
+
+  await supabase.from('catalog_series').delete().eq('id', id);
 }
 
 export async function upsertCatalogVariant(seriesId: string, variant: CatalogVariant): Promise<void> {
   const series = await getCatalogSeries();
   const sIdx = series.findIndex(s => s.id === seriesId);
   if (sIdx < 0) return;
-  const vIdx = series[sIdx].variants.findIndex(v => v.id === variant.id);
-  if (vIdx >= 0) series[sIdx].variants[vIdx] = variant;
-  else series[sIdx].variants.push(variant);
-  await saveCatalogSeries(series);
+  const updated = { ...series[sIdx], variants: [...series[sIdx].variants] };
+  const vIdx = updated.variants.findIndex(v => v.id === variant.id);
+  if (vIdx >= 0) updated.variants[vIdx] = variant;
+  else updated.variants.push(variant);
+  await upsertCatalogSeries(updated);
 }
 
 export async function deleteCatalogVariant(seriesId: string, variantId: string): Promise<void> {
   const series = await getCatalogSeries();
   const sIdx = series.findIndex(s => s.id === seriesId);
   if (sIdx < 0) return;
-  series[sIdx].variants = series[sIdx].variants.filter(v => v.id !== variantId);
-  await saveCatalogSeries(series);
+  const updated = { ...series[sIdx], variants: series[sIdx].variants.filter(v => v.id !== variantId) };
+  await upsertCatalogSeries(updated);
+}
+
+// Kept for backward compat — non usata internamente ma esposta
+export async function saveCatalogSeries(series: CatalogSeries[]): Promise<void> {
+  _seriesCache = [...series];
+  const ids = await getCurrentIds();
+  if (!ids) { await _localSave(series); return; }
+  for (const s of series) {
+    await supabase.from('catalog_series').upsert({
+      id:         s.id,
+      company_id: ids.companyId,
+      user_id:    ids.userId,
+      data:       s,
+      updated_at: new Date().toISOString(),
+    });
+  }
+}
+
+// ─── Migrazione AsyncStorage → Supabase (una tantum) ─────────────────────────
+
+export async function migrateSeriesToSupabase(): Promise<void> {
+  const already = await AsyncStorage.getItem(SERIES_MIGRATED_KEY);
+  if (already) return;
+
+  const ids = await getCurrentIds();
+  if (!ids) return;
+
+  const local = await _localGet();
+  if (local.length > 0) {
+    const { data } = await supabase
+      .from('catalog_series')
+      .select('id')
+      .eq('company_id', ids.companyId)
+      .limit(1);
+
+    if (!data || data.length === 0) {
+      for (const s of local) {
+        await supabase.from('catalog_series').upsert({
+          id:         s.id,
+          company_id: ids.companyId,
+          user_id:    ids.userId,
+          data:       s,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  _seriesCache = null; // forza rilettura da Supabase al prossimo accesso
+  await AsyncStorage.setItem(SERIES_MIGRATED_KEY, '1');
 }
 
 // Trova la variante più adatta per un dato numero di ante

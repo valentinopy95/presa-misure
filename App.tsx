@@ -13,6 +13,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import * as AppAlert from './src/components/AppAlert';
 import { migrateLocalToSupabase, clearDbCache } from './src/storage/database';
+import { migrateSeriesToSupabase, clearSeriesCache } from './src/storage/settings';
 import { RootStackParamList } from './src/types';
 
 import SplashScreen            from './src/screens/SplashScreen';
@@ -116,7 +117,7 @@ function AppContent() {
         return;
       }
       setSession(session);
-      if (!session) clearDbCache();
+      if (!session) { clearDbCache(); clearSeriesCache(); }
     });
 
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
@@ -124,7 +125,10 @@ function AppContent() {
 
   // Migrazione locale → Supabase (una tantum al login)
   useEffect(() => {
-    if (session) migrateLocalToSupabase();
+    if (session) {
+      migrateLocalToSupabase();
+      migrateSeriesToSupabase();
+    }
   }, [session]);
 
   if (loading) return <SplashScreen />;

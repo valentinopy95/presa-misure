@@ -54,7 +54,7 @@ async function upsertProject(payload: Record<string, unknown>): Promise<void> {
 
 // ─── Helpers interni ──────────────────────────────────────────────────────────
 
-async function getCurrentIds(): Promise<{ userId: string; companyId: string } | null> {
+export async function getCurrentIds(): Promise<{ userId: string; companyId: string } | null> {
   if (_cachedIds) return _cachedIds;
 
   const { data: { user } } = await supabase.auth.getUser();
