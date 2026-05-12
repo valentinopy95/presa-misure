@@ -375,9 +375,10 @@ export interface CatalogPiece {
 
 // Una variante = tabella pezzi per un numero specifico di ante
 export interface CatalogVariant {
-  id:        string;
-  leafCount: number;       // numero ante: 1, 2, 3, 4, 6, 8...
-  pieces:    CatalogPiece[];
+  id:          string;
+  leafCount:   number;       // numero ante: 1, 2, 3, 4, 6, 8...
+  pieces:      CatalogPiece[];
+  telaiOffset: number;       // aletta telaio in mm (aggiunta alla misura taglio per traversi e montanti)
 }
 
 export interface CatalogSeries {

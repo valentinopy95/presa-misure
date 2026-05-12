@@ -42,10 +42,13 @@ export interface CuttingBin {
   remaining: number;   // leftover mm after all cuts
 }
 
+export type PieceGroup = 'telaio' | 'anta' | 'fermavetro' | 'riporto';
+
 export interface CuttingProfile {
   label:     string;
   cutAngle:  45 | 90;
   bins:      CuttingBin[];
+  group?:    PieceGroup;
 }
 
 export interface CuttingListResult {
@@ -437,8 +440,7 @@ export function calculateCuttingList(
 function isSeriesEligible(o: Opening): boolean {
   if (!o.width || !o.height || !o.style) return false;
   const s = o.style;
-  return (s.startsWith('window') || s.startsWith('door') || s.startsWith('shutter'))
-    && s !== 'window_fixed';
+  return s.startsWith('window') || s.startsWith('door') || s.startsWith('shutter');
 }
 
 export function calculateCatalogCuttingList(
@@ -457,6 +459,7 @@ export function calculateCatalogCuttingList(
 
   const b45: Record<string, number[]> = {};
   const b90: Record<string, number[]> = {};
+  const pieceGroups: Record<string, PieceGroup> = {};
   const warnings: string[] = [];
 
   for (const o of openings) {
@@ -469,13 +472,44 @@ export function calculateCatalogCuttingList(
     const pcH = o.height! - tol.h;
     const hasSoglia = o.hasSoglia === true;
 
+    // ── Auto-telaio (traversi + montanti) se la variante non li ha definiti ──
+    const hasTelaioInVariant = variant.pieces.some(p => (p.pieceCategory ?? 'anta') === 'telaio');
+    if (!hasTelaioInVariant) {
+      const tOff     = variant.telaiOffset ?? 0;
+      const useFS    = !!(o.outOfSquare && o.heightLeft && o.heightRight);
+      const baseHL   = useFS ? o.heightLeft!  - tol.h : pcH;
+      const baseHR   = useFS ? o.heightRight! - tol.h : pcH;
+      const tW       = pcL + tOff;
+      const tHL      = baseHL + tOff;
+      const tHR      = baseHR + tOff;
+      const s        = o.style!;
+      const isSlidingT  = s === 'window_sliding' || s === 'door_sliding';
+      const isShutterT  = s.startsWith('shutter');
+      const isDoorT     = s.startsWith('door');
+      // Traversi: 1 se persiana o porta senza battente inferiore; 2 altrimenti
+      const nTraversi = (isShutterT || (isDoorT && !isSlidingT && !o.hasBattente)) ? 1 : 2;
+      for (let t = 0; t < nTraversi; t++) {
+        pieceGroups['Traverso telaio'] = 'telaio';
+        pieceGroups['Montante telaio'] = 'telaio';
+        if (tW > 0 && tW <= barLength) b45['Traverso telaio'] = [...(b45['Traverso telaio'] ?? []), tW];
+        else if (tW > barLength) warnings.push(`Traverso telaio: ${tW}mm supera la barra (${barLength}mm)`);
+      }
+      if (tHL > 0 && tHL <= barLength) b45['Montante telaio'] = [...(b45['Montante telaio'] ?? []), tHL];
+      else if (tHL > barLength) warnings.push(`Montante telaio sx: ${tHL}mm supera la barra (${barLength}mm)`);
+      if (tHR > 0 && tHR <= barLength) b45['Montante telaio'] = [...(b45['Montante telaio'] ?? []), tHR];
+      else if (tHR > barLength) warnings.push(`Montante telaio dx: ${tHR}mm supera la barra (${barLength}mm)`);
+    }
+
     for (const piece of variant.pieces) {
       const cond = piece.condition ?? 'always';
       if (cond === 'no_soglia'   &&  hasSoglia) continue;
       if (cond === 'with_soglia' && !hasSoglia) continue;
 
       const cat = piece.pieceCategory ?? 'anta';
+      pieceGroups[piece.name] = cat;
 
+      // Finestra fissa: solo telaio e fermavetro, niente anta né riporto
+      if (o.style === 'window_fixed' && (cat === 'anta' || cat === 'riporto')) continue;
       // Fermavetro: salta se l'apertura non ha fermavetro selezionato
       if (cat === 'fermavetro' && !o.hasFermavetro) continue;
       // Riporto: solo se ci sono più ante (coprigiunto tra ante)
@@ -502,22 +536,28 @@ export function calculateCatalogCuttingList(
     }
   }
 
+  const GROUP_ORDER: PieceGroup[] = ['telaio', 'anta', 'fermavetro', 'riporto'];
+
   const profiles45 = Object.entries(b45)
     .map(([label, pieces]): CuttingProfile | null => {
       const { binDetails } = calcBars(pieces, barLength, riattestattura, false);
-      return binDetails.length ? { label, cutAngle: 45, bins: binDetails } : null;
-    }).filter(Boolean) as CuttingProfile[];
+      return binDetails.length ? { label, cutAngle: 45, bins: binDetails, group: pieceGroups[label] } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => GROUP_ORDER.indexOf(a!.group ?? 'anta') - GROUP_ORDER.indexOf(b!.group ?? 'anta')) as CuttingProfile[];
 
   const profiles90 = Object.entries(b90)
     .map(([label, pieces]): CuttingProfile | null => {
       const { binDetails } = calcBars(pieces, barLength, kerf90, true);
-      return binDetails.length ? { label, cutAngle: 90, bins: binDetails } : null;
-    }).filter(Boolean) as CuttingProfile[];
+      return binDetails.length ? { label, cutAngle: 90, bins: binDetails, group: pieceGroups[label] } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => GROUP_ORDER.indexOf(a!.group ?? 'anta') - GROUP_ORDER.indexOf(b!.group ?? 'anta')) as CuttingProfile[];
 
   return { profiles45, profiles90, warnings, barLength };
 }
 
-// Converte CuttingListResult → MaterialsResult (per la schermata sviluppo)
+// Converte CuttingListResult → MaterialsResult raggruppando per categoria (Telaio / Anta / …)
 export function catalogCuttingToMaterials(
   cuttingResult: CuttingListResult,
   safetyMarginPct = 5,
@@ -525,14 +565,36 @@ export function catalogCuttingToMaterials(
   function applyMargin(n: number) {
     return safetyMarginPct <= 0 ? n : n + Math.round(n * safetyMarginPct / 100);
   }
-  const toProfile = (cp: CuttingProfile): ProfileResult => ({
-    label:     cp.label,
-    bars:      applyMargin(cp.bins.length),
-    offcuts:   cp.bins.map(b => b.remaining).filter(r => r >= MIN_REMNANT_MM),
-    nearLimit: cp.bins.some(b => b.remaining > 0 && b.remaining < NEAR_LIMIT_THRESHOLD),
-  });
-  const p45 = cuttingResult.profiles45.map(toProfile);
-  const p90 = cuttingResult.profiles90.map(toProfile);
+
+  const GROUP_LABELS: Record<PieceGroup, string> = {
+    telaio:     'Telaio',
+    anta:       'Anta',
+    fermavetro: 'Fermavetro',
+    riporto:    'Riporto',
+  };
+  const GROUP_ORDER: PieceGroup[] = ['telaio', 'anta', 'fermavetro', 'riporto'];
+
+  function mergeByGroup(profiles: CuttingProfile[]): ProfileResult[] {
+    const acc: Record<string, { bins: number; offcuts: number[]; nearLimit: boolean }> = {};
+    for (const cp of profiles) {
+      const key = GROUP_LABELS[cp.group ?? 'anta'];
+      if (!acc[key]) acc[key] = { bins: 0, offcuts: [], nearLimit: false };
+      acc[key].bins += cp.bins.length;
+      acc[key].offcuts.push(...cp.bins.map(b => b.remaining).filter(r => r >= MIN_REMNANT_MM));
+      if (cp.bins.some(b => b.remaining > 0 && b.remaining < NEAR_LIMIT_THRESHOLD)) acc[key].nearLimit = true;
+    }
+    return GROUP_ORDER
+      .filter(g => acc[GROUP_LABELS[g]])
+      .map(g => ({
+        label:     GROUP_LABELS[g],
+        bars:      applyMargin(acc[GROUP_LABELS[g]].bins),
+        offcuts:   acc[GROUP_LABELS[g]].offcuts,
+        nearLimit: acc[GROUP_LABELS[g]].nearLimit,
+      }));
+  }
+
+  const p45 = mergeByGroup(cuttingResult.profiles45);
+  const p90 = mergeByGroup(cuttingResult.profiles90);
   return {
     profiles45:  p45,
     profiles90:  p90,

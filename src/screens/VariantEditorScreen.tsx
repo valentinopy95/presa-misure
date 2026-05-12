@@ -43,10 +43,11 @@ export default function VariantEditorScreen() {
   const route      = useRoute<Route>();
   const { seriesId, variantId, leafCount: paramLeafCount } = route.params;
 
-  const [leafCount, setLeafCount] = useState<number>(paramLeafCount ?? 1);
-  const [pieces, setPieces]       = useState<CatalogPiece[]>([emptyPiece('anta')]);
-  const [saving, setSaving]       = useState(false);
-  const [tourVisible, setTourVisible] = useState(false);
+  const [leafCount,    setLeafCount]    = useState<number>(paramLeafCount ?? 1);
+  const [pieces,       setPieces]       = useState<CatalogPiece[]>([emptyPiece('anta')]);
+  const [telaiOffset,  setTelaiOffset]  = useState<number>(0);
+  const [saving,       setSaving]       = useState(false);
+  const [tourVisible,  setTourVisible]  = useState(false);
 
   useEffect(() => {
     navigation.setOptions({
@@ -65,6 +66,7 @@ export default function VariantEditorScreen() {
       const v = s?.variants.find(x => x.id === variantId);
       if (v) {
         setLeafCount(v.leafCount);
+        setTelaiOffset(v.telaiOffset ?? 0);
         // Migrazione vecchi pezzi senza categoria → anta
         const migrated = v.pieces.map(p => ({ ...p, pieceCategory: p.pieceCategory ?? 'anta' as PieceCategory }));
         setPieces(migrated.length ? migrated : [emptyPiece('anta')]);
@@ -85,9 +87,10 @@ export default function VariantEditorScreen() {
     setSaving(true);
     try {
       const variant: CatalogVariant = {
-        id:        variantId ?? uuidv4(),
+        id:          variantId ?? uuidv4(),
         leafCount,
-        pieces:    pieces.filter(p => p.name.trim()),
+        pieces:      pieces.filter(p => p.name.trim()),
+        telaiOffset,
       };
       await upsertCatalogVariant(seriesId, variant);
       navigation.goBack();
@@ -226,6 +229,32 @@ export default function VariantEditorScreen() {
           <Text style={s.configBadgeLabel}>{leafCount === 1 ? 'anta' : 'ante'}</Text>
         </View>
 
+        {/* Aletta telaio */}
+        <View style={s.telaiCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.telaiLabel}>ALETTA TELAIO</Text>
+            <Text style={s.telaiHint}>
+              mm aggiunti alla misura taglio per traversi e montanti.{'\n'}
+              Se hai pezzi telaio nella sezione Telaio, questo campo viene ignorato.
+            </Text>
+          </View>
+          <View style={s.telaiInputWrap}>
+            <TextInput
+              style={s.telaiInput}
+              keyboardType="number-pad"
+              value={telaiOffset === 0 ? '' : String(telaiOffset)}
+              placeholder="0"
+              placeholderTextColor="#aaa"
+              selectTextOnFocus
+              onChangeText={v => {
+                const n = parseInt(v.replace(/[^0-9]/g, ''), 10);
+                setTelaiOffset(isNaN(n) ? 0 : n);
+              }}
+            />
+            <Text style={s.telaiUnit}>mm</Text>
+          </View>
+        </View>
+
         {/* Intestazione colonne */}
         <View style={s.headerRow}>
           <Text style={[s.headerCell, { flex: 3 }]}>Pezzo</Text>
@@ -310,6 +339,13 @@ const s = StyleSheet.create({
   },
   configBadgeNum:   { color: '#fff', fontSize: 30, fontWeight: '900', lineHeight: 34 },
   configBadgeLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '700' },
+
+  telaiCard:      { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E5F5', borderRadius: 12, padding: 12, marginBottom: 16, gap: 12, borderWidth: 1.5, borderColor: '#CE93D8' },
+  telaiLabel:     { fontSize: 10, fontWeight: '900', color: '#7B1FA2', letterSpacing: 1, marginBottom: 3 },
+  telaiHint:      { fontSize: 10, color: '#9C27B0', lineHeight: 14 },
+  telaiInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  telaiInput:     { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1.5, borderColor: '#CE93D8', width: 56, paddingVertical: 8, paddingHorizontal: 6, fontSize: 16, fontWeight: '800', color: '#7B1FA2', textAlign: 'center' },
+  telaiUnit:      { fontSize: 12, fontWeight: '700', color: '#7B1FA2' },
 
   headerRow:  { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 8, paddingHorizontal: 2 },
   headerCell: { fontSize: 9, fontWeight: '700', color: '#aaa', textTransform: 'uppercase', textAlign: 'center' },
