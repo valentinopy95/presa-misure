@@ -799,7 +799,7 @@ function cuttingProfileHTML(profile: CuttingProfile, barLength: number): string 
 
   const barsHtml = profile.bins.map((bin, binIdx) => {
     const segmentsHtml = bin.pieces.map((piece, pi) => {
-      const widthPct = ((piece / barLength) * 100).toFixed(2);
+      const widthPct = ((piece.length / barLength) * 100).toFixed(2);
       const color    = CUTTING_COLORS[pi % CUTTING_COLORS.length];
       return `<div style="width:${widthPct}%;height:100%;background:${color};display:inline-block;"></div>`;
     }).join('');
@@ -811,9 +811,10 @@ function cuttingProfileHTML(profile: CuttingProfile, barLength: number): string 
 
     const tagsHtml = bin.pieces.map((piece, pi) => {
       const color = CUTTING_COLORS[pi % CUTTING_COLORS.length];
+      const name  = piece.label ? `${piece.label} ` : '';
       return `<span style="display:inline-flex;align-items:center;gap:4px;background:#F0F4F8;border-radius:5px;padding:3px 8px;margin:2px;">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color};"></span>
-        <span style="font-size:10px;font-weight:700;color:#1a2a3a;">${piece.toFixed(1)} mm</span>
+        <span style="font-size:10px;font-weight:700;color:#1a2a3a;">${name}${piece.length.toFixed(1)} mm</span>
       </span>`;
     }).join('');
 
@@ -1069,9 +1070,9 @@ export function generateCuttingListCSV(
     const addProfile = (profile: CuttingProfile) => {
       const angle = profile.cutAngle === 45 ? '45°' : '90°';
       profile.bins.forEach((bin, barIdx) => {
-        bin.pieces.forEach((len, pieceIdx) => {
+        bin.pieces.forEach((piece, pieceIdx) => {
           const avanzo = pieceIdx === bin.pieces.length - 1 ? bin.remaining.toString() : '';
-          lines.push(`${profile.label};${angle};${barIdx + 1};${pieceIdx + 1};${len};${avanzo}`);
+          lines.push(`${profile.label};${angle};${barIdx + 1};${pieceIdx + 1};${piece.length};${avanzo}`);
         });
       });
     };

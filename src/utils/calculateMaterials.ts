@@ -37,8 +37,13 @@ export interface MaterialsResult {
 
 // ─── Cutting list types ───────────────────────────────────────────────────────
 
+export interface CuttingBinPiece {
+  length: number;
+  label:  string;  // nome del taglio (es. "Traverso", "Montante", nome pezzo)
+}
+
 export interface CuttingBin {
-  pieces:    number[];  // lengths assigned to this bar (sorted large→small)
+  pieces:    CuttingBinPiece[];
   remaining: number;   // leftover mm after all cuts
 }
 
@@ -59,32 +64,31 @@ export interface CuttingListResult {
 }
 
 /**
- * First Fit Decreasing bin-packing.
- * kerfOnFirstCut=true  (90°): every cut pays kerf, including first on a fresh bar.
- * kerfOnFirstCut=false (45°): bar arrives pre-squared, first piece pays no kerf.
- * Returns both summary data and detailed bin assignments.
+ * First Fit Decreasing bin-packing con pezzi etichettati.
+ * kerfOnFirstCut=true  (90°): ogni taglio paga kerf, incluso il primo su barra nuova.
+ * kerfOnFirstCut=false (45°): la barra arriva già attestata, il primo pezzo non paga.
  */
 function calcBars(
-  pieces: number[],
+  pieces: CuttingBinPiece[],
   barMm: number,
   wastePerCut: number,
   kerfOnFirstCut = false,
 ): { count: number; offcuts: number[]; nearLimitCount: number; binDetails: CuttingBin[] } {
   if (!pieces.length) return { count: 0, offcuts: [], nearLimitCount: 0, binDetails: [] };
 
-  const valid = pieces.filter(p => p > 0 && p <= barMm);
+  const valid = pieces.filter(p => p.length > 0 && p.length <= barMm);
   if (!valid.length) return { count: 0, offcuts: [], nearLimitCount: 0, binDetails: [] };
 
-  const sorted = [...valid].sort((a, b) => b - a);
-  const bins: number[]    = [barMm];
-  const binPieces: number[][] = [[]];
+  const sorted = [...valid].sort((a, b) => b.length - a.length);
+  const bins: number[]               = [barMm];
+  const binPieces: CuttingBinPiece[][] = [[]];
 
   for (const piece of sorted) {
     let placed = false;
     for (let i = 0; i < bins.length; i++) {
       const rem     = bins[i];
       const isFirst = !kerfOnFirstCut && rem === barMm;
-      const needed  = piece + (isFirst ? 0 : wastePerCut);
+      const needed  = piece.length + (isFirst ? 0 : wastePerCut);
       if (needed <= rem) {
         bins[i] -= needed;
         binPieces[i].push(piece);
@@ -93,7 +97,7 @@ function calcBars(
       }
     }
     if (!placed) {
-      bins.push(barMm - piece - (kerfOnFirstCut ? wastePerCut : 0));
+      bins.push(barMm - piece.length - (kerfOnFirstCut ? wastePerCut : 0));
       binPieces.push([piece]);
     }
   }
@@ -104,7 +108,6 @@ function calcBars(
   }));
 
   // L'alert scatta solo se l'ULTIMA barra ha pochissimo avanzo.
-  // Le barre precedenti piene sono semplicemente un buon utilizzo del materiale.
   const lastBinRem = bins[bins.length - 1];
   const nearLimitCount = (lastBinRem > 0 && lastBinRem < NEAR_LIMIT_THRESHOLD) ? 1 : 0;
 
@@ -116,7 +119,17 @@ function calcBars(
   };
 }
 
-// ─── Shared piece-gathering ───────────────────────────────────────────────────
+// Helper per percorso standard (pezzi senza nome individuale)
+function calcBarsN(
+  lengths: number[],
+  barMm: number,
+  wastePerCut: number,
+  kerfOnFirstCut = false,
+) {
+  return calcBars(lengths.map(l => ({ length: l, label: '' })), barMm, wastePerCut, kerfOnFirstCut);
+}
+
+// ─── Shared piece-gathering (percorso standard) ───────────────────────────────
 
 function gatherPieces(
   openings: Opening[],
@@ -167,10 +180,8 @@ function gatherPieces(
     }
   }
 
-  // Correzione punta corta → punta lunga per profilo telaio
-  // (non si applica a scorrevoli e controtelai)
-  const PUNTA_W            = 50;
-  const PUNTA_H_BATTENTE   = 50;
+  const PUNTA_W             = 50;
+  const PUNTA_H_BATTENTE    = 50;
   const PUNTA_H_NO_BATTENTE = 25;
 
   for (const o of openings) {
@@ -273,13 +284,10 @@ function gatherPieces(
         push45('Profilo anta', antaW, antaW, leafHL, leafHR);
         if (o.hasFermavetro) {
           if (o.hasFascia) {
-            // Porta-finestra: due vani separati dalla fascia
             const FASCIA_PROFILE_H = 110;
             const fasciaBottom = fasciaH - FASCIA_PROFILE_H / 2;
             const fasciaTop    = fasciaH + FASCIA_PROFILE_H / 2;
-            // Vano inferiore: top zoccolo → bottom fascia (zoccolo e fascia fanno da traversi)
             const botH = Math.max(0, fasciaBottom - zoccoloH);
-            // Vano superiore: top fascia → top anta (un solo traverso superiore)
             const topHL = Math.max(0, leafHL - fasciaTop - antaTopRail);
             const topHR = Math.max(0, leafHR - fasciaTop - antaTopRail);
             push90('Fermavetro', luceW, luceW, botH, botH);
@@ -303,7 +311,6 @@ function gatherPieces(
       const leafW  = Math.round(W / n);
       const antaW  = Math.max(1, leafW - antaReduction);
       const innerW = Math.max(0, antaW - 2 * antaReduction);
-      // Spessore profilo fascia hardcoded 110mm, fasciaH è la posizione del centro
       const FASCIA_PROFILE_H = 110;
       push45('Profilo telaio', telW, telHL, telHR);
       for (let i = 0; i < n; i++) {
@@ -320,10 +327,8 @@ function gatherPieces(
         if (isPF) push90('Fascia', innerW);
         let slats: number;
         if (isPF) {
-          // Zona inferiore: dal top dello zoccolo al bottom della fascia
           const fasciaBottom = fasciaH - FASCIA_PROFILE_H / 2;
           const netBottom    = Math.max(0, fasciaBottom - zoccoloH);
-          // Zona superiore: dal top della fascia al traverso superiore
           const fasciaTop    = fasciaH + FASCIA_PROFILE_H / 2;
           const netTop       = Math.max(0, H - fasciaTop - antaTopRail);
           slats = Math.floor(netBottom / slatPitch) + Math.floor(netTop / slatPitch);
@@ -361,14 +366,14 @@ export function calculateMaterials(
 
   function toResult45(label: string, pieces: number[]): ProfileResult | null {
     if (!pieces.length) return null;
-    const { count, offcuts, nearLimitCount } = calcBars(pieces, barLength, riattestattura, false);
+    const { count, offcuts, nearLimitCount } = calcBarsN(pieces, barLength, riattestattura, false);
     if (count === 0) return null;
     return { label, bars: applyMargin(count), offcuts, nearLimit: nearLimitCount > 0 };
   }
 
   function toResult90(label: string, pieces: number[]): ProfileResult | null {
     if (!pieces.length) return null;
-    const { count, offcuts, nearLimitCount } = calcBars(pieces, barLength, kerf90, true);
+    const { count, offcuts, nearLimitCount } = calcBarsN(pieces, barLength, kerf90, true);
     if (count === 0) return null;
     return { label, bars: applyMargin(count), offcuts, nearLimit: nearLimitCount > 0 };
   }
@@ -395,7 +400,7 @@ export function calculateMaterials(
   };
 }
 
-// ─── Cutting list ─────────────────────────────────────────────────────────────
+// ─── Cutting list (percorso standard) ────────────────────────────────────────
 
 export function calculateCuttingList(
   openings: Opening[],
@@ -412,7 +417,7 @@ export function calculateCuttingList(
   const profiles45 = Object.entries(b45)
     .map(([label, pieces]): CuttingProfile | null => {
       if (!pieces.length) return null;
-      const { binDetails } = calcBars(pieces, barLength, riattestattura, false);
+      const { binDetails } = calcBarsN(pieces, barLength, riattestattura, false);
       if (!binDetails.length) return null;
       return { label, cutAngle: 45, bins: binDetails };
     })
@@ -421,7 +426,7 @@ export function calculateCuttingList(
   const profiles90 = Object.entries(b90)
     .map(([label, pieces]): CuttingProfile | null => {
       if (!pieces.length) return null;
-      const { binDetails } = calcBars(pieces, barLength, kerf90, true);
+      const { binDetails } = calcBarsN(pieces, barLength, kerf90, true);
       if (!binDetails.length) return null;
       return { label, cutAngle: 90, bins: binDetails };
     })
@@ -435,13 +440,16 @@ export function calculateCuttingList(
   return { profiles45, profiles90, warnings, barLength };
 }
 
-// ─── Catalog cutting list ──────────────────────────────────────────────────────
+// ─── Catalog cutting list ─────────────────────────────────────────────────────
 
 function isSeriesEligible(o: Opening): boolean {
   if (!o.width || !o.height || !o.style) return false;
   const s = o.style;
   return s.startsWith('window') || s.startsWith('door') || s.startsWith('shutter');
 }
+
+const GROUP_ORDER:  PieceGroup[]                  = ['telaio', 'anta', 'fermavetro', 'riporto'];
+const GROUP_LABELS: Record<PieceGroup, string>    = { telaio: 'Telaio', anta: 'Anta', fermavetro: 'Fermavetro', riporto: 'Riporto' };
 
 export function calculateCatalogCuttingList(
   openings: Opening[],
@@ -457,107 +465,93 @@ export function calculateCatalogCuttingList(
     kerf90         = DEFAULT_KERF_90,
   } = config;
 
-  const b45: Record<string, number[]> = {};
-  const b90: Record<string, number[]> = {};
-  const pieceGroups: Record<string, PieceGroup> = {};
+  // Accumula per GRUPPO (profilo fisico), non per nome pezzo
+  const b45: Partial<Record<PieceGroup, CuttingBinPiece[]>> = {};
+  const b90: Partial<Record<PieceGroup, CuttingBinPiece[]>> = {};
   const warnings: string[] = [];
+
+  function push(group: PieceGroup, is90: boolean, length: number, label: string) {
+    if (length <= 0) return;
+    if (length > barLength) { warnings.push(`${label}: ${length}mm supera la barra (${barLength}mm)`); return; }
+    const target = is90 ? b90 : b45;
+    if (!target[group]) target[group] = [];
+    target[group]!.push({ length, label });
+  }
 
   for (const o of openings) {
     if (!isSeriesEligible(o)) continue;
     const variant = findBestVariant(series, o.leafCount);
     if (!variant || !variant.pieces.length) continue;
 
-    const tol = toleranceByType ? toleranceForStyle(o.style, toleranceByType) : { w: toleranceW, h: toleranceH };
-    const pcL = o.width!  - tol.w;
-    const pcH = o.height! - tol.h;
+    const tol    = toleranceByType ? toleranceForStyle(o.style, toleranceByType) : { w: toleranceW, h: toleranceH };
+    const pcL    = o.width!  - tol.w;
+    const pcH    = o.height! - tol.h;
     const hasSoglia = o.hasSoglia === true;
 
-    // ── Auto-telaio (traversi + montanti) se la variante non li ha definiti ──
+    // ── Auto-telaio se la variante non ha pezzi categoria telaio ──────────────
     const hasTelaioInVariant = variant.pieces.some(p => (p.pieceCategory ?? 'anta') === 'telaio');
     if (!hasTelaioInVariant) {
-      const tOff     = variant.telaiOffset ?? 0;
-      const useFS    = !!(o.outOfSquare && o.heightLeft && o.heightRight);
-      const baseHL   = useFS ? o.heightLeft!  - tol.h : pcH;
-      const baseHR   = useFS ? o.heightRight! - tol.h : pcH;
-      const tW       = pcL + tOff;
-      const tHL      = baseHL + tOff;
-      const tHR      = baseHR + tOff;
-      const s        = o.style!;
-      const isSlidingT  = s === 'window_sliding' || s === 'door_sliding';
-      const isShutterT  = s.startsWith('shutter');
-      const isDoorT     = s.startsWith('door');
-      // Traversi: 1 se persiana o porta senza battente inferiore; 2 altrimenti
-      const nTraversi = (isShutterT || (isDoorT && !isSlidingT && !o.hasBattente)) ? 1 : 2;
-      for (let t = 0; t < nTraversi; t++) {
-        pieceGroups['Traverso telaio'] = 'telaio';
-        pieceGroups['Montante telaio'] = 'telaio';
-        if (tW > 0 && tW <= barLength) b45['Traverso telaio'] = [...(b45['Traverso telaio'] ?? []), tW];
-        else if (tW > barLength) warnings.push(`Traverso telaio: ${tW}mm supera la barra (${barLength}mm)`);
-      }
-      if (tHL > 0 && tHL <= barLength) b45['Montante telaio'] = [...(b45['Montante telaio'] ?? []), tHL];
-      else if (tHL > barLength) warnings.push(`Montante telaio sx: ${tHL}mm supera la barra (${barLength}mm)`);
-      if (tHR > 0 && tHR <= barLength) b45['Montante telaio'] = [...(b45['Montante telaio'] ?? []), tHR];
-      else if (tHR > barLength) warnings.push(`Montante telaio dx: ${tHR}mm supera la barra (${barLength}mm)`);
+      const tOff       = variant.telaiOffset ?? 0;
+      const useFS      = !!(o.outOfSquare && o.heightLeft && o.heightRight);
+      const baseHL     = useFS ? o.heightLeft!  - tol.h : pcH;
+      const baseHR     = useFS ? o.heightRight! - tol.h : pcH;
+      const tW         = pcL + tOff;
+      const tHL        = baseHL + tOff;
+      const tHR        = baseHR + tOff;
+      const s          = o.style!;
+      const isSlidingT = s === 'window_sliding' || s === 'door_sliding';
+      const isShutterT = s.startsWith('shutter');
+      const isDoorT    = s.startsWith('door');
+      const nTraversi  = (isShutterT || (isDoorT && !isSlidingT && !o.hasBattente)) ? 1 : 2;
+      for (let t = 0; t < nTraversi; t++) push('telaio', false, tW, 'Traverso');
+      push('telaio', false, tHL, 'Montante');
+      if (tHR !== tHL) push('telaio', false, tHR, 'Montante');
+      else             push('telaio', false, tHR, 'Montante');
     }
 
+    // ── Pezzi dalla variante ───────────────────────────────────────────────────
     for (const piece of variant.pieces) {
       const cond = piece.condition ?? 'always';
       if (cond === 'no_soglia'   &&  hasSoglia) continue;
       if (cond === 'with_soglia' && !hasSoglia) continue;
 
       const cat = piece.pieceCategory ?? 'anta';
-      pieceGroups[piece.name] = cat;
 
-      // Finestra fissa: solo telaio e fermavetro, niente anta né riporto
+      // Finestra fissa: solo telaio e fermavetro
       if (o.style === 'window_fixed' && (cat === 'anta' || cat === 'riporto')) continue;
-      // Fermavetro: salta se l'apertura non ha fermavetro selezionato
       if (cat === 'fermavetro' && !o.hasFermavetro) continue;
-      // Riporto: solo se ci sono più ante (coprigiunto tra ante)
       if (cat === 'riporto' && (o.leafCount ?? 1) <= 1) continue;
 
       const base = piece.baseVar === 'L' ? pcL : pcH;
-      // divideFirst=true:  (base/div) + offset  → "prima dividi, poi applica offset"  ÷−
-      // divideFirst=false or undefined (default): (base + offset) / div → "prima offset, poi dividi"  −÷
-      const df = piece.divideFirst === true;
+      const df   = piece.divideFirst === true;
       const length = df
         ? Math.round(((base / piece.divisor) + piece.offset) * 2) / 2
         : Math.round(((base + piece.offset) / piece.divisor) * 2) / 2;
       if (length <= 0) continue;
 
       const is90 = piece.cutAngle1 === 90 && piece.cutAngle2 === 90;
-      for (let q = 0; q < piece.quantity; q++) {
-        if (length > barLength) {
-          warnings.push(`${piece.name}: ${length}mm supera la barra (${barLength}mm)`);
-          continue;
-        }
-        if (is90) b90[piece.name] = [...(b90[piece.name] ?? []), length];
-        else      b45[piece.name] = [...(b45[piece.name] ?? []), length];
-      }
+      for (let q = 0; q < piece.quantity; q++) push(cat, is90, length, piece.name);
     }
   }
 
-  const GROUP_ORDER: PieceGroup[] = ['telaio', 'anta', 'fermavetro', 'riporto'];
+  const profiles45 = GROUP_ORDER
+    .filter(g => b45[g]?.length)
+    .map((g): CuttingProfile => {
+      const { binDetails } = calcBars(b45[g]!, barLength, riattestattura, false);
+      return { label: GROUP_LABELS[g], cutAngle: 45, bins: binDetails, group: g };
+    });
 
-  const profiles45 = Object.entries(b45)
-    .map(([label, pieces]): CuttingProfile | null => {
-      const { binDetails } = calcBars(pieces, barLength, riattestattura, false);
-      return binDetails.length ? { label, cutAngle: 45, bins: binDetails, group: pieceGroups[label] } : null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => GROUP_ORDER.indexOf(a!.group ?? 'anta') - GROUP_ORDER.indexOf(b!.group ?? 'anta')) as CuttingProfile[];
-
-  const profiles90 = Object.entries(b90)
-    .map(([label, pieces]): CuttingProfile | null => {
-      const { binDetails } = calcBars(pieces, barLength, kerf90, true);
-      return binDetails.length ? { label, cutAngle: 90, bins: binDetails, group: pieceGroups[label] } : null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => GROUP_ORDER.indexOf(a!.group ?? 'anta') - GROUP_ORDER.indexOf(b!.group ?? 'anta')) as CuttingProfile[];
+  const profiles90 = GROUP_ORDER
+    .filter(g => b90[g]?.length)
+    .map((g): CuttingProfile => {
+      const { binDetails } = calcBars(b90[g]!, barLength, kerf90, true);
+      return { label: GROUP_LABELS[g], cutAngle: 90, bins: binDetails, group: g };
+    });
 
   return { profiles45, profiles90, warnings, barLength };
 }
 
-// Converte CuttingListResult → MaterialsResult raggruppando per categoria (Telaio / Anta / …)
+// Converte CuttingListResult → MaterialsResult (sviluppo: barre per profilo)
 export function catalogCuttingToMaterials(
   cuttingResult: CuttingListResult,
   safetyMarginPct = 5,
@@ -565,36 +559,14 @@ export function catalogCuttingToMaterials(
   function applyMargin(n: number) {
     return safetyMarginPct <= 0 ? n : n + Math.round(n * safetyMarginPct / 100);
   }
-
-  const GROUP_LABELS: Record<PieceGroup, string> = {
-    telaio:     'Telaio',
-    anta:       'Anta',
-    fermavetro: 'Fermavetro',
-    riporto:    'Riporto',
-  };
-  const GROUP_ORDER: PieceGroup[] = ['telaio', 'anta', 'fermavetro', 'riporto'];
-
-  function mergeByGroup(profiles: CuttingProfile[]): ProfileResult[] {
-    const acc: Record<string, { bins: number; offcuts: number[]; nearLimit: boolean }> = {};
-    for (const cp of profiles) {
-      const key = GROUP_LABELS[cp.group ?? 'anta'];
-      if (!acc[key]) acc[key] = { bins: 0, offcuts: [], nearLimit: false };
-      acc[key].bins += cp.bins.length;
-      acc[key].offcuts.push(...cp.bins.map(b => b.remaining).filter(r => r >= MIN_REMNANT_MM));
-      if (cp.bins.some(b => b.remaining > 0 && b.remaining < NEAR_LIMIT_THRESHOLD)) acc[key].nearLimit = true;
-    }
-    return GROUP_ORDER
-      .filter(g => acc[GROUP_LABELS[g]])
-      .map(g => ({
-        label:     GROUP_LABELS[g],
-        bars:      applyMargin(acc[GROUP_LABELS[g]].bins),
-        offcuts:   acc[GROUP_LABELS[g]].offcuts,
-        nearLimit: acc[GROUP_LABELS[g]].nearLimit,
-      }));
-  }
-
-  const p45 = mergeByGroup(cuttingResult.profiles45);
-  const p90 = mergeByGroup(cuttingResult.profiles90);
+  const toProfile = (cp: CuttingProfile): ProfileResult => ({
+    label:     cp.label,
+    bars:      applyMargin(cp.bins.length),
+    offcuts:   cp.bins.map(b => b.remaining).filter(r => r >= MIN_REMNANT_MM),
+    nearLimit: cp.bins.some(b => b.remaining > 0 && b.remaining < NEAR_LIMIT_THRESHOLD),
+  });
+  const p45 = cuttingResult.profiles45.map(toProfile);
+  const p90 = cuttingResult.profiles90.map(toProfile);
   return {
     profiles45:  p45,
     profiles90:  p90,

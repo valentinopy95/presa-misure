@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
   TouchableOpacity, Modal, Pressable,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as AppAlert from '../components/AppAlert';
@@ -18,7 +19,7 @@ import {
 } from '../storage/settings';
 import {
   calculateCuttingList, calculateCatalogCuttingList, openingsWithoutSeries,
-  CuttingListResult, CuttingProfile, CuttingBin,
+  CuttingListResult, CuttingProfile, CuttingBin, CuttingBinPiece,
 } from '../utils/calculateMaterials';
 import { generateCuttingListHTML } from '../utils/pdfExport';
 
@@ -46,6 +47,27 @@ export default function CuttingListScreen() {
   const [activeId,       setActiveId]       = useState<string | null>(null);
   const [showPdfModal,   setShowPdfModal]   = useState(false);
   const [pdfBusy,        setPdfBusy]        = useState(false);
+  const [checked,        setChecked]        = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    AsyncStorage.getItem(`@cutting_progress_${projectId}`).then(raw => {
+      if (raw) setChecked(new Set(JSON.parse(raw)));
+    });
+  }, [projectId]);
+
+  const toggleCheck = useCallback((key: string) => {
+    setChecked(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      AsyncStorage.setItem(`@cutting_progress_${projectId}`, JSON.stringify([...next]));
+      return next;
+    });
+  }, [projectId]);
+
+  const resetProgress = useCallback(() => {
+    setChecked(new Set());
+    AsyncStorage.removeItem(`@cutting_progress_${projectId}`);
+  }, [projectId]);
 
   const loadAndCalculate = useCallback(async () => {
     const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, tolW, tolH, allSeries, tolByType] = await Promise.all([
@@ -207,12 +229,19 @@ export default function CuttingListScreen() {
       {/* ── Sezione catalogo ── */}
       {hasCatalogData && catalogResult && (
         <>
-          <SectionHeader label={`Serie: ${catalogSeries?.name ?? 'Catalogo'}`} color="#6A1B9A"/>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+            <SectionHeader label={`Serie: ${catalogSeries?.name ?? 'Catalogo'}`} color="#6A1B9A"/>
+            {checked.size > 0 && (
+              <TouchableOpacity onPress={resetProgress} style={{ marginLeft: 'auto' as any, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: '#FFF3E0', borderRadius: 8 }}>
+                <Text style={{ fontSize: 11, color: '#E65100', fontWeight: '700' }}>Reset ✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           {catalogResult.profiles45.length > 0 && (
             <>
               <SectionHeader label="Tagli a 45°" color="#1565C0"/>
               {catalogResult.profiles45.map(profile => (
-                <ProfileBlock key={`cat45_${profile.label}`} profile={profile} barLength={config.barLength}/>
+                <ProfileBlock key={`cat45_${profile.label}`} profile={profile} barLength={config.barLength} checked={checked} onToggle={toggleCheck}/>
               ))}
             </>
           )}
@@ -220,7 +249,7 @@ export default function CuttingListScreen() {
             <>
               <SectionHeader label="Tagli a 90°" color="#2E7D32"/>
               {catalogResult.profiles90.map(profile => (
-                <ProfileBlock key={`cat90_${profile.label}`} profile={profile} barLength={config.barLength}/>
+                <ProfileBlock key={`cat90_${profile.label}`} profile={profile} barLength={config.barLength} checked={checked} onToggle={toggleCheck}/>
               ))}
             </>
           )}
@@ -235,7 +264,7 @@ export default function CuttingListScreen() {
             <>
               {!hasCatalogData && <SectionHeader label="Tagli a 45°" color="#1565C0"/>}
               {result.profiles45.map(profile => (
-                <ProfileBlock key={profile.label} profile={profile} barLength={config.barLength}/>
+                <ProfileBlock key={profile.label} profile={profile} barLength={config.barLength} checked={checked} onToggle={toggleCheck}/>
               ))}
             </>
           )}
@@ -243,7 +272,7 @@ export default function CuttingListScreen() {
             <>
               {!hasCatalogData && <SectionHeader label="Tagli a 90°" color="#2E7D32"/>}
               {result.profiles90.map(profile => (
-                <ProfileBlock key={profile.label} profile={profile} barLength={config.barLength}/>
+                <ProfileBlock key={profile.label} profile={profile} barLength={config.barLength} checked={checked} onToggle={toggleCheck}/>
               ))}
             </>
           )}
@@ -309,13 +338,18 @@ export default function CuttingListScreen() {
 
 // ─── ProfileBlock ─────────────────────────────────────────────────────────────
 
-function ProfileBlock({ profile, barLength }: { profile: CuttingProfile; barLength: number }) {
-  const totalBars = profile.bins.length;
+function ProfileBlock({
+  profile, barLength, checked, onToggle,
+}: {
+  profile: CuttingProfile; barLength: number;
+  checked: Set<string>; onToggle: (key: string) => void;
+}) {
+  const totalBars  = profile.bins.length;
   const angleColor = profile.cutAngle === 45 ? '#1565C0' : '#2E7D32';
+  const profileKey = profile.label;
 
   return (
     <View style={pb.card}>
-      {/* Profile header */}
       <View style={[pb.header, { borderLeftColor: angleColor }]}>
         <Text style={pb.headerLabel}>{profile.label}</Text>
         <View style={[pb.angleBadge, { backgroundColor: angleColor }]}>
@@ -323,8 +357,6 @@ function ProfileBlock({ profile, barLength }: { profile: CuttingProfile; barLeng
         </View>
         <Text style={pb.barCount}>{totalBars} barr{totalBars !== 1 ? 'e' : 'a'}</Text>
       </View>
-
-      {/* Each bar */}
       {profile.bins.map((bin, idx) => (
         <BarRow
           key={idx}
@@ -332,6 +364,9 @@ function ProfileBlock({ profile, barLength }: { profile: CuttingProfile; barLeng
           barIndex={idx + 1}
           barLength={barLength}
           totalBars={totalBars}
+          profileKey={profileKey}
+          checked={checked}
+          onToggle={onToggle}
         />
       ))}
     </View>
@@ -341,29 +376,30 @@ function ProfileBlock({ profile, barLength }: { profile: CuttingProfile; barLeng
 // ─── BarRow ───────────────────────────────────────────────────────────────────
 
 function BarRow({
-  bin, barIndex, barLength, totalBars,
+  bin, barIndex, barLength, totalBars, profileKey, checked, onToggle,
 }: {
   bin: CuttingBin;
   barIndex: number;
   barLength: number;
   totalBars: number;
+  profileKey: string;
+  checked: Set<string>;
+  onToggle: (key: string) => void;
 }) {
   const usedMm = barLength - bin.remaining;
 
   return (
     <View style={br.wrap}>
-      {/* Bar label */}
       <View style={br.labelCol}>
         <Text style={br.barNum}>B{barIndex}</Text>
         <Text style={br.barTotal}>/{totalBars}</Text>
       </View>
 
-      {/* Bar visual + piece list */}
       <View style={br.right}>
         {/* Visual bar */}
         <View style={br.barTrack}>
           {bin.pieces.map((piece, pi) => {
-            const widthPct = (piece / barLength) * 100;
+            const widthPct = (piece.length / barLength) * 100;
             const color = PIECE_COLORS[pi % PIECE_COLORS.length];
             return (
               <View
@@ -372,7 +408,6 @@ function BarRow({
               />
             );
           })}
-          {/* Remaining space */}
           {bin.remaining > 0 && (
             <View
               style={[br.segment, br.segmentRem, { width: `${(bin.remaining / barLength) * 100}%` as any }]}
@@ -380,28 +415,36 @@ function BarRow({
           )}
         </View>
 
-        {/* Piece sizes */}
+        {/* Pezzi con nome + checkbox */}
         <View style={br.pieces}>
           {bin.pieces.map((piece, pi) => {
             const color = PIECE_COLORS[pi % PIECE_COLORS.length];
+            const ck    = `${profileKey}_b${barIndex}_p${pi}`;
+            const done  = checked.has(ck);
             return (
-              <View key={pi} style={br.pieceTag}>
-                <View style={[br.pieceColor, { backgroundColor: color }]}/>
-                <Text style={br.pieceLen}>{piece.toFixed(1)}</Text>
-              </View>
+              <TouchableOpacity
+                key={pi}
+                style={[br.pieceTag, done && br.pieceTagDone]}
+                onPress={() => onToggle(ck)}
+                activeOpacity={0.7}
+              >
+                <View style={[br.pieceColor, { backgroundColor: done ? '#bbb' : color }]}/>
+                {!!piece.label && (
+                  <Text style={[br.pieceLabel, done && br.pieceLabelDone]}>{piece.label}</Text>
+                )}
+                <Text style={[br.pieceLen, done && br.pieceLenDone]}>{piece.length.toFixed(1)}</Text>
+                <Text style={done ? br.checkDone : br.checkTodo}>{done ? '✓' : '○'}</Text>
+              </TouchableOpacity>
             );
           })}
           {bin.remaining > 0 && (
             <View style={br.pieceTag}>
               <View style={[br.pieceColor, br.pieceColorRem]}/>
-              <Text style={br.pieceLenRem}>
-                {bin.remaining.toFixed(1)} avanzo
-              </Text>
+              <Text style={br.pieceLenRem}>{bin.remaining.toFixed(1)} avanzo</Text>
             </View>
           )}
         </View>
 
-        {/* Usage bar label */}
         <Text style={br.usageText}>
           Usata: {usedMm.toFixed(1)} / {barLength} mm
           {bin.remaining === 0 ? ' — barra piena' : ''}
@@ -513,11 +556,17 @@ const br = StyleSheet.create({
     backgroundColor: '#F0F4F8', borderRadius: 6,
     paddingHorizontal: 8, paddingVertical: 4, gap: 5,
   },
-  pieceColor:    { width: 10, height: 10, borderRadius: 3 },
-  pieceColorRem: { backgroundColor: '#C8D4E0' },
-  pieceLen:      { fontSize: 12, fontWeight: '700', color: '#1a2a3a' },
-  pieceLenRem:   { fontSize: 11, fontWeight: '600', color: '#8A9AB0' },
-  usageText:     { fontSize: 10, color: '#A0B0C8', marginTop: 6 },
+  pieceColor:     { width: 10, height: 10, borderRadius: 3 },
+  pieceColorRem:  { backgroundColor: '#C8D4E0' },
+  pieceLabel:     { fontSize: 10, fontWeight: '700', color: '#1a2a3a' },
+  pieceLabelDone: { color: '#aaa', textDecorationLine: 'line-through' as const },
+  pieceLen:       { fontSize: 12, fontWeight: '700', color: '#1a2a3a' },
+  pieceLenDone:   { color: '#aaa', textDecorationLine: 'line-through' as const },
+  pieceLenRem:    { fontSize: 11, fontWeight: '600', color: '#8A9AB0' },
+  pieceTagDone:   { backgroundColor: '#F0F4F8', opacity: 0.6 },
+  checkTodo:      { fontSize: 12, color: '#B0C0D0', marginLeft: 2 },
+  checkDone:      { fontSize: 12, color: '#2E7D32', fontWeight: '900', marginLeft: 2 },
+  usageText:      { fontSize: 10, color: '#A0B0C8', marginTop: 6 },
 });
 
 const ps = StyleSheet.create({
