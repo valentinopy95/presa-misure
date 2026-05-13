@@ -1,9 +1,4 @@
 {
   "buildCommand": null,
-  "routes": [
-    { "src": "/app(.*)", "dest": "/dist-android/index.html" },
-    { "src": "/privacy", "dest": "/public/privacy.html" },
-    { "src": "/terms", "dest": "/public/terms.html" },
-    { "src": "/(.*)", "dest": "/public/index.html" }
-  ]
+  "outputDirectory": "maintenance"
 }
