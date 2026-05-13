@@ -58,7 +58,7 @@ export default function MaterialsProjectsScreen() {
   useFocusEffect(
     useCallback(() => {
       getAllProjectsWithOpenings().then(all =>
-        setProjects([...all].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+        setProjects([...all].filter(p => !p.parentId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
       ).catch(() => {});
       getOrderedStatuses().then(setOrderedMap).catch(() => {});
     }, [])

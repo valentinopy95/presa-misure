@@ -454,18 +454,25 @@ export async function getTolerance(): Promise<number> {
 
 // ─── Serie catalogo ───────────────────────────────────────────────────────────
 
+export type PieceOp = '+' | '-' | '÷';
+
 export interface CatalogPiece {
   id:         string;
   name:       string;      // es. "Montanti telaio fisso"
   quantity:   number;      // pezzi per questa configurazione
   baseVar:    'L' | 'H';  // punta corta L o H
-  offset:     number;      // mm da sottrarre (0 = nessuno); per isTelaio può essere negativo (aggiunge punta)
-  divisor:    number;      // 1 = nessuna divisione, 2 = dividi per 2
+  offset:     number;      // legacy – mantenuto per backward compat
+  divisor:    number;      // legacy – mantenuto per backward compat
   cutAngle1:  45 | 90;    // angolo lato A
   cutAngle2:  45 | 90;    // angolo lato B
   condition?:     'always' | 'no_soglia' | 'with_soglia'; // default = 'always'
   pieceCategory?: 'telaio' | 'anta' | 'fermavetro' | 'riporto'; // default = 'anta'
-  divideFirst?:   boolean; // true (default) = (L/div)+offset · false = (L+offset)/div
+  divideFirst?:   boolean; // legacy
+  // Nuova formula flessibile: apply(apply(base, op1, val1), op2, val2)
+  op1?:  PieceOp;  // primo operatore  (default: '+'/'-' da sign(offset))
+  val1?: number;   // primo valore
+  op2?:  PieceOp;  // secondo operatore (default: '÷')
+  val2?: number;   // secondo valore
 }
 
 // Una variante = tabella pezzi per un numero specifico di ante

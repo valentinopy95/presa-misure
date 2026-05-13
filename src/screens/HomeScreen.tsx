@@ -15,6 +15,7 @@ import NewProjectModal from '../components/NewProjectModal';
 import TourModal, { TourStep, SpotRect } from '../components/TourModal';
 import { getTourSeen, setTourSeen } from '../storage/settings';
 import { useSubscription } from '../contexts/SubscriptionContext';
+import { Ionicons } from '@expo/vector-icons';
 
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -52,14 +53,6 @@ const MENU_ITEMS = [
     color: '#37474F',
     light: '#ECEFF1',
   },
-  {
-    key: 'series',
-    image: require('../../assets/menu_cutting.png'),
-    title: 'Serie catalogo',
-    subtitle: 'Gestisci i profili e le formule di taglio',
-    color: '#00695C',
-    light: '#E0F2F1',
-  },
 ];
 
 export default function HomeScreen() {
@@ -86,7 +79,6 @@ export default function HomeScreen() {
   const card1Ref   = useRef<View>(null);
   const card2Ref   = useRef<View>(null);
   const card3Ref   = useRef<View>(null);
-  const card4Ref   = useRef<View>(null);
 
   const measureEl = (ref: React.RefObject<View>): Promise<SpotRect | null> =>
     new Promise(resolve => {
@@ -250,7 +242,6 @@ export default function HomeScreen() {
     else if (key === 'saved') navigation.navigate('SavedProjects');
     else if (key === 'materials') navigation.navigate('MaterialsProjects');
     else if (key === 'cutting') navigation.navigate('CuttingProjects');
-    else if (key === 'series') navigation.navigate('CatalogSeries');
   };
 
   return (
@@ -319,7 +310,7 @@ export default function HomeScreen() {
       <View style={styles.menu}>
         {MENU_ITEMS.map((item, i) => {
           const anim = anims[i];
-          const cardRef = i === 0 ? card0Ref : i === 1 ? card1Ref : i === 2 ? card2Ref : i === 3 ? card3Ref : card4Ref;
+          const cardRef = i === 0 ? card0Ref : i === 1 ? card1Ref : i === 2 ? card2Ref : card3Ref;
           return (
             <Animated.View
               key={item.key}
@@ -391,16 +382,22 @@ export default function HomeScreen() {
               <View style={styles.menuDivider} />
 
               {/* Voci */}
-              {[
-                { icon: '📊', label: 'Statistiche',      action: () => { closeMenu(); setTimeout(() => navigation.navigate('Stats'), 200); } },
-                { icon: '📦', label: 'Magazzino avanzi', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Magazzino'), 200); } },
-                { icon: '⚙️', label: 'Impostazioni',     action: () => { closeMenu(); setTimeout(() => navigation.navigate('Settings'), 200); } },
-                { icon: '?',  label: 'Tour guidato',     action: () => { closeMenu(); setTimeout(openTour, 200); } },
-                { icon: '🎧', label: 'Supporto tecnico', action: () => { closeMenu(); setTimeout(() => setSupportOpen(true), 200); } },
-              ].map(item => (
+              {([
+                { icon: 'bar-chart',    label: 'Statistiche',      sub: 'Riepilogo rilievi e misure',    color: '#1565C0', bg: '#E3F2FD', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Stats'), 200); } },
+                { icon: 'cube',         label: 'Magazzino avanzi', sub: 'Riutilizza i profili avanzati', color: '#E65100', bg: '#FFF3E0', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Magazzino'), 200); } },
+                { icon: 'layers',       label: 'Serie catalogo',   sub: 'Profili e formule di taglio',  color: '#00695C', bg: '#E0F2F1', action: () => { closeMenu(); setTimeout(() => navigation.navigate('CatalogSeries'), 200); } },
+                { icon: 'settings',     label: 'Impostazioni',     sub: 'Parametri calcolo e barre',    color: '#37474F', bg: '#ECEFF1', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Settings'), 200); } },
+                { icon: 'compass',      label: 'Tour guidato',     sub: 'Rivedere le funzionalità',     color: '#6A1B9A', bg: '#F3E5F5', action: () => { closeMenu(); setTimeout(openTour, 200); } },
+                { icon: 'headset',      label: 'Supporto tecnico', sub: 'Scrivici per assistenza',      color: '#C62828', bg: '#FFEBEE', action: () => { closeMenu(); setTimeout(() => setSupportOpen(true), 200); } },
+              ] as { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; sub: string; color: string; bg: string; action: () => void }[]).map(item => (
                 <TouchableOpacity key={item.label} style={styles.menuItem} onPress={item.action} activeOpacity={0.7}>
-                  <Text style={styles.menuItemIcon}>{item.icon}</Text>
-                  <Text style={styles.menuItemText}>{item.label}</Text>
+                  <View style={[styles.menuItemBox, { backgroundColor: item.bg }]}>
+                    <Ionicons name={item.icon} size={20} color={item.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.menuItemText, { color: item.color }]}>{item.label}</Text>
+                    <Text style={styles.menuItemSub}>{item.sub}</Text>
+                  </View>
                   <Text style={styles.menuItemArrow}>›</Text>
                 </TouchableOpacity>
               ))}
@@ -533,14 +530,17 @@ const styles = StyleSheet.create({
   menuDivider:       { height: 1, backgroundColor: '#EEF2F7', marginHorizontal: 16, marginBottom: 8 },
   menuItem: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 14, gap: 14,
+    paddingHorizontal: 16, paddingVertical: 10, gap: 12,
+    marginHorizontal: 8, borderRadius: 12, marginBottom: 2,
   },
   menuNavIconBox:   { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   menuNavSub:       { fontSize: 10, color: '#8a9ab0', marginTop: 1 },
   menuSecondaryItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, gap: 14 },
   menuSecondaryText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#555' },
-  menuItemIcon:  { fontSize: 18, width: 26, textAlign: 'center' },
-  menuItemText:  { fontSize: 14, fontWeight: '700' },
+  menuItemBox:   { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  menuItemIcon:  { fontSize: 20 },
+  menuItemText:  { fontSize: 14, fontWeight: '800', marginBottom: 1 },
+  menuItemSub:   { fontSize: 11, color: '#8a9ab0', fontWeight: '500' },
   menuItemArrow: { fontSize: 20, color: '#ccc', fontWeight: '700' },
   companyBanner: {
     flexDirection: 'row', alignItems: 'center',

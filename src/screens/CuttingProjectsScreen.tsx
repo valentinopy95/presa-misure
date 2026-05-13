@@ -40,6 +40,7 @@ const CUTTING_PROJECTS_TOUR: TourStep[] = [
 export default function CuttingProjectsScreen() {
   const navigation  = useNavigation<Nav>();
   const [projects,      setProjects]      = useState<Project[]>([]);
+  const [allProjects,   setAllProjects]   = useState<Project[]>([]);
   const [query,         setQuery]         = useState('');
   const [tourVisible,   setTourVisible]   = useState(false);
   const [navMenuOpen,   setNavMenuOpen]   = useState(false);
@@ -52,11 +53,17 @@ export default function CuttingProjectsScreen() {
       )
     : projects;
 
+  const isFamilyComplete = (rootId: string): boolean => {
+    const members = [rootId, ...allProjects.filter(p => p.parentId === rootId).map(p => p.id)];
+    return members.length > 0 && members.every(id => !!completedMap[id]);
+  };
+
   useFocusEffect(
     useCallback(() => {
-      getAllProjectsWithOpenings().then(all =>
-        setProjects([...all].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
-      ).catch(() => {});
+      getAllProjectsWithOpenings().then(all => {
+        setAllProjects(all);
+        setProjects([...all].filter(p => !p.parentId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+      }).catch(() => {});
       getCuttingCompleteStatuses().then(setCompletedMap).catch(() => {});
     }, [])
   );
@@ -134,7 +141,7 @@ export default function CuttingProjectsScreen() {
                   </Text>
                 </View>
                 <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
-                {completedMap[item.id] && (
+                {isFamilyComplete(item.id) && (
                   <View style={styles.completeBadge}>
                     <Text style={styles.completeText}>✓ Taglio completo</Text>
                   </View>

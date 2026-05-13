@@ -1,5 +1,5 @@
 import { Project, Opening, OpeningStyle } from '../types';
-import { calculateMaterials, MaterialsResult, MaterialsConfig, CuttingListResult, CuttingProfile } from './calculateMaterials';
+import { calculateMaterials, MaterialsResult, MaterialsConfig, CuttingListResult, CuttingProfile, computePieceLength } from './calculateMaterials';
 import { PriceConfig, priceForStyle, CatalogSeries, findBestVariant } from '../storage/settings';
 
 export type PdfMode = 'both' | 'misure' | 'materiale';
@@ -1067,14 +1067,13 @@ export function generateCuttingListCSV(
         if (cond === 'no_soglia'   &&  hasSoglia) continue;
         if (cond === 'with_soglia' && !hasSoglia) continue;
         const base = piece.baseVar === 'L' ? pcL : pcH;
-        const df   = piece.divideFirst === true;
-        const length = df
-          ? Math.round(((base / piece.divisor) + piece.offset) * 2) / 2
-          : Math.round(((base + piece.offset) / piece.divisor) * 2) / 2;
+        const length = computePieceLength(base, piece);
         if (length <= 0) continue;
         const angA = piece.cutAngle1 === 45 ? '45°' : '90°';
         const angB = piece.cutAngle2 === 45 ? '45°' : '90°';
-        lines.push(`${o.name};${styleLabel};${o.leafCount ?? '—'};${variantLabel};${piece.name};${piece.quantity};${length};${angA};${angB}`);
+        const pieceTypeLabel = piece.baseVar === 'L' ? 'Traverso' : 'Montante';
+        const csvPieceLabel  = piece.name ? `${pieceTypeLabel} — ${piece.name}` : pieceTypeLabel;
+        lines.push(`${o.name};${styleLabel};${o.leafCount ?? '—'};${variantLabel};${csvPieceLabel};${piece.quantity};${length};${angA};${angB}`);
       }
     }
     lines.push('');

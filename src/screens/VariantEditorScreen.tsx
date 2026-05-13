@@ -8,7 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
 import * as AppAlert from '../components/AppAlert';
 import {
-  CatalogPiece, CatalogVariant,
+  CatalogPiece, CatalogVariant, PieceOp,
   getCatalogSeries, upsertCatalogVariant, deleteCatalogVariant,
 } from '../storage/settings';
 import { RootStackParamList } from '../types';
@@ -17,7 +17,7 @@ import TourModal, { TourStep } from '../components/TourModal';
 const VARIANT_TOUR: TourStep[] = [
   { icon: '🪟', title: 'Variante per numero di ante', body: 'Ogni variante definisce i pezzi da tagliare per una finestra con 1, 2, 3 o 4 ante. La serie può avere più varianti, una per ogni configurazione.', spot: null },
   { icon: '📦', title: 'Sezioni Telaio / Anta / Fermavetro / Riporto', body: 'I pezzi sono divisi per categoria: Telaio (profilo fisso), Anta (profilo mobile), Fermavetro (solo se selezionato sull\'apertura) e Riporto (coprigiunto tra ante, solo per aperture con 2+ ante).', spot: null },
-  { icon: '📐', title: 'Formula di calcolo', body: 'Per ogni pezzo scegli: base di riferimento (L = larghezza taglio, H = altezza taglio), offset in mm (+/−) e divisore.\n\nFormula: (L + offset) ÷ divisore\nEs. traverso: (L − 48) ÷ 2 = 643', spot: null },
+  { icon: '📐', title: 'Formula di calcolo', body: 'Per ogni pezzo scegli base (L/H), poi due operazioni in sequenza: Op1→Val1, Op2→Val2.\n\nEs. traverso: L − 48 ÷ 2 → (1334−48)÷2 = 643\nEs. fermavetro: L ÷ 2 − 5 → 1334÷2−5 = 662\n\nOgni operatore (+, −, ÷) si cambia toccando il pulsante colorato.', spot: null },
   { icon: '✂️', title: 'Angolo di taglio', body: 'Ang.A e Ang.B indicano l\'angolo di taglio alle due estremità del profilo: 45° per giunti a inglete (telaio e anta), 90° per tagli dritti (fermavetro, riporto).', spot: null },
   { icon: '🔁', title: 'Condizione soglia', body: '"Sempre" include il pezzo in tutti i casi. "Senza soglia" lo esclude se la porta ha soglia. "Con soglia" lo include solo se c\'è la soglia.', spot: null },
 ];
@@ -28,7 +28,24 @@ type Route = RouteProp<RootStackParamList, 'VariantEditor'>;
 type PieceCategory = 'telaio' | 'anta' | 'fermavetro' | 'riporto';
 
 function emptyPiece(cat: PieceCategory): CatalogPiece {
-  return { id: uuidv4(), name: '', quantity: 1, baseVar: 'L', offset: 0, divisor: 1, cutAngle1: 45, cutAngle2: 45, pieceCategory: cat, divideFirst: false };
+  return { id: uuidv4(), name: '', quantity: 1, baseVar: 'L', offset: 0, divisor: 1, cutAngle1: 45, cutAngle2: 45, pieceCategory: cat, op1: '-', val1: 0, op2: '÷', val2: 1 };
+}
+
+// Converte pezzi vecchio formato (offset/divisor) in nuovo formato (op1/val1/op2/val2)
+function migratePiece(p: CatalogPiece): CatalogPiece {
+  if (p.op1 !== undefined) return p;
+  const absOff = Math.abs(p.offset);
+  const sign: PieceOp = p.offset >= 0 ? '+' : '-';
+  if (p.divideFirst) return { ...p, op1: '÷', val1: p.divisor, op2: sign, val2: absOff };
+  return { ...p, op1: sign, val1: absOff, op2: '÷', val2: p.divisor };
+}
+
+const OPS: PieceOp[] = ['+', '-', '÷'];
+function nextOp(op: PieceOp): PieceOp { return OPS[(OPS.indexOf(op) + 1) % OPS.length]; }
+function opColor(op: PieceOp): string {
+  if (op === '+') return '#2E7D32';
+  if (op === '-') return '#C62828';
+  return '#0c2d75';
 }
 
 const SECTIONS: { cat: PieceCategory; label: string; color: string; bg: string; hint: string }[] = [
@@ -49,6 +66,7 @@ export default function VariantEditorScreen() {
   const [articleCodes,  setArticleCodes]  = useState<Partial<Record<PieceCategory, string>>>({});
   const [saving,        setSaving]        = useState(false);
   const [tourVisible,   setTourVisible]   = useState(false);
+  const [seriesName,    setSeriesName]    = useState<string>('');
 
   // ID stabile: usa variantId dai params o genera uno nuovo UNA SOLA VOLTA
   const effectiveId = useRef<string>(variantId ?? uuidv4());
@@ -64,6 +82,19 @@ export default function VariantEditorScreen() {
   }, [navigation]);
 
   useEffect(() => {
+    if (seriesName) {
+      navigation.setOptions({ title: `${seriesName} · ${leafCount} ant${leafCount === 1 ? 'a' : 'e'}` });
+    }
+  }, [seriesName, leafCount, navigation]);
+
+  useEffect(() => {
+    getCatalogSeries().then(list => {
+      const s = list.find(x => x.id === seriesId);
+      if (s) setSeriesName(s.name);
+    });
+  }, [seriesId]);
+
+  useEffect(() => {
     if (!variantId) return;
     getCatalogSeries().then(list => {
       const s = list.find(x => x.id === seriesId);
@@ -72,8 +103,10 @@ export default function VariantEditorScreen() {
         setLeafCount(v.leafCount);
         setTelaiOffset(v.telaiOffset ?? 0);
         setArticleCodes(v.articleCodes ?? {});
-        // Migrazione vecchi pezzi senza categoria → anta
-        const migrated = v.pieces.map(p => ({ ...p, pieceCategory: p.pieceCategory ?? 'anta' as PieceCategory }));
+        // Migrazione: categoria → anta, e vecchio formato offset/divisor → op1/val1/op2/val2
+        const migrated = v.pieces
+          .map(p => ({ ...p, pieceCategory: p.pieceCategory ?? 'anta' as PieceCategory }))
+          .map(migratePiece);
         setPieces(migrated.length ? migrated : [emptyPiece('anta')]);
       }
     });
@@ -130,8 +163,39 @@ export default function VariantEditorScreen() {
 
   const renderPieceRow = (p: CatalogPiece, sectionColor: string) => {
     const isTelaio = (p.pieceCategory ?? 'anta') === 'telaio';
+    const typeLabel = p.baseVar === 'L' ? 'Traverso' : 'Montante';
+    const typeColor = p.baseVar === 'L' ? '#1565C0' : '#2E7D32';
+    const typeBg    = p.baseVar === 'L' ? '#E3F2FD' : '#E8F5E9';
     return (
     <View key={p.id}>
+      {/* Leggenda pezzo */}
+      <View style={s.pieceLegendRow}>
+        <View style={[s.pieceTypeBadge, { backgroundColor: typeBg, borderColor: typeColor }]}>
+          <Text style={[s.pieceTypeTxt, { color: typeColor }]}>
+            {p.baseVar === 'L' ? '↔' : '↕'} {typeLabel}
+          </Text>
+        </View>
+        <TextInput
+          style={[s.pieceNameInput, { borderColor: sectionColor + '60', flex: 1 }]}
+          placeholder={`Nome (es. ${typeLabel} telaio)`}
+          placeholderTextColor="#ccc"
+          value={p.name}
+          onChangeText={v => updatePiece(p.id, { name: v })}
+          autoCapitalize="none"
+        />
+      </View>
+      {/* Header colonne */}
+      <View style={s.pieceHeaderRow}>
+        <Text style={[s.pieceHdrCell, { width: 36 }]}>Qtà</Text>
+        <Text style={[s.pieceHdrCell, { width: 36 }]}>L/H</Text>
+        <Text style={[s.pieceHdrCell, { width: 26 }]}>Op1</Text>
+        <Text style={[s.pieceHdrCell, { width: 34 }]}>Val1</Text>
+        <Text style={[s.pieceHdrCell, { width: 26 }]}>Op2</Text>
+        <Text style={[s.pieceHdrCell, { width: 30 }]}>Val2</Text>
+        <Text style={[s.pieceHdrCell, { width: 38 }]}>Ang.A</Text>
+        <Text style={[s.pieceHdrCell, { width: 38 }]}>Ang.B</Text>
+        <Text style={[s.pieceHdrCell, { width: 24 }]}></Text>
+      </View>
       <View style={s.pieceRow}>
         {/* Quantità */}
         <TextInput
@@ -153,47 +217,46 @@ export default function VariantEditorScreen() {
         >
           <Text style={s.toggleText}>{p.baseVar}</Text>
         </TouchableOpacity>
-        {/* Toggle segno +/- (nascosto per telaio) */}
-        {isTelaio ? (
-          <View style={{ width: 26 + 3 + 36 + 3 }} />
-        ) : (
-          <>
-            <TouchableOpacity
-              style={[s.toggleBtn, { width: 26 }, p.offset < 0 && s.toggleBtnMinus]}
-              onPress={() => updatePiece(p.id, { offset: -p.offset })}
-            >
-              <Text style={s.toggleText}>{p.offset < 0 ? '−' : '+'}</Text>
-            </TouchableOpacity>
-            {/* Offset valore assoluto */}
-            <TextInput
-              style={[s.cellInput, { width: 36 }]}
-              keyboardType="numeric"
-              value={p.offset === 0 ? '' : String(Math.abs(p.offset))}
-              placeholder="0"
-              placeholderTextColor="#ccc"
-              selectTextOnFocus
-              onChangeText={v => {
-                const clean = v.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-                const n = parseFloat(clean) || 0;
-                const sign = p.offset < 0 ? -1 : 1;
-                updatePiece(p.id, { offset: sign * n });
-              }}
-            />
-          </>
-        )}
-        {/* ÷ simbolo */}
-        <Text style={s.divSymbol}>÷</Text>
-        {/* Divisore */}
+        {/* Op 1 */}
+        <TouchableOpacity
+          style={[s.toggleBtn, { width: 26, backgroundColor: opColor(p.op1 ?? '-') }]}
+          onPress={() => updatePiece(p.id, { op1: nextOp(p.op1 ?? '-') })}
+        >
+          <Text style={s.toggleText}>{p.op1 ?? '-'}</Text>
+        </TouchableOpacity>
+        {/* Val 1 */}
         <TextInput
-          style={[s.cellInput, { width: 30 }]}
-          keyboardType="numeric"
-          value={p.divisor === 1 ? '' : String(p.divisor)}
-          placeholder="1"
+          style={[s.cellInput, { width: 34 }]}
+          keyboardType="decimal-pad"
+          defaultValue={(!p.val1) ? '' : String(p.val1)}
+          key={`v1-${p.id}-${p.op1}`}
+          placeholder={(p.op1 ?? '-') === '÷' ? '2' : '0'}
           placeholderTextColor="#ccc"
           selectTextOnFocus
-          onChangeText={v => {
-            const clean = v.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-            updatePiece(p.id, { divisor: Math.max(1, parseFloat(clean) || 1) });
+          onEndEditing={e => {
+            const clean = e.nativeEvent.text.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+            updatePiece(p.id, { val1: parseFloat(clean) || 0 });
+          }}
+        />
+        {/* Op 2 */}
+        <TouchableOpacity
+          style={[s.toggleBtn, { width: 26, backgroundColor: opColor(p.op2 ?? '÷') }]}
+          onPress={() => updatePiece(p.id, { op2: nextOp(p.op2 ?? '÷') })}
+        >
+          <Text style={s.toggleText}>{p.op2 ?? '÷'}</Text>
+        </TouchableOpacity>
+        {/* Val 2 */}
+        <TextInput
+          style={[s.cellInput, { width: 30 }]}
+          keyboardType="decimal-pad"
+          defaultValue={p.val2 === 1 || !p.val2 ? '' : String(p.val2)}
+          key={`v2-${p.id}-${p.op2}`}
+          placeholder={(p.op2 ?? '÷') === '÷' ? '2' : '0'}
+          placeholderTextColor="#ccc"
+          selectTextOnFocus
+          onEndEditing={e => {
+            const clean = e.nativeEvent.text.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+            updatePiece(p.id, { val2: parseFloat(clean) || 1 });
           }}
         />
         {/* Angolo A */}
@@ -229,6 +292,7 @@ export default function VariantEditorScreen() {
           </TouchableOpacity>
         ))}
       </View>
+      <View style={s.pieceDivider}/>
     </View>
     );
   };
@@ -270,13 +334,14 @@ export default function VariantEditorScreen() {
           </View>
         </View>
 
-        {/* Intestazione colonne */}
-        <View style={s.headerRow}>
-          <Text style={[s.headerCell, { width: 36 }]}>Qtà</Text>
-          <Text style={[s.headerCell, { width: 36 }]}>Rif.</Text>
-          <Text style={[s.headerCell, { width: 26 + 3 + 36 }]}>± mm</Text>
-          <Text style={[s.headerCell, { width: 14 }]}></Text>
-          <Text style={[s.headerCell, { width: 30 }]}>÷</Text>
+        {/* Intestazione colonne globale */}
+        <View style={[s.headerRow, { backgroundColor: '#EEF2F7', borderRadius: 8, paddingVertical: 4, paddingHorizontal: 4 }]}>
+          <Text style={[s.headerCell, { width: 36 }]}>Qtà{'\n'}pezzi</Text>
+          <Text style={[s.headerCell, { width: 36 }]}>L/H{'\n'}base</Text>
+          <Text style={[s.headerCell, { width: 26 }]}>Op1</Text>
+          <Text style={[s.headerCell, { width: 34 }]}>Val1{'\n'}(mm)</Text>
+          <Text style={[s.headerCell, { width: 26 }]}>Op2</Text>
+          <Text style={[s.headerCell, { width: 30 }]}>Val2</Text>
           <Text style={[s.headerCell, { width: 38 }]}>Ang.A</Text>
           <Text style={[s.headerCell, { width: 38 }]}>Ang.B</Text>
           <Text style={[s.headerCell, { width: 24 }]}></Text>
@@ -328,10 +393,10 @@ export default function VariantEditorScreen() {
         {/* Legenda formula */}
         <View style={s.legend}>
           <Text style={s.legendText}>
-            Formula: <Text style={s.legendBold}>(L + offset) ÷ divisore</Text> · es. traverso: (L − 48) / 2 = 643{'\n'}
-            Offset <Text style={s.legendBold}>−</Text> = sottrae · Offset <Text style={s.legendBold}>+</Text> = aggiunge{'\n'}
-            Rif. = L (larghezza taglio) · H (altezza taglio){'\n'}
-            Condizione: <Text style={s.legendBold}>Sempre / Senza soglia / Con soglia</Text>
+            Formula: <Text style={s.legendBold}>base Op1 Val1 Op2 Val2</Text>{'\n'}
+            Es: L − 48 ÷ 2 = (1334−48)÷2 = 643{'\n'}
+            Es: L ÷ 2 − 5 = 1334÷2−5 = 662{'\n'}
+            <Text style={{ color: '#2E7D32' }}>+</Text> aggiunge · <Text style={{ color: '#C62828' }}>−</Text> sottrae · <Text style={{ color: '#0c2d75' }}>÷</Text> divide
           </Text>
         </View>
 
@@ -395,9 +460,10 @@ const s = StyleSheet.create({
 
   pieceRow:   { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 },
   cellInput:  { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#DDE3ED', paddingHorizontal: 4, paddingVertical: 8, fontSize: 12, color: '#1a2a3a', textAlign: 'center' },
-  toggleBtn:     { backgroundColor: '#0c2d75', borderRadius: 8, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
-  toggleBtn90:   { backgroundColor: '#2E7D32' },
-  toggleBtnMinus: { backgroundColor: '#B45309' },
+  toggleBtn:      { backgroundColor: '#0c2d75', borderRadius: 8, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
+  toggleBtn90:    { backgroundColor: '#2E7D32' },
+  toggleBtnPlus:  { backgroundColor: '#2E7D32' },
+  toggleBtnMinus: { backgroundColor: '#C62828' },
   toggleText:    { color: '#fff', fontWeight: '800', fontSize: 11 },
   removeBtn:     { width: 24, height: 36, alignItems: 'center', justifyContent: 'center' },
   removeBtnText: { fontSize: 20, color: '#DC2626', fontWeight: '700', lineHeight: 22 },
@@ -405,6 +471,14 @@ const s = StyleSheet.create({
   condRow:        { flexDirection: 'row', gap: 5, marginTop: 1, marginBottom: 8, paddingLeft: 2 },
   condChip:       { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC' },
   condChipText:   { fontSize: 9, fontWeight: '700', color: '#aaa' },
+
+  pieceLegendRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3, marginTop: 4 },
+  pieceTypeBadge:  { borderRadius: 6, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 3 },
+  pieceTypeTxt:    { fontSize: 10, fontWeight: '900' },
+  pieceNameInput:  { backgroundColor: '#fff', borderRadius: 7, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5, fontSize: 11, color: '#1a2a3a' },
+  pieceHeaderRow:  { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2, paddingHorizontal: 2 },
+  pieceHdrCell:    { fontSize: 8, fontWeight: '700', color: '#bbb', textTransform: 'uppercase', textAlign: 'center' },
+  pieceDivider:    { height: 1, backgroundColor: '#EEF2F7', marginVertical: 6 },
 
   addPieceBtn:     { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4 },
   addPieceBtnText: { fontWeight: '700', fontSize: 13 },

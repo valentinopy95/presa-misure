@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Modal, Pressable, Animated, Easing, Linking, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export type NavSection = 'saved' | 'materials' | 'cutting';
 
@@ -70,7 +71,9 @@ export default function NavBurgerModal({ visible, current, onClose, navigation }
             <View style={s.divider} />
 
             <TouchableOpacity style={s.secondaryItem} onPress={() => { onClose(); setTimeout(() => navigation.navigate('Settings'), 180); }} activeOpacity={0.7}>
-              <Text style={s.secondaryIcon}>⚙️</Text>
+              <View style={[s.secondaryIconBox, { backgroundColor: '#ECEFF1' }]}>
+                <Ionicons name="settings" size={18} color="#37474F" />
+              </View>
               <Text style={s.secondaryText}>Impostazioni</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.secondaryItem} onPress={() => {
@@ -86,7 +89,9 @@ export default function NavBurgerModal({ visible, current, onClose, navigation }
                 );
               }, 200);
             }} activeOpacity={0.7}>
-              <Text style={s.secondaryIcon}>🎧</Text>
+              <View style={[s.secondaryIconBox, { backgroundColor: '#FFEBEE' }]}>
+                <Ionicons name="headset" size={18} color="#C62828" />
+              </View>
               <Text style={s.secondaryText}>Supporto tecnico</Text>
             </TouchableOpacity>
 
@@ -126,8 +131,9 @@ const s = StyleSheet.create({
   divider:     { height: 1, backgroundColor: '#EEF2F7', marginHorizontal: 16, marginVertical: 12 },
   secondaryItem: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 12, gap: 14,
+    paddingHorizontal: 16, paddingVertical: 10, gap: 12,
+    marginHorizontal: 8, borderRadius: 12, marginBottom: 2,
   },
-  secondaryIcon: { fontSize: 18, width: 24, textAlign: 'center' },
-  secondaryText: { fontSize: 13, fontWeight: '600', color: '#555' },
+  secondaryIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  secondaryText: { fontSize: 13, fontWeight: '700', color: '#333', flex: 1 },
 });

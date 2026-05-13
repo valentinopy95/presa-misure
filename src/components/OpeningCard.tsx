@@ -8,7 +8,9 @@ interface Props {
   onPress: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
-  pricePerSqm?: number; // €/m² per la categoria di questo infisso
+  pricePerSqm?: number;
+  tolW?: number;                   // tolleranza larghezza (mm) → misura taglio
+  tolH?: number;                   // tolleranza altezza (mm)  → misura taglio
 }
 
 const formatDim = (v: number | null) => (v ? `${v}` : '—');
@@ -24,9 +26,13 @@ function accentColor(style: OpeningStyle | null): string {
   return '#455A64';
 }
 
-export default function OpeningCard({ opening, onPress, onDelete, onDuplicate, pricePerSqm }: Props) {
+export default function OpeningCard({ opening, onPress, onDelete, onDuplicate, pricePerSqm, tolW, tolH }: Props) {
   const hasDims = opening.width || opening.height;
   const color = accentColor(opening.style);
+  // Misura taglio = luce − tolleranza (se disponibile)
+  const displayW = (tolW != null && tolW > 0 && opening.width) ? opening.width - tolW : opening.width;
+  const displayH = (tolH != null && tolH > 0 && opening.height) ? opening.height - tolH : opening.height;
+  const showTaglio = (tolW != null && tolW > 0) || (tolH != null && tolH > 0);
   const estimatedPrice =
     pricePerSqm && pricePerSqm > 0 && opening.width && opening.height
       ? (opening.width * opening.height / 1_000_000) * pricePerSqm
@@ -78,15 +84,16 @@ export default function OpeningCard({ opening, onPress, onDelete, onDuplicate, p
 
         {hasDims && (
           <View style={styles.dims}>
+            {showTaglio && <Text style={styles.taglioLabel}>✂</Text>}
             <View style={[styles.dimChip, { borderColor: color + '40' }]}>
               <Text style={styles.dimLabel}>L</Text>
-              <Text style={[styles.dimVal, { color }]}>{formatDim(opening.width)}</Text>
+              <Text style={[styles.dimVal, { color }]}>{formatDim(displayW)}</Text>
               <Text style={styles.dimUnit}>mm</Text>
             </View>
             <Text style={styles.dimSep}>×</Text>
             <View style={[styles.dimChip, { borderColor: color + '40' }]}>
               <Text style={styles.dimLabel}>H</Text>
-              <Text style={[styles.dimVal, { color }]}>{formatDim(opening.height)}</Text>
+              <Text style={[styles.dimVal, { color }]}>{formatDim(displayH)}</Text>
               <Text style={styles.dimUnit}>mm</Text>
             </View>
           </View>
@@ -157,6 +164,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '800', color: '#1a2a3a', marginBottom: 4 },
 
   dims: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  taglioLabel: { fontSize: 11, color: '#8a9ab0', fontWeight: '700' },
   dimChip: {
     flexDirection: 'row', alignItems: 'baseline', gap: 3,
     backgroundColor: '#F4F7FC', borderRadius: 8, borderWidth: 1,
@@ -185,6 +193,11 @@ const styles = StyleSheet.create({
   infoBadgeExtTxt: { color: '#2E7D32' },
   infoBadgePrice:    { backgroundColor: '#FFF3E0', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   infoBadgePriceTxt: { fontSize: 11, fontWeight: '800', color: '#E65100' },
+
+  seriesChip: { alignSelf: 'flex-start', backgroundColor: '#EEF2F7', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6, borderWidth: 1, borderColor: '#DDE3ED' },
+  seriesChipOverride: { backgroundColor: '#EDE7F6', borderColor: '#9C27B0' },
+  seriesChipText: { fontSize: 10, fontWeight: '700', color: '#5a6a7a' },
+  seriesChipTextOverride: { color: '#7B1FA2' },
 
   badges: { flexDirection: 'row', gap: 6, marginTop: 7 },
   badge: {

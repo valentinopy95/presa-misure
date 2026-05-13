@@ -7,6 +7,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { v4 as uuidv4 } from 'uuid';
 import TourModal, { TourStep } from '../components/TourModal';
 import {
@@ -57,6 +58,14 @@ export default function CatalogSeriesScreen() {
     getCatalogSeries().then(setCatalogSeries);
     getDefaultCatalogSeriesId().then(setDefaultSeriesId);
   }, []));
+
+  const handleExportSeries = async (series: CatalogSeries) => {
+    const json = JSON.stringify(series, null, 2);
+    const fileName = `${series.name.replace(/[^a-zA-Z0-9_\-]/g, '_')}.misu.json`;
+    const path = FileSystem.cacheDirectory + fileName;
+    await FileSystem.writeAsStringAsync(path, json, { encoding: FileSystem.EncodingType.UTF8 });
+    await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Esporta serie' });
+  };
 
   const handleImportSeries = async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -173,6 +182,9 @@ export default function CatalogSeriesScreen() {
                   {series.variants.length} {series.variants.length === 1 ? 'variante' : 'varianti'}
                 </Text>
               </View>
+              <TouchableOpacity style={s.exportBtn} onPress={() => handleExportSeries(series)}>
+                <Text style={s.exportBtnText}>↑ Esporta</Text>
+              </TouchableOpacity>
               {defaultSeriesId === series.id ? (
                 <View style={s.defaultBadge}>
                   <Text style={s.defaultBadgeText}>DEFAULT</Text>
@@ -185,7 +197,7 @@ export default function CatalogSeriesScreen() {
                     setDefaultSeriesId(series.id);
                   }}
                 >
-                  <Text style={[s.setDefaultText, { color: t.textSecondary }]}>Imposta default</Text>
+                  <Text style={[s.setDefaultText, { color: t.textSecondary }]}>Default</Text>
                 </TouchableOpacity>
               )}
               <Text style={{ color: '#ccc', fontSize: 20, marginLeft: 8 }}>›</Text>
@@ -261,6 +273,9 @@ const s = StyleSheet.create({
   rowDot:    { width: 9, height: 9, borderRadius: 5, backgroundColor: NAVY },
   rowName:   { fontSize: 14, fontWeight: '700' },
   rowSub:    { fontSize: 11, marginTop: 2 },
+
+  exportBtn:     { borderWidth: 1.5, borderColor: NAVY, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5 },
+  exportBtnText: { color: NAVY, fontWeight: '700', fontSize: 11 },
 
   defaultBadge:     { backgroundColor: '#E8F5E9', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   defaultBadgeText: { fontSize: 10, fontWeight: '900', color: '#2E7D32', letterSpacing: 0.3 },

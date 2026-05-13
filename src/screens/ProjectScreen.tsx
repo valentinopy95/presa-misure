@@ -11,7 +11,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
 import { Project, Opening, OpeningStyle, RootStackParamList } from '../types';
 import { getProject, getProjectFamily, deleteOpening, saveOpening, deleteProject, saveProject } from '../storage/database';
-import { getToleranceW, getToleranceH, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail, getCatalogSeries, CatalogSeries, getDefaultCatalogSeriesId, getDetailedPrices, priceForStyleDetailed, DetailedPriceConfig } from '../storage/settings';
+import { getToleranceW, getToleranceH, getToleranceByType, toleranceForStyle, ToleranceByType, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail, getCatalogSeries, CatalogSeries, getDefaultCatalogSeriesId, getDetailedPrices, priceForStyleDetailed, DetailedPriceConfig } from '../storage/settings';
 import { generateHTML, generateCuttingListHTML, generateFullPDF, generateCuttingListCSV } from '../utils/pdfExport';
 import { calculateCuttingList } from '../utils/calculateMaterials';
 import { getLogoBase64, sharePdf, saveToDevice, shareCSV } from '../utils/pdfActions';
@@ -46,7 +46,8 @@ export default function ProjectScreen() {
   const [prices,           setPricesState]      = useState<PriceConfig>({ interni: 0, persiane: 0, controtelai: 0, zanzariere: 0, monoblocchi: 0 });
   const [detailedPrices,   setDetailedPricesState] = useState<DetailedPriceConfig>({});
   const [allSeries,        setAllSeries]        = useState<CatalogSeries[]>([]);
-  const [showSeriesPicker, setShowSeriesPicker] = useState(false);
+  const [showSeriesPicker,         setShowSeriesPicker]         = useState(false);
+  const [tolByType, setTolByType] = useState<ToleranceByType>({ finestre: { w: 10, h: 10 }, porte: { w: 10, h: 10 }, persiane: { w: 10, h: 10 }, zanzariere: { w: 10, h: 10 } });
 
   const headerRef           = useRef<any>(null);
   const pdfBtnRef           = useRef<any>(null);
@@ -74,6 +75,7 @@ export default function ProjectScreen() {
     getPrices().then(setPricesState);
     getDetailedPrices().then(setDetailedPricesState);
     getCatalogSeries().then(setAllSeries);
+    getToleranceByType().then(setTolByType);
   }, [loadFamily]));
 
   // Ricarica solo il progetto attivo dopo cambio tab
@@ -284,39 +286,10 @@ export default function ProjectScreen() {
   };
 
   // ── Aperture ───────────────────────────────────────────────────────────────
-  const shutterEquivalent = (style: OpeningStyle | null): OpeningStyle => {
-    if (!style) return 'shutter_single';
-    if (style.startsWith('door'))   return 'shutter_double';
-    if (style.startsWith('window')) return style.includes('double') ? 'shutter_double' : 'shutter_single';
-    return 'shutter_single';
-  };
-
-  const handleDuplicate = (opening: Opening) => {
-    const isWindowOrDoor = opening.style?.startsWith('window') || opening.style?.startsWith('door');
-    if (isWindowOrDoor) {
-      AppAlert.show('Duplica apertura', 'Vuoi cambiare la tipologia della copia in persiana?', [
-        { text: 'Sì, cambia in persiana', onPress: async () => {
-            const copy: Opening = { ...opening, id: uuidv4(), name: opening.name + ' (copia)', style: shutterEquivalent(opening.style) };
-            await saveOpening(activeProjectId, copy); reload();
-          },
-        },
-        { text: 'No, copia uguale', onPress: async () => {
-            const copy: Opening = { ...opening, id: uuidv4(), name: opening.name + ' (copia)' };
-            await saveOpening(activeProjectId, copy); reload();
-          },
-        },
-        { text: 'Annulla', style: 'cancel' },
-      ]);
-    } else {
-      AppAlert.show('Duplica apertura', 'Vuoi duplicare questa apertura?', [
-        { text: 'Annulla', style: 'cancel' },
-        { text: 'Duplica', onPress: async () => {
-            const copy: Opening = { ...opening, id: uuidv4(), name: opening.name + ' (copia)' };
-            await saveOpening(activeProjectId, copy); reload();
-          },
-        },
-      ]);
-    }
+  const handleDuplicate = async (opening: Opening) => {
+    const copy: Opening = { ...opening, id: uuidv4(), name: opening.name + ' (copia)' };
+    await saveOpening(activeProjectId, copy);
+    reload();
   };
 
   const handleDelete = (openingId: string) => {
@@ -453,7 +426,7 @@ export default function ProjectScreen() {
             {family.map((p, i) => (
               <View key={p.id} style={[styles.tab, i === activeIdx && styles.tabActive]}>
                 <TouchableOpacity onPress={() => setActiveIdx(i)} activeOpacity={0.75} style={styles.tabLabel}>
-                  <Text style={[styles.tabText, i === activeIdx && styles.tabTextActive]} numberOfLines={1}>
+                  <Text style={[styles.tabText, i === activeIdx && styles.tabTextActive]}>
                     {p.name}
                   </Text>
                 </TouchableOpacity>
@@ -517,6 +490,8 @@ export default function ProjectScreen() {
             onDelete={() => handleDelete(item.id)}
             onDuplicate={() => handleDuplicate(item)}
             pricePerSqm={priceForStyle(item.style, prices) || undefined}
+            tolW={toleranceForStyle(item.style, tolByType).w}
+            tolH={toleranceForStyle(item.style, tolByType).h}
           />
         )}
       />

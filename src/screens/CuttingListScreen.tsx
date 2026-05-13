@@ -8,7 +8,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as AppAlert from '../components/AppAlert';
 import { RootStackParamList, Project } from '../types';
 import { sharePdf, saveToDevice } from '../utils/pdfActions';
-import { getProject } from '../storage/database';
+import { getProject, getProjectFamily } from '../storage/database';
 import {
   getRiattestattura, getBarLength, getKerf90, getSafetyMargin,
   getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail,
@@ -41,6 +41,8 @@ export default function CuttingListScreen() {
   const navigation = useNavigation<Nav>();
   const { projectId } = route.params;
 
+  const [family,         setFamily]         = useState<Project[]>([]);
+  const [activeIdx,      setActiveIdx]      = useState(0);
   const [project,        setProject]        = useState<Project | null>(null);
   const [result,         setResult]         = useState<CuttingListResult | null>(null);
   const [catalogResult,  setCatalogResult]  = useState<CuttingListResult | null>(null);
@@ -53,11 +55,20 @@ export default function CuttingListScreen() {
   const [checked,        setChecked]        = useState<Set<string>>(new Set());
   const [magazzinoMatch, setMagazzinoMatch] = useState(false);
 
+  const activeProjectId = family[activeIdx]?.id ?? projectId;
+
   useEffect(() => {
-    getCuttingProgress(projectId).then(keys => {
-      if (keys.length > 0) setChecked(new Set(keys));
+    getProjectFamily(projectId).then(fam => {
+      if (fam.length > 0) setFamily(fam);
     });
   }, [projectId]);
+
+  useEffect(() => {
+    getCuttingProgress(activeProjectId).then(keys => {
+      if (keys.length > 0) setChecked(new Set(keys));
+      else setChecked(new Set());
+    });
+  }, [activeProjectId]);
 
   const totalPieces = useMemo(() => {
     let n = 0;
@@ -91,13 +102,13 @@ export default function CuttingListScreen() {
 
   const resetProgress = useCallback(() => {
     setChecked(new Set());
-    clearCuttingProgress(projectId);
-    saveCuttingComplete(projectId, false);
-  }, [projectId]);
+    clearCuttingProgress(activeProjectId);
+    saveCuttingComplete(activeProjectId, false);
+  }, [activeProjectId]);
 
   const loadAndCalculate = useCallback(async () => {
     const [p, riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, tolW, tolH, allSeries, tolByType] = await Promise.all([
-      getProject(projectId), getRiattestattura(), getBarLength(), getKerf90(),
+      getProject(activeProjectId), getRiattestattura(), getBarLength(), getKerf90(),
       getSafetyMargin(), getSlatPitch(), getZoccoloH(), getFasciaH(), getAntaReduction(), getAntaTopRail(),
       getToleranceW(), getToleranceH(), getCatalogSeries(), getToleranceByType(),
     ]);
@@ -138,12 +149,18 @@ export default function CuttingListScreen() {
       setCatalogResult(null);
       setResult(calculateCuttingList(p.openings, cfg));
     }
-  }, [projectId]);
+  }, [activeProjectId]);
 
   useEffect(() => {
     getPresets().then(setPresets);
     loadAndCalculate();
   }, [loadAndCalculate]);
+
+  useEffect(() => {
+    setResult(null);
+    setCatalogResult(null);
+    loadAndCalculate();
+  }, [activeIdx]);
 
   const handleSelectPreset = async (preset: SettingsPreset) => {
     await applyPreset(preset);
@@ -203,31 +220,37 @@ export default function CuttingListScreen() {
   const hasData = result.profiles45.length > 0 || result.profiles90.length > 0 || !!hasCatalogData;
 
   return (
-    <>
-    <ScrollView style={s.screen} contentContainerStyle={s.content}>
-
-      {/* ── Header card ── */}
-      <View style={s.header}>
-        {/* Progetto */}
-        <View style={s.headerTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.projectName}>{project.clientName || project.name}</Text>
-            {!!project.clientName && <Text style={s.projectSub}>{project.name}</Text>}
-            <Text style={s.projectParams}>Barre {config.barLength} mm · Riatt. {config.riattestattura} mm</Text>
-          </View>
-          {/* Badge serie */}
-          <View style={[s.seriesBadge, { backgroundColor: seriesBanner.color }]}>
-            <Text style={s.seriesBadgeText}>{catalogSeries ? catalogSeries.name : 'Standard'}</Text>
-          </View>
+    <View style={{ flex: 1, backgroundColor: '#0c2d75' }}>
+    {/* ── Top header: info progetto + switch + tabs ── */}
+    <View style={s.topHeader}>
+      <View style={s.headerTop}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.projectName}>{project.clientName || project.name}</Text>
+          {!!project.clientName && <Text style={s.projectSub}>{project.name}</Text>}
+          <Text style={s.projectParams}>Barre {config.barLength} mm · Riatt. {config.riattestattura} mm</Text>
         </View>
-
-        {/* Bottone sviluppo */}
-        <TouchableOpacity style={s.materialsBtn} onPress={() => navigation.navigate('Materials', { projectId })} activeOpacity={0.8}>
-          <Text style={s.materialsBtnIcon}>📊</Text>
-          <Text style={s.materialsBtnTitle}>Vai allo sviluppo materiale</Text>
-          <Text style={s.materialsBtnArrow}>›</Text>
-        </TouchableOpacity>
+        <View style={[s.seriesBadge, { backgroundColor: seriesBanner.color }]}>
+          <Text style={s.seriesBadgeText}>{catalogSeries ? catalogSeries.name : 'Standard'}</Text>
+        </View>
       </View>
+      <TouchableOpacity style={s.switchBtn} onPress={() => navigation.navigate('Materials', { projectId })} activeOpacity={0.8}>
+        <Text style={s.switchBtnIcon}>📊</Text>
+        <Text style={s.switchBtnTitle}>Vai allo sviluppo materiale</Text>
+        <Text style={s.switchBtnArrow}>›</Text>
+      </TouchableOpacity>
+      {family.length > 1 && (
+        <View style={{ marginTop: 12 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabContent}>
+            {family.map((p, i) => (
+              <TouchableOpacity key={p.id} style={[s.tab, i === activeIdx && s.tabActive]} onPress={() => setActiveIdx(i)} activeOpacity={0.75}>
+                <Text style={[s.tabText, i === activeIdx && s.tabTextActive]}>{p.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+    <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
       {/* Legenda */}
       <View style={s.legendCard}>
@@ -369,7 +392,7 @@ export default function CuttingListScreen() {
         </Pressable>
       </Pressable>
     </Modal>
-    </>
+    </View>
   );
 }
 
@@ -562,6 +585,25 @@ function SectionHeader({ label, color }: { label: string; color: string }) {
 const s = StyleSheet.create({
   screen:      { flex: 1, backgroundColor: '#F0F4F8' },
   content:     { padding: 16 },
+  topHeader:    { backgroundColor: '#0c2d75', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14 },
+  tabContent:   { gap: 8 },
+  tab: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)',
+  },
+  tabActive:     { backgroundColor: '#fff', borderColor: '#fff' },
+  tabText:       { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.9)' },
+  tabTextActive: { color: '#0c2d75' },
+  switchBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  switchBtnIcon:  { fontSize: 15 },
+  switchBtnTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#fff' },
+  switchBtnArrow: { fontSize: 18, color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
   loading:     { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
     backgroundColor: '#1565C0', borderRadius: 16,

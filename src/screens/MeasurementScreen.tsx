@@ -351,30 +351,32 @@ export default function MeasurementScreen() {
         </View>
       )}
 
-      {/* ── Toggle Interno / Esterno ── */}
-      {!isCustom && opening.style && (
-        <View style={styles.viewSideRow}>
-          <TouchableOpacity
-            style={[styles.viewSideBtn, opening.viewSide !== 'esterno' && styles.viewSideBtnActive]}
-            onPress={() => update({ viewSide: 'interno' })}
-          >
-            <Text style={[styles.viewSideTxt, opening.viewSide !== 'esterno' && styles.viewSideTxtActive]}>
-              Interno
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewSideBtn, opening.viewSide === 'esterno' && styles.viewSideBtnActive]}
-            onPress={() => update({ viewSide: 'esterno' })}
-          >
-            <Text style={[styles.viewSideTxt, opening.viewSide === 'esterno' && styles.viewSideTxtActive]}>
-              Esterno
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* ── Disegno 2D live (nascosto per tipologia personalizzata) ── */}
       {!isCustom && <View style={styles.drawingCard}>
+        {/* Badge serie + toggle int/est sopra il disegno */}
+        <View style={styles.drawingTopBar}>
+          {/* Toggle Interno / Esterno */}
+          {opening.style && (
+            <View style={styles.viewSideRow}>
+              <TouchableOpacity
+                style={[styles.viewSideBtn, opening.viewSide !== 'esterno' && styles.viewSideBtnActive]}
+                onPress={() => update({ viewSide: 'interno' })}
+              >
+                <Text style={[styles.viewSideTxt, opening.viewSide !== 'esterno' && styles.viewSideTxtActive]}>
+                  Interno
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.viewSideBtn, opening.viewSide === 'esterno' && styles.viewSideBtnActive]}
+                onPress={() => update({ viewSide: 'esterno' })}
+              >
+                <Text style={[styles.viewSideTxt, opening.viewSide === 'esterno' && styles.viewSideTxtActive]}>
+                  Esterno
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
         <LiveDrawing
           style={opening.style}
           width={opening.width}
@@ -403,14 +405,32 @@ export default function MeasurementScreen() {
         )}
       </View>}
 
-      {/* ── Nome ── */}
+      {/* ── Nome + Interno/Esterno ── */}
       <Text style={styles.label}>Nome apertura *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="es. Finestra soggiorno"
-        value={opening.name}
-        onChangeText={t => update({ name: t })}
-      />
+      <View style={styles.nameRow}>
+        <TextInput
+          style={[styles.input, { flex: 1, marginTop: 0 }]}
+          placeholder="es. Finestra soggiorno"
+          value={opening.name}
+          onChangeText={t => update({ name: t })}
+        />
+        {!isCustom && opening.style && (
+          <View style={styles.viewSideRowInline}>
+            <TouchableOpacity
+              style={[styles.viewSideBtn, opening.viewSide !== 'esterno' && styles.viewSideBtnActive]}
+              onPress={() => update({ viewSide: 'interno' })}
+            >
+              <Text style={[styles.viewSideTxt, opening.viewSide !== 'esterno' && styles.viewSideTxtActive]}>Int</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewSideBtn, opening.viewSide === 'esterno' && styles.viewSideBtnActive]}
+              onPress={() => update({ viewSide: 'esterno' })}
+            >
+              <Text style={[styles.viewSideTxt, opening.viewSide === 'esterno' && styles.viewSideTxtActive]}>Est</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
 
       {/* ── Tipologia ── */}
       <Text style={styles.label}>Tipologia</Text>
@@ -903,10 +923,28 @@ const styles = StyleSheet.create({
   customBannerTitle: { fontSize: 15, fontWeight: '800', color: '#1a3060', marginBottom: 5 },
   customBannerDesc:  { fontSize: 13, color: '#4a6080', lineHeight: 19 },
 
-  viewSideRow: {
-    flexDirection: 'row', marginBottom: 8,
+  drawingTopBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    width: '100%', marginBottom: 6, paddingHorizontal: 4,
+  },
+  seriesBadge: {
+    backgroundColor: '#EEF2F7', borderRadius: 20, borderWidth: 1.5,
+    borderColor: '#DDE3ED', paddingHorizontal: 10, paddingVertical: 4,
+  },
+  seriesBadgeActive: { backgroundColor: '#EDE7F6', borderColor: '#9C27B0' },
+  seriesBadgeTxt:    { fontSize: 11, fontWeight: '700', color: '#8090a0' },
+  seriesBadgeTxtActive: { color: '#7B1FA2' },
+
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  viewSideRowInline: {
+    flexDirection: 'row',
     backgroundColor: '#EEF2F7', borderRadius: 10, padding: 3,
-    alignSelf: 'center',
+  },
+
+  viewSideRow: {
+    flexDirection: 'row',
+    backgroundColor: '#EEF2F7', borderRadius: 10, padding: 3,
+    alignSelf: 'flex-start',
   },
   viewSideBtn: {
     paddingHorizontal: 22, paddingVertical: 7, borderRadius: 8,

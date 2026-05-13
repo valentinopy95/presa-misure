@@ -73,6 +73,7 @@ export default function DuplicateProjectScreen() {
   const [allSeries,        setAllSeries]        = useState<CatalogSeries[]>([]);
   const [catalogSeriesId,  setCatalogSeriesId]  = useState<string | null>(null);
   const [showSeriesPicker, setShowSeriesPicker] = useState(false);
+  const [excluded,         setExcluded]         = useState<Set<string>>(new Set());
 
   useEffect(() => {
     getProject(projectId).then(p => {
@@ -104,11 +105,15 @@ export default function DuplicateProjectScreen() {
     updateDraft(index, { _category: cat, style: newStyle });
   };
 
+  const toggleExclude = (id: string) => {
+    setExcluded(prev => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+  };
+
   const handleCreate = async () => {
-    if (!projectName.trim()) {
-      AppAlert.show('Nome mancante', 'Inserisci il nome del nuovo progetto.');
-      return;
-    }
     setSaving(true);
     try {
       const original = await getProject(projectId);
@@ -117,13 +122,14 @@ export default function DuplicateProjectScreen() {
       // Se l'originale è già un figlio → la copia diventa fratello (stesso parent).
       // Se l'originale è un progetto madre → la copia diventa figlio (parent = originale).
       const parentId = original.parentId ?? original.id;
+      const finalName = projectName.trim() || original.clientName || original.name;
       const newProject: Project = {
         ...original,
         id:              uuidv4(),
-        name:            projectName.trim(),
+        name:            finalName,
         parentId,
         catalogSeriesId: catalogSeriesId ?? null,
-        openings:        drafts.map(({ _category, ...o }) => ({ ...o, updatedAt: now })),
+        openings:        drafts.filter(d => !excluded.has(d.id)).map(({ _category, ...o }) => ({ ...o, updatedAt: now })),
         createdAt:       now,
         updatedAt:       now,
       };
@@ -173,62 +179,77 @@ export default function DuplicateProjectScreen() {
         </View>
 
         {drafts.map((draft, index) => (
-          <View key={draft.id} style={s.card}>
-            {/* Nome apertura */}
-            <TextInput
-              style={s.openingName}
-              value={draft.name}
-              onChangeText={v => updateDraft(index, { name: v })}
-              placeholder="Nome apertura"
-              placeholderTextColor="#aaa"
-            />
-
-            {/* Tipologia attuale */}
-            <View style={s.currentStyle}>
-              {draft.style && <StyleLabel style={draft.style} compact />}
+          <View key={draft.id} style={[s.card, excluded.has(draft.id) && s.cardExcluded]}>
+            {/* Header: nome + toggle includi/escludi */}
+            <View style={s.cardHeader}>
+              <TextInput
+                style={[s.openingName, { flex: 1, borderBottomWidth: 0, paddingBottom: 0, marginBottom: 0 }]}
+                value={draft.name}
+                onChangeText={v => updateDraft(index, { name: v })}
+                placeholder="Nome apertura"
+                placeholderTextColor="#aaa"
+                editable={!excluded.has(draft.id)}
+              />
+              <TouchableOpacity
+                style={[s.exclBtn, excluded.has(draft.id) ? s.exclBtnOff : s.exclBtnOn]}
+                onPress={() => toggleExclude(draft.id)}
+              >
+                <Text style={[s.exclBtnText, excluded.has(draft.id) ? s.exclBtnTextOff : s.exclBtnTextOn]}>
+                  {excluded.has(draft.id) ? '✕ Esclusa' : '✓ Inclusa'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Selettore categoria */}
-            <Text style={s.catLabel}>Cambia tipologia</Text>
-            <View style={s.catRow}>
-              {CATEGORIES.map(cat => (
-                <TouchableOpacity
-                  key={cat.key}
-                  style={[s.catChip, draft._category === cat.key && { backgroundColor: cat.color, borderColor: cat.color }]}
-                  onPress={() => changeCategory(index, cat.key)}
-                >
-                  <Text style={[s.catChipText, draft._category === cat.key && { color: '#fff' }]}>
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {!excluded.has(draft.id) && (
+              <>
+                {/* Tipologia attuale */}
+                <View style={s.currentStyle}>
+                  {draft.style && <StyleLabel style={draft.style} compact />}
+                </View>
 
-            {/* Misure */}
-            <View style={s.dimsRow}>
-              <View style={s.dimWrap}>
-                <Text style={s.dimLabel}>Larghezza (mm)</Text>
-                <TextInput
-                  style={s.dimInput}
-                  value={draft.width != null ? String(draft.width) : ''}
-                  onChangeText={v => updateDraft(index, { width: v ? parseInt(v) : null })}
-                  keyboardType="number-pad"
-                  placeholder="—"
-                  placeholderTextColor="#aaa"
-                />
-              </View>
-              <View style={s.dimWrap}>
-                <Text style={s.dimLabel}>Altezza (mm)</Text>
-                <TextInput
-                  style={s.dimInput}
-                  value={draft.height != null ? String(draft.height) : ''}
-                  onChangeText={v => updateDraft(index, { height: v ? parseInt(v) : null })}
-                  keyboardType="number-pad"
-                  placeholder="—"
-                  placeholderTextColor="#aaa"
-                />
-              </View>
-            </View>
+                {/* Selettore categoria */}
+                <Text style={s.catLabel}>Cambia tipologia</Text>
+                <View style={s.catRow}>
+                  {CATEGORIES.map(cat => (
+                    <TouchableOpacity
+                      key={cat.key}
+                      style={[s.catChip, draft._category === cat.key && { backgroundColor: cat.color, borderColor: cat.color }]}
+                      onPress={() => changeCategory(index, cat.key)}
+                    >
+                      <Text style={[s.catChipText, draft._category === cat.key && { color: '#fff' }]}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Misure */}
+                <View style={s.dimsRow}>
+                  <View style={s.dimWrap}>
+                    <Text style={s.dimLabel}>Larghezza (mm)</Text>
+                    <TextInput
+                      style={s.dimInput}
+                      value={draft.width != null ? String(draft.width) : ''}
+                      onChangeText={v => updateDraft(index, { width: v ? parseInt(v) : null })}
+                      keyboardType="number-pad"
+                      placeholder="—"
+                      placeholderTextColor="#aaa"
+                    />
+                  </View>
+                  <View style={s.dimWrap}>
+                    <Text style={s.dimLabel}>Altezza (mm)</Text>
+                    <TextInput
+                      style={s.dimInput}
+                      value={draft.height != null ? String(draft.height) : ''}
+                      onChangeText={v => updateDraft(index, { height: v ? parseInt(v) : null })}
+                      keyboardType="number-pad"
+                      placeholder="—"
+                      placeholderTextColor="#aaa"
+                    />
+                  </View>
+                </View>
+              </>
+            )}
           </View>
         ))}
 
@@ -236,7 +257,9 @@ export default function DuplicateProjectScreen() {
         <TouchableOpacity style={s.btnCreate} onPress={handleCreate} disabled={saving}>
           {saving
             ? <ActivityIndicator color="#fff" />
-            : <Text style={s.btnCreateText}>Crea copia progetto</Text>}
+            : <Text style={s.btnCreateText}>
+                Crea copia{excluded.size > 0 ? ` (${drafts.length - excluded.size} aperture)` : ' progetto'}
+              </Text>}
         </TouchableOpacity>
 
       </ScrollView>
@@ -292,6 +315,14 @@ const s = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12,
     elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
+  cardExcluded: { opacity: 0.45 },
+  cardHeader:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  exclBtn:       { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1.5 },
+  exclBtnOn:     { backgroundColor: '#E8F5E9', borderColor: '#4CAF50' },
+  exclBtnOff:    { backgroundColor: '#FEE8E8', borderColor: '#E57373' },
+  exclBtnText:    { fontSize: 11, fontWeight: '800' },
+  exclBtnTextOn:  { color: '#2E7D32' },
+  exclBtnTextOff: { color: '#C62828' },
 
   openingName: {
     fontSize: 15, fontWeight: '800', color: '#1a2a3a',

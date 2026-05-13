@@ -1,5 +1,27 @@
 import { Opening } from '../types';
-import { CatalogSeries, findBestVariant, ToleranceByType, toleranceForStyle } from '../storage/settings';
+import { CatalogSeries, CatalogPiece, findBestVariant, ToleranceByType, toleranceForStyle } from '../storage/settings';
+
+// ─── Helper formula pezzi ────────────────────────────────────────────────────
+// Supporta sia il nuovo formato op1/val1/op2/val2 che il legacy offset/divisor
+export function computePieceLength(base: number, piece: CatalogPiece): number {
+  if (piece.op1 !== undefined && piece.op2 !== undefined) {
+    const v1 = piece.val1 ?? 0;
+    const v2 = piece.val2 ?? 1;
+    let r = base;
+    if      (piece.op1 === '+') r += v1;
+    else if (piece.op1 === '-') r -= v1;
+    else                        r = v1 === 0 ? r : r / v1;
+    if      (piece.op2 === '+') r += v2;
+    else if (piece.op2 === '-') r -= v2;
+    else                        r = v2 === 0 ? r : r / v2;
+    return Math.round(r * 2) / 2;
+  }
+  // Legacy fallback
+  const df = piece.divideFirst === true;
+  return df
+    ? Math.round(((base / piece.divisor) + piece.offset) * 2) / 2
+    : Math.round(((base + piece.offset) / piece.divisor) * 2) / 2;
+}
 
 const DEFAULT_BAR_MM  = 6400;
 const DEFAULT_KERF_90 = 4;
@@ -530,14 +552,13 @@ export function calculateCatalogCuttingList(
       if (cat === 'riporto' && (o.leafCount ?? 1) <= 1) continue;
 
       const base = piece.baseVar === 'L' ? pcL : pcH;
-      const df   = piece.divideFirst === true;
-      const length = df
-        ? Math.round(((base / piece.divisor) + piece.offset) * 2) / 2
-        : Math.round(((base + piece.offset) / piece.divisor) * 2) / 2;
+      const length = computePieceLength(base, piece);
       if (length <= 0) continue;
 
       const is90 = piece.cutAngle1 === 90 && piece.cutAngle2 === 90;
-      for (let q = 0; q < piece.quantity; q++) push(cat, is90, length, piece.name);
+      const typeLabel = piece.baseVar === 'L' ? 'Traverso' : 'Montante';
+      const cutLabel  = piece.name ? `${typeLabel} — ${piece.name}` : typeLabel;
+      for (let q = 0; q < piece.quantity; q++) push(cat, is90, length, cutLabel);
     }
   }
 
