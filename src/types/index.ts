@@ -112,4 +112,5 @@ export type RootStackParamList = {
   SettingsParametri:  undefined;
   SettingsPrezzi:     undefined;
   SettingsGenerico:   undefined;
+  Magazzino:          undefined;
 };

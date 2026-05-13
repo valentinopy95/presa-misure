@@ -1,16 +1,23 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Modal, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import TourModal, { TourStep } from '../components/TourModal';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { v4 as uuidv4 } from 'uuid';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   getBarLength, getRiattestattura,
   getAntaReduction, getSlatPitch,
   getToleranceByType,
-  CatalogSeries, getCatalogSeries,
+  CatalogSeries, getCatalogSeries, upsertCatalogSeries,
   getDefaultCatalogSeriesId, setDefaultCatalogSeriesId,
 } from '../storage/settings';
 import { RootStackParamList } from '../types';
+import { useSubscription } from '../contexts/SubscriptionContext';
+import { supabase } from '../lib/supabase';
+import * as AppAlert from '../components/AppAlert';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -66,10 +73,24 @@ const sl = StyleSheet.create({
 
 // ─── Hub ─────────────────────────────────────────────────────────────────────
 
+const SETTINGS_TOUR: TourStep[] = [
+  { icon: '📋', title: 'Serie catalogo', body: 'Crea le serie di profili con le formule di taglio per ogni numero di ante. Assegna una serie al progetto e l\'app calcola ogni pezzo al millimetro in automatico.', spot: null },
+  { icon: '📐', title: 'Tolleranze', body: 'Differenza tra la misura in luce e la misura di taglio. Si configura separatamente per finestre, porte, persiane e zanzariere — larghezza e altezza indipendenti.', spot: null },
+  { icon: '✂️', title: 'Parametri barra', body: 'Lunghezza barra utile, riattestattura 45°, kerf 90° e margine di sicurezza. Usati per l\'ottimizzazione FFD del taglio su tutte le serie.', spot: null },
+  { icon: '💰', title: 'Prezzi al m²', body: 'Prezzi orientativi per tipologia e numero di ante. Vengono usati per stimare il valore del progetto nel PDF del rilievo.', spot: null },
+  { icon: '🔧', title: 'Calcolo generico', body: 'Riduzione anta, parametri persiane (lamella, zoccolo, traverso) e posizione fascia. Usati per le aperture senza serie catalogo assegnata.', spot: null },
+  { icon: '💾', title: 'Preset', body: 'Salva tutta la configurazione corrente come preset con un nome. Richiamalo in un tap per applicare immediatamente tolleranze, parametri e prezzi — utile per passare da un tipo di sistema all\'altro.', spot: null },
+  { icon: '☁️', title: 'Tutto in cloud', body: 'Tutte le impostazioni (tolleranze, prezzi, parametri, serie) si sincronizzano automaticamente con tutti i dispositivi del tuo team. Configuri una volta, funziona ovunque.', spot: null },
+];
+
 export default function SettingsScreen() {
   const navigation = useNavigation<Nav>();
   const { theme, toggleDark } = useTheme();
   const t = theme;
+  const subscription = useSubscription();
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [buyingSlot, setBuyingSlot] = useState(false);
+  const [tourVisible, setTourVisible] = useState(false);
 
   const [catalogSeries,   setCatalogSeries]   = useState<CatalogSeries[]>([]);
   const [defaultSeriesId, setDefaultSeriesId] = useState<string | null>(null);
@@ -91,14 +112,91 @@ export default function SettingsScreen() {
 
   useEffect(() => { loadSummaries(); }, [loadSummaries]);
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => setTourVisible(true)}
+          style={{ paddingHorizontal: 14, paddingVertical: 8 }}
+        >
+          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   useFocusEffect(useCallback(() => {
     getCatalogSeries().then(setCatalogSeries);
     getDefaultCatalogSeriesId().then(setDefaultSeriesId);
     loadSummaries();
   }, [loadSummaries]));
 
+  const handleImportSeries = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/json', 'text/plain', '*/*'],
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    try {
+      const raw = await FileSystem.readAsStringAsync(result.assets[0].uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const parsed = JSON.parse(raw) as CatalogSeries;
+      if (!parsed.id || !parsed.name || !Array.isArray(parsed.variants)) {
+        AppAlert.show('File non valido', 'Il file non è una serie Misu valida.');
+        return;
+      }
+      const imported: CatalogSeries = { ...parsed, id: uuidv4() };
+      await upsertCatalogSeries(imported);
+      const updated = await getCatalogSeries();
+      setCatalogSeries(updated);
+      AppAlert.show('Serie importata', `"${imported.name}" è stata aggiunta alle tue serie.`);
+    } catch {
+      AppAlert.show('Errore', 'Impossibile leggere il file. Assicurati che sia un file .misu.json valido.');
+    }
+  };
+
+  const handleNewSeries = () => {
+    if (subscription.plan === 'free' || subscription.status !== 'active') {
+      navigation.navigate('Paywall');
+      return;
+    }
+    if (!subscription.canAddSeries) {
+      if (subscription.plan === 'base') {
+        // Base al limite → upgrade a Pro
+        navigation.navigate('Paywall');
+      } else {
+        // Pro al limite → acquista slot extra
+        setShowLimitModal(true);
+      }
+      return;
+    }
+    navigation.navigate('SeriesEditor', {});
+  };
+
+  const handleBuySeriesSlot = async () => {
+    setBuyingSlot(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { type: 'extra_series_slot' },
+      });
+      if (error || !data?.url) {
+        AppAlert.show('Errore', 'Impossibile avviare il pagamento. Riprova.');
+        return;
+      }
+      const { Linking, Platform } = require('react-native');
+      if (Platform.OS === 'web') (window as any).open(data.url, '_blank');
+      else Linking.openURL(data.url);
+      setTimeout(() => subscription.refresh(), 5000);
+    } catch {
+      AppAlert.show('Errore', 'Impossibile avviare il pagamento. Riprova.');
+    } finally {
+      setBuyingSlot(false);
+      setShowLimitModal(false);
+    }
+  };
+
   return (
     <ScrollView style={[s.screen, { backgroundColor: t.bg }]} contentContainerStyle={s.content}>
+      <TourModal visible={tourVisible} steps={SETTINGS_TOUR} onClose={() => setTourVisible(false)}/>
 
       {/* ── Serie catalogo ── */}
       <SectionLabel label="Serie catalogo" />
@@ -107,12 +205,19 @@ export default function SettingsScreen() {
           <View>
             <Text style={[s.seriesCardTitle, { color: t.textPrimary }]}>📋  Gestione serie</Text>
             <Text style={[s.seriesCardSub, { color: t.textSecondary }]}>
-              {catalogSeries.length === 0 ? 'Nessuna serie configurata' : `${catalogSeries.length} serie disponibili`}
+              {subscription.plan === 'free' || subscription.status !== 'active'
+                ? 'Richiede piano Base o Pro'
+                : `${subscription.seriesCount}/${subscription.seriesLimit} serie`}
             </Text>
           </View>
-          <TouchableOpacity style={s.seriesAddBtn} onPress={() => navigation.navigate('SeriesEditor', {})}>
-            <Text style={s.seriesAddBtnText}>+ Nuova</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={s.seriesImportBtn} onPress={handleImportSeries}>
+              <Text style={s.seriesImportBtnText}>Importa</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.seriesAddBtn} onPress={handleNewSeries}>
+              <Text style={s.seriesAddBtnText}>+ Nuova</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {catalogSeries.length === 0 ? (
@@ -203,6 +308,28 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={[s.version, { color: t.dark ? '#3a5a7a' : '#D0D8E0' }]}>Versione 1.0.0</Text>
+
+      {/* Limit modal */}
+      <Modal visible={showLimitModal} transparent animationType="fade" onRequestClose={() => setShowLimitModal(false)}>
+        <Pressable style={lm.overlay} onPress={() => setShowLimitModal(false)}>
+          <Pressable style={lm.sheet} onPress={() => {}}>
+            <Text style={lm.icon}>📋</Text>
+            <Text style={lm.title}>Limite serie raggiunto</Text>
+            <Text style={lm.body}>
+              Hai usato tutte le {subscription.seriesLimit} serie incluse nel piano Pro.{'\n'}
+              Puoi aggiungere slot extra a €3/mese ciascuno.
+            </Text>
+            <TouchableOpacity style={lm.buyBtn} onPress={handleBuySeriesSlot} disabled={buyingSlot}>
+              {buyingSlot
+                ? <ActivityIndicator color="#fff"/>
+                : <Text style={lm.buyBtnText}>Acquista slot extra · €3/mese</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={lm.cancelBtn} onPress={() => setShowLimitModal(false)}>
+              <Text style={lm.cancelText}>Annulla</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -218,8 +345,10 @@ const s = StyleSheet.create({
   seriesCardHeader:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   seriesCardTitle:   { fontSize: 15, fontWeight: '800' },
   seriesCardSub:     { fontSize: 12, marginTop: 2 },
-  seriesAddBtn:      { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-  seriesAddBtnText:  { color: '#fff', fontWeight: '800', fontSize: 12 },
+  seriesAddBtn:        { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  seriesAddBtnText:    { color: '#fff', fontWeight: '800', fontSize: 12 },
+  seriesImportBtn:     { borderWidth: 1.5, borderColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  seriesImportBtnText: { color: '#0c2d75', fontWeight: '700', fontSize: 12 },
 
   seriesEmpty:     { alignItems: 'center', paddingVertical: 16, gap: 8 },
   seriesEmptyIcon: { fontSize: 28 },
@@ -244,4 +373,16 @@ const s = StyleSheet.create({
   toggleSub:      { fontSize: 12, marginTop: 2 },
 
   version: { textAlign: 'center', fontSize: 12, marginTop: 32 },
+});
+
+const lm = StyleSheet.create({
+  overlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', paddingHorizontal: 28 },
+  sheet:     { backgroundColor: '#0c2d75', borderRadius: 22, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  icon:      { fontSize: 36, marginBottom: 12 },
+  title:     { fontSize: 18, fontWeight: '900', color: '#fff', marginBottom: 10, textAlign: 'center' },
+  body:      { fontSize: 14, color: 'rgba(255,255,255,0.75)', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  buyBtn:    { backgroundColor: '#1565C0', borderRadius: 14, paddingHorizontal: 28, paddingVertical: 13, width: '100%', alignItems: 'center', marginBottom: 10 },
+  buyBtnText:{ fontSize: 15, fontWeight: '800', color: '#fff' },
+  cancelBtn: { paddingVertical: 10 },
+  cancelText:{ fontSize: 14, color: 'rgba(255,255,255,0.5)', fontWeight: '600' },
 });

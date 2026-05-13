@@ -3,6 +3,81 @@ import { OpeningStyle } from '../types';
 import { supabase } from '../lib/supabase';
 import { getCurrentIds } from './database';
 
+// ─── Cloud sync impostazioni (debounced) ─────────────────────────────────────
+
+const SETTINGS_MIGRATED_KEY = '@settings_migrated_v1';
+
+// Chiavi AsyncStorage da sincronizzare con company_settings (literal per evitare TDZ)
+const SYNC_KEYS = [
+  '@measure_tolerance_by_type',
+  '@measure_bar_length', '@measure_kerf_90', '@measure_safety_margin', '@measure_slat_pitch',
+  '@measure_zoccolo_h', '@measure_fascia_h', '@measure_anta_reduction', '@measure_anta_top_rail',
+  '@measure_riattestattura', '@measure_dim_mode',
+  '@measure_price_interni', '@measure_price_persiane', '@measure_price_controtelai',
+  '@measure_price_zanzariere', '@measure_price_monoblocchi',
+  '@measure_detailed_prices', '@measure_presets', '@measure_default_series_id',
+] as const;
+
+let _flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function scheduleSettingsSync(): void {
+  if (_flushTimer) clearTimeout(_flushTimer);
+  _flushTimer = setTimeout(syncAllSettingsToCloud, 1500);
+}
+
+export async function syncAllSettingsToCloud(): Promise<void> {
+  _flushTimer = null;
+  const ids = await getCurrentIds();
+  if (!ids) return;
+  try {
+    const pairs = await AsyncStorage.multiGet([...SYNC_KEYS]);
+    const settings: Record<string, string> = {};
+    for (const [k, v] of pairs) { if (v != null) settings[k] = v; }
+    if (Object.keys(settings).length === 0) return;
+    await supabase.from('company_settings').upsert({
+      company_id: ids.companyId,
+      settings,
+      updated_at: new Date().toISOString(),
+    });
+  } catch {}
+}
+
+/** Carica le impostazioni dal cloud e le applica localmente (richiamata al login). */
+export async function loadSettingsFromCloud(): Promise<void> {
+  const ids = await getCurrentIds();
+  if (!ids) return;
+  try {
+    const { data, error } = await supabase
+      .from('company_settings')
+      .select('settings')
+      .eq('company_id', ids.companyId)
+      .single();
+    if (error || !data?.settings) return;
+    const settings = data.settings as Record<string, string>;
+    const pairs = Object.entries(settings).filter(([, v]) => v != null) as [string, string][];
+    if (pairs.length > 0) await AsyncStorage.multiSet(pairs);
+  } catch {}
+}
+
+/** Migrazione locale → cloud (una tantum per dispositivo, solo se cloud è vuoto). */
+export async function migrateSettingsToSupabase(): Promise<void> {
+  const already = await AsyncStorage.getItem(SETTINGS_MIGRATED_KEY);
+  if (already) return;
+  const ids = await getCurrentIds();
+  if (!ids) return;
+  try {
+    const { data } = await supabase
+      .from('company_settings')
+      .select('settings')
+      .eq('company_id', ids.companyId)
+      .single();
+    if (!data?.settings || Object.keys(data.settings).length === 0) {
+      await syncAllSettingsToCloud();
+    }
+  } catch {}
+  await AsyncStorage.setItem(SETTINGS_MIGRATED_KEY, '1');
+}
+
 export const KEYS = {
   ROLE:            '@measure_user_role',
   TOLERANCE_W:     '@measure_tolerance_w',
@@ -74,6 +149,7 @@ export async function getToleranceByType(): Promise<ToleranceByType> {
 
 export async function setToleranceByType(t: ToleranceByType): Promise<void> {
   await AsyncStorage.setItem(TOL_KEY, JSON.stringify(t));
+  scheduleSettingsSync();
 }
 
 /** Ritorna la coppia W/H corretta per lo stile apertura dato */
@@ -103,6 +179,7 @@ export async function getToleranceW(): Promise<number> {
 }
 export async function setToleranceW(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.TOLERANCE_W, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getToleranceH(): Promise<number> {
@@ -113,6 +190,7 @@ export async function getToleranceH(): Promise<number> {
 }
 export async function setToleranceH(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.TOLERANCE_H, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getRiattestattura(): Promise<number> {
@@ -123,6 +201,7 @@ export async function getRiattestattura(): Promise<number> {
 }
 export async function setRiattestattura(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.RIATTESTATTURA, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getBarLength(): Promise<number> {
@@ -133,6 +212,7 @@ export async function getBarLength(): Promise<number> {
 }
 export async function setBarLength(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.BAR_LENGTH, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getKerf90(): Promise<number> {
@@ -143,6 +223,7 @@ export async function getKerf90(): Promise<number> {
 }
 export async function setKerf90(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.KERF_90, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getSafetyMargin(): Promise<number> {
@@ -153,6 +234,7 @@ export async function getSafetyMargin(): Promise<number> {
 }
 export async function setSafetyMargin(pct: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.SAFETY_MARGIN, String(pct));
+  scheduleSettingsSync();
 }
 
 export async function getSlatPitch(): Promise<number> {
@@ -163,6 +245,7 @@ export async function getSlatPitch(): Promise<number> {
 }
 export async function setSlatPitch(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.SLAT_PITCH, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getZoccoloH(): Promise<number> {
@@ -173,6 +256,7 @@ export async function getZoccoloH(): Promise<number> {
 }
 export async function setZoccoloH(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.ZOCCOLO_H, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getFasciaH(): Promise<number> {
@@ -183,6 +267,7 @@ export async function getFasciaH(): Promise<number> {
 }
 export async function setFasciaH(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.FASCIA_H, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getDimMode(): Promise<'taglio' | 'luce'> {
@@ -191,6 +276,7 @@ export async function getDimMode(): Promise<'taglio' | 'luce'> {
 }
 export async function setDimMode(mode: 'taglio' | 'luce'): Promise<void> {
   await AsyncStorage.setItem(KEYS.DIM_MODE, mode);
+  scheduleSettingsSync();
 }
 
 export async function getAntaReduction(): Promise<number> {
@@ -201,6 +287,7 @@ export async function getAntaReduction(): Promise<number> {
 }
 export async function setAntaReduction(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.ANTA_REDUCTION, String(mm));
+  scheduleSettingsSync();
 }
 
 export async function getAntaTopRail(): Promise<number> {
@@ -211,6 +298,7 @@ export async function getAntaTopRail(): Promise<number> {
 }
 export async function setAntaTopRail(mm: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.ANTA_TOP_RAIL, String(mm));
+  scheduleSettingsSync();
 }
 
 const parsePrice = (raw: string | null): number => {
@@ -237,6 +325,7 @@ export async function getPrices(): Promise<PriceConfig> {
 }
 export async function setPrice(key: keyof PriceConfig, value: number): Promise<void> {
   await AsyncStorage.setItem(KEY_MAP[key], String(value));
+  scheduleSettingsSync();
 }
 
 export function priceForStyle(style: OpeningStyle | null, prices: PriceConfig): number {
@@ -264,6 +353,7 @@ export async function getDetailedPrices(): Promise<DetailedPriceConfig> {
 
 export async function setDetailedPrices(prices: DetailedPriceConfig): Promise<void> {
   await AsyncStorage.setItem(DETAILED_PRICES_KEY, JSON.stringify(prices));
+  scheduleSettingsSync();
 }
 
 /** Ritorna il prezzo €/m² per lo stile e numero ante dato.
@@ -291,8 +381,12 @@ export const PRICE_SECTIONS: {
       { key: 'window_fixed',       label: 'Fissa' },
       { key: 'window_single_1',    label: 'Battente 1 anta' },
       { key: 'window_double_2',    label: 'Battente 2 ante' },
-      { key: 'window_tilt_turn_1', label: 'Ribalta 1 anta' },
-      { key: 'window_tilt_turn_2', label: 'Ribalta 2 ante' },
+      { key: 'window_double_3',    label: 'Battente 3 ante' },
+      { key: 'window_double_4',    label: 'Battente 4 ante' },
+      { key: 'window_tilt_turn_1', label: 'Vasistas/Ribalta 1 anta' },
+      { key: 'window_tilt_turn_2', label: 'Vasistas/Ribalta 2 ante' },
+      { key: 'window_tilt_turn_3', label: 'Vasistas/Ribalta 3 ante' },
+      { key: 'window_tilt_turn_4', label: 'Vasistas/Ribalta 4 ante' },
       { key: 'window_sliding_2',   label: 'Scorrevole 2 ante' },
       { key: 'window_sliding_3',   label: 'Scorrevole 3 ante' },
       { key: 'window_sliding_4',   label: 'Scorrevole 4 ante' },
@@ -301,19 +395,20 @@ export const PRICE_SECTIONS: {
   {
     label: '🚪 Porte', color: '#4A148C',
     items: [
-      { key: 'door_single_1',   label: 'Singola 1 anta' },
-      { key: 'door_single_2',   label: 'Singola 2 ante' },
+      { key: 'door_single_1',   label: 'Battente 1 anta' },
+      { key: 'door_single_2',   label: 'Battente 2 ante' },
       { key: 'door_sliding_2',  label: 'Scorrevole 2 ante' },
       { key: 'door_sliding_3',  label: 'Scorrevole 3 ante' },
-      { key: 'door_entrance_1', label: 'Blindata 1 anta' },
+      { key: 'door_sliding_4',  label: 'Scorrevole 4 ante' },
+      { key: 'door_entrance_1', label: 'Ingresso/Blindata 1 anta' },
+      { key: 'door_entrance_2', label: 'Ingresso/Blindata 2 ante' },
     ],
   },
   {
-    label: '🪟 Persiane', color: '#1B5E20',
+    label: '🏠 Persiane', color: '#1B5E20',
     items: [
       { key: 'shutter_single_1', label: '1 anta' },
-      { key: 'shutter_single_2', label: '2 ante' },
-      { key: 'shutter_double_2', label: 'Porta-finestra 2 ante' },
+      { key: 'shutter_double_2', label: '2 ante' },
       { key: 'shutter_double_3', label: '3 ante' },
       { key: 'shutter_double_4', label: '4 ante' },
     ],
@@ -375,10 +470,11 @@ export interface CatalogPiece {
 
 // Una variante = tabella pezzi per un numero specifico di ante
 export interface CatalogVariant {
-  id:          string;
-  leafCount:   number;       // numero ante: 1, 2, 3, 4, 6, 8...
-  pieces:      CatalogPiece[];
-  telaiOffset: number;       // aletta telaio in mm (aggiunta alla misura taglio per traversi e montanti)
+  id:           string;
+  leafCount:    number;       // numero ante: 1, 2, 3, 4, 6, 8...
+  pieces:       CatalogPiece[];
+  telaiOffset:  number;       // aletta telaio in mm (aggiunta alla misura taglio per traversi e montanti)
+  articleCodes?: Partial<Record<'telaio' | 'anta' | 'fermavetro' | 'riporto', string>>; // codice articolo per profilato
 }
 
 export interface CatalogSeries {
@@ -396,6 +492,7 @@ export async function getDefaultCatalogSeriesId(): Promise<string | null> {
 export async function setDefaultCatalogSeriesId(id: string | null): Promise<void> {
   if (id) await AsyncStorage.setItem(DEFAULT_SERIES_KEY, id);
   else await AsyncStorage.removeItem(DEFAULT_SERIES_KEY);
+  scheduleSettingsSync();
 }
 
 // ─── Cache in memoria per le serie ───────────────────────────────────────────
@@ -443,14 +540,20 @@ export async function getCatalogSeries(): Promise<CatalogSeries[]> {
   if (_seriesCache !== null) return _seriesCache;
 
   const ids = await getCurrentIds();
-  if (!ids) return _localGet();
+  if (!ids) {
+    _seriesCache = await _localGet();
+    return _seriesCache;
+  }
 
   const { data, error } = await supabase
     .from('catalog_series')
     .select('data')
     .eq('company_id', ids.companyId);
 
-  if (error || !data) return _localGet();
+  if (error || !data) {
+    _seriesCache = await _localGet();
+    return _seriesCache;
+  }
 
   _seriesCache = data.map(row => row.data as CatalogSeries);
   return _seriesCache;
@@ -610,6 +713,7 @@ export async function getPresets(): Promise<SettingsPreset[]> {
 
 export async function savePresets(presets: SettingsPreset[]): Promise<void> {
   await AsyncStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+  scheduleSettingsSync();
 }
 
 export async function addPreset(preset: SettingsPreset): Promise<void> {

@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
   TouchableOpacity, Modal, Pressable,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as AppAlert from '../components/AppAlert';
@@ -20,8 +19,12 @@ import {
 import {
   calculateCuttingList, calculateCatalogCuttingList, openingsWithoutSeries,
   CuttingListResult, CuttingProfile, CuttingBin, CuttingBinPiece,
+  PieceGroup, MIN_REMNANT_MM,
 } from '../utils/calculateMaterials';
 import { generateCuttingListHTML } from '../utils/pdfExport';
+import { saveCuttingComplete } from '../storage/statusTracker';
+import { getMagazzino, saveMagazzino, emptyItem } from '../storage/magazzino';
+import { getCuttingProgress, saveCuttingProgress, clearCuttingProgress } from '../storage/cuttingProgress';
 
 type Route = RouteProp<RootStackParamList, 'CuttingList'>;
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'CuttingList'>;
@@ -48,25 +51,48 @@ export default function CuttingListScreen() {
   const [showPdfModal,   setShowPdfModal]   = useState(false);
   const [pdfBusy,        setPdfBusy]        = useState(false);
   const [checked,        setChecked]        = useState<Set<string>>(new Set());
+  const [magazzinoMatch, setMagazzinoMatch] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(`@cutting_progress_${projectId}`).then(raw => {
-      if (raw) setChecked(new Set(JSON.parse(raw)));
+    getCuttingProgress(projectId).then(keys => {
+      if (keys.length > 0) setChecked(new Set(keys));
     });
   }, [projectId]);
+
+  const totalPieces = useMemo(() => {
+    let n = 0;
+    const count = (r: CuttingListResult | null) => {
+      if (!r) return;
+      for (const p of [...r.profiles45, ...r.profiles90])
+        for (const bin of p.bins) n += bin.pieces.length;
+    };
+    count(result);
+    count(catalogResult);
+    return n;
+  }, [result, catalogResult]);
 
   const toggleCheck = useCallback((key: string) => {
     setChecked(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
-      AsyncStorage.setItem(`@cutting_progress_${projectId}`, JSON.stringify([...next]));
+      saveCuttingProgress(projectId, [...next]);
+      const nowComplete  = totalPieces > 0 && next.size >= totalPieces;
+      const wasComplete  = totalPieces > 0 && prev.size >= totalPieces;
+      saveCuttingComplete(projectId, nowComplete);
+      if (nowComplete && !wasComplete) {
+        // snapshot refs so the closure stays stable
+        const catRes = catalogResultRef.current;
+        const series = catalogSeriesRef.current;
+        if (catRes && series) autoAddOffcutsToMagazzino(catRes, series);
+      }
       return next;
     });
-  }, [projectId]);
+  }, [projectId, totalPieces]);
 
   const resetProgress = useCallback(() => {
     setChecked(new Set());
-    AsyncStorage.removeItem(`@cutting_progress_${projectId}`);
+    clearCuttingProgress(projectId);
+    saveCuttingComplete(projectId, false);
   }, [projectId]);
 
   const loadAndCalculate = useCallback(async () => {
@@ -84,9 +110,25 @@ export default function CuttingListScreen() {
     };
     setConfig({ barLength: barLen, riattestattura: riatt, kerf90: kerf, antaReduction: antaRed });
 
+
     // Serie catalogo
     const series = p.catalogSeriesId ? allSeries.find(s => s.id === p.catalogSeriesId) ?? null : null;
     setCatalogSeries(series);
+
+    // Magazzino match
+    if (series) {
+      const magItems = await getMagazzino();
+      const seriesCodes = new Set<string>();
+      for (const v of series.variants)
+        for (const code of Object.values(v.articleCodes ?? {}))
+          if (code?.trim()) seriesCodes.add(code.trim().toLowerCase());
+      setMagazzinoMatch(
+        seriesCodes.size > 0 &&
+        magItems.some(m => m.articleCode && seriesCodes.has(m.articleCode.trim().toLowerCase()))
+      );
+    } else {
+      setMagazzinoMatch(false);
+    }
 
     if (series) {
       // Catalogo per aperture eligibili, default per il resto
@@ -110,10 +152,14 @@ export default function CuttingListScreen() {
     await loadAndCalculate();
   };
 
-  const projectRef = useRef(project);
-  const resultRef  = useRef(result);
-  projectRef.current = project;
-  resultRef.current  = result;
+  const projectRef       = useRef(project);
+  const resultRef        = useRef(result);
+  const catalogResultRef = useRef(catalogResult);
+  const catalogSeriesRef = useRef(catalogSeries);
+  projectRef.current       = project;
+  resultRef.current        = result;
+  catalogResultRef.current = catalogResult;
+  catalogSeriesRef.current = catalogSeries;
 
   const handlePdfAction = useCallback(async (action: 'share' | 'save') => {
     const p = projectRef.current;
@@ -160,56 +206,27 @@ export default function CuttingListScreen() {
     <>
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
-      {/* Banner serie attiva */}
-      <View style={{ backgroundColor: seriesBanner.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Text style={{ fontSize: 11, color: seriesBanner.color, fontWeight: '800' }}>●</Text>
-        <Text style={{ fontSize: 12, color: seriesBanner.color, fontWeight: '700', flex: 1 }}>{seriesBanner.label}</Text>
-        {!catalogSeries && <Text style={{ fontSize: 10, color: '#78909C' }}>Assegna una serie dal progetto</Text>}
-      </View>
-
-      {/* Preset strip */}
-      {presets.length > 0 && (
-        <ScrollView
-          horizontal showsHorizontalScrollIndicator={false}
-          style={ps.bar} contentContainerStyle={ps.scroll}
-        >
-          {presets.map(p => (
-            <TouchableOpacity
-              key={p.id}
-              style={[ps.chip, activeId === p.id && ps.chipActive]}
-              onPress={() => handleSelectPreset(p)}
-            >
-              <Text style={[ps.chipText, activeId === p.id && ps.chipTextActive]}>{p.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
-
-      {/* Sviluppo materiale (scorciatoia) */}
-      <TouchableOpacity
-        style={s.materialsBtn}
-        onPress={() => navigation.navigate('Materials', { projectId })}
-      >
-        <Text style={s.materialsBtnIcon}>📊</Text>
-        <View style={s.materialsBtnText}>
-          <Text style={s.materialsBtnTitle}>Sviluppo materiale</Text>
-          <Text style={s.materialsBtnSub}>Quante barre ordinare per questo rilievo</Text>
-        </View>
-        <Text style={s.materialsBtnArrow}>›</Text>
-      </TouchableOpacity>
-
-      {/* Header */}
+      {/* ── Header card ── */}
       <View style={s.header}>
-        <Text style={s.projectName}>{project.name}</Text>
-        {!!project.clientName && <Text style={s.projectSub}>{project.clientName}</Text>}
-        <Text style={s.projectSub}>Barre da {config.barLength} mm · Rid. anta: {config.antaReduction} mm</Text>
-      </View>
+        {/* Progetto */}
+        <View style={s.headerTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.projectName}>{project.clientName || project.name}</Text>
+            {!!project.clientName && <Text style={s.projectSub}>{project.name}</Text>}
+            <Text style={s.projectParams}>Barre {config.barLength} mm · Riatt. {config.riattestattura} mm</Text>
+          </View>
+          {/* Badge serie */}
+          <View style={[s.seriesBadge, { backgroundColor: seriesBanner.color }]}>
+            <Text style={s.seriesBadgeText}>{catalogSeries ? catalogSeries.name : 'Standard'}</Text>
+          </View>
+        </View>
 
-      {/* Disclaimer */}
-      <View style={s.disclaimer}>
-        <Text style={s.disclaimerText}>
-          ⚠️ I dati sono stime basate sulle misure rilevate. Il numero di barre e i tagli possono variare del ±5–10% rispetto al reale in base agli accoppiamenti effettivi e alle tolleranze in cantiere. Verificare sempre prima dell'ordine.
-        </Text>
+        {/* Bottone sviluppo */}
+        <TouchableOpacity style={s.materialsBtn} onPress={() => navigation.navigate('Materials', { projectId })} activeOpacity={0.8}>
+          <Text style={s.materialsBtnIcon}>📊</Text>
+          <Text style={s.materialsBtnTitle}>Vai allo sviluppo materiale</Text>
+          <Text style={s.materialsBtnArrow}>›</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Legenda */}
@@ -219,6 +236,27 @@ export default function CuttingListScreen() {
           Ogni riga è una barra da tagliare. I numeri indicano la lunghezza dei pezzi nell'ordine in cui conviene tagliarli (dal più lungo al più corto). L'avanzo in grigio è lo scarto.
         </Text>
       </View>
+
+      {/* Taglio completo banner */}
+      {totalPieces > 0 && checked.size >= totalPieces && (
+        <View style={s.completeBanner}>
+          <Text style={s.completeBannerIcon}>✓</Text>
+          <Text style={s.completeBannerText}>Taglio completo!</Text>
+          <TouchableOpacity onPress={resetProgress} style={s.completeBannerReset}>
+            <Text style={s.completeBannerResetText}>Azzera</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Magazzino hint */}
+      {magazzinoMatch && (
+        <View style={s.magBanner}>
+          <Text style={s.magBannerIcon}>📦</Text>
+          <Text style={s.magBannerText}>
+            Hai avanzi in magazzino per alcuni profili di questa serie — verifica la compatibilità del colore prima di ordinare.
+          </Text>
+        </View>
+      )}
 
       {!hasData && (
         <View style={s.empty}>
@@ -301,7 +339,6 @@ export default function CuttingListScreen() {
     <Modal visible={showPdfModal} transparent animationType="fade" onRequestClose={() => setShowPdfModal(false)}>
       <Pressable style={pdfM.overlay} onPress={() => !pdfBusy && setShowPdfModal(false)}>
         <Pressable style={pdfM.sheet} onPress={() => {}}>
-          <View style={pdfM.handle}/>
           <Text style={pdfM.title}>Esporta distinta di taglio</Text>
           {pdfBusy ? (
             <View style={{ alignItems: 'center', paddingVertical: 24 }}>
@@ -334,6 +371,62 @@ export default function CuttingListScreen() {
     </Modal>
     </>
   );
+}
+
+// ─── Auto-populate magazzino on cutting complete ──────────────────────────────
+
+async function autoAddOffcutsToMagazzino(
+  cuttingResult: CuttingListResult,
+  series: CatalogSeries,
+) {
+  // Map PieceGroup → article code (first variant that declares it wins)
+  const groupToCode: Partial<Record<PieceGroup, string>> = {};
+  for (const variant of series.variants) {
+    for (const [grp, code] of Object.entries(variant.articleCodes ?? {})) {
+      if (code?.trim() && !groupToCode[grp as PieceGroup]) {
+        groupToCode[grp as PieceGroup] = code.trim();
+      }
+    }
+  }
+
+  // Collect offcuts ≥ MIN_REMNANT_MM per article code
+  // If no article code configured for the group, use the profile label as key
+  const offcutsByCode: Record<string, { offcuts: number[]; label: string }> = {};
+  for (const profile of [...cuttingResult.profiles45, ...cuttingResult.profiles90]) {
+    if (!profile.group) continue;
+    const code = groupToCode[profile.group] ?? profile.label; // fallback to "Telaio", "Anta" etc.
+    for (const bin of profile.bins) {
+      if (bin.remaining >= MIN_REMNANT_MM) {
+        if (!offcutsByCode[code]) offcutsByCode[code] = { offcuts: [], label: profile.label };
+        offcutsByCode[code].offcuts.push(Math.round(bin.remaining));
+      }
+    }
+  }
+
+  if (!Object.keys(offcutsByCode).length) return;
+
+  const magItems = await getMagazzino();
+  const updated  = [...magItems];
+
+  for (const [code, { offcuts: newOffcuts, label: profileLabel }] of Object.entries(offcutsByCode)) {
+    const idx = updated.findIndex(
+      m => m.articleCode.trim().toLowerCase() === code.toLowerCase(),
+    );
+    if (idx >= 0) {
+      updated[idx] = {
+        ...updated[idx],
+        offcuts: [...updated[idx].offcuts, ...newOffcuts].sort((a, b) => b - a),
+      };
+    } else {
+      const item = emptyItem();
+      item.articleCode = code;
+      item.label       = `${profileLabel} · ${series.name}`;
+      item.offcuts     = [...newOffcuts].sort((a, b) => b - a);
+      updated.push(item);
+    }
+  }
+
+  await saveMagazzino(updated);
 }
 
 // ─── ProfileBlock ─────────────────────────────────────────────────────────────
@@ -471,16 +564,24 @@ const s = StyleSheet.create({
   content:     { padding: 16 },
   loading:     { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
-    backgroundColor: '#1565C0', borderRadius: 14,
-    padding: 18, marginBottom: 16,
+    backgroundColor: '#1565C0', borderRadius: 16,
+    padding: 16, marginBottom: 14,
+    elevation: 4, shadowColor: '#1a3a5c', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
-  projectName: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  projectSub:  { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 },
-  disclaimer: {
-    backgroundColor: '#FFF8E1', borderRadius: 10, padding: 12,
-    marginBottom: 12, borderWidth: 1, borderColor: '#FFE082',
+  headerTop:    { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  projectName:  { color: '#fff', fontSize: 17, fontWeight: '800' },
+  projectSub:   { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 },
+  projectParams:{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
+  seriesBadge:  { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start', maxWidth: 120 },
+  seriesBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  materialsBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, gap: 10,
   },
-  disclaimerText: { fontSize: 11, color: '#6D4C00', lineHeight: 17 },
+  materialsBtnIcon:  { fontSize: 18 },
+  materialsBtnTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#fff' },
+  materialsBtnArrow: { fontSize: 18, color: 'rgba(255,255,255,0.8)', fontWeight: '700' },
   legendCard: {
     backgroundColor: '#EBF3FF', borderRadius: 12, padding: 14,
     marginBottom: 16, borderWidth: 1, borderColor: '#BBDEFB',
@@ -489,18 +590,27 @@ const s = StyleSheet.create({
   legendBody:  { fontSize: 12, color: '#455A64', lineHeight: 18 },
   empty:       { alignItems: 'center', padding: 32 },
   emptyText:   { color: '#AAA', fontSize: 14, textAlign: 'center' },
-  materialsBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 14,
-    padding: 16, marginBottom: 12,
-    borderWidth: 1.5, borderColor: '#2E7D32',
-    elevation: 2, gap: 12,
+  completeBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#E8F5E9', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14,
+    borderWidth: 1, borderColor: '#A5D6A7',
   },
-  materialsBtnIcon:  { fontSize: 22 },
-  materialsBtnText:  { flex: 1 },
-  materialsBtnTitle: { fontSize: 15, fontWeight: '800', color: '#2E7D32' },
-  materialsBtnSub:   { fontSize: 12, color: '#70A070', marginTop: 2 },
-  materialsBtnArrow: { fontSize: 22, color: '#2E7D32', fontWeight: '700' },
+  completeBannerIcon: { fontSize: 20, color: '#2E7D32' },
+  completeBannerText: { flex: 1, fontSize: 15, fontWeight: '800', color: '#2E7D32' },
+  completeBannerReset: {
+    backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: '#A5D6A7',
+  },
+  completeBannerResetText: { fontSize: 11, fontWeight: '700', color: '#2E7D32' },
+  magBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: '#FFF8E1', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14,
+    borderWidth: 1, borderColor: '#FFE082',
+  },
+  magBannerIcon: { fontSize: 18, marginTop: 1 },
+  magBannerText: { flex: 1, fontSize: 12, color: '#5D4037', lineHeight: 18, fontWeight: '500' },
 });
 
 const sec = StyleSheet.create({
@@ -595,8 +705,8 @@ const warn = StyleSheet.create({
 });
 
 const pdfM = StyleSheet.create({
-  overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet:      { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 36 },
+  overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 24 },
+  sheet:      { backgroundColor: '#fff', borderRadius: 20, padding: 24 },
   handle:     { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 18 },
   title:      { fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 16 },
   btn:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#1565C0', borderRadius: 14, padding: 16, marginBottom: 10 },

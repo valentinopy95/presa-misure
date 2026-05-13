@@ -40,13 +40,13 @@ export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
   const selectedSeries = allSeries.find(s => s.id === seriesId);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={[styles.sheet, { paddingBottom: Math.max(36, insets.bottom + 20) }]}>
-          <View style={styles.handle} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.sheet, { paddingBottom: Math.max(24, insets.bottom + 12) }]}>
 
           <LinearGradient
             colors={['#0d47a1', '#1976d2']}
@@ -131,10 +131,9 @@ export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
       </KeyboardAvoidingView>
 
       {/* Picker serie */}
-      <Modal visible={showPicker} transparent animationType="slide" onRequestClose={() => setShowPicker(false)}>
+      <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
         <Pressable style={styles.pickerOverlay} onPress={() => setShowPicker(false)}>
-          <Pressable style={styles.pickerSheet}>
-            <View style={styles.handle} />
+          <Pressable style={styles.pickerSheet} onPress={() => {}}>
             <Text style={styles.pickerTitle}>Serie catalogo</Text>
             <TouchableOpacity
               style={[styles.pickerRow, !seriesId && styles.pickerRowActive]}
@@ -164,10 +163,10 @@ export default function NewProjectModal({ visible, onClose, onCreate }: Props) {
 }
 
 const styles = StyleSheet.create({
-  overlay:    { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10,20,40,0.55)' },
+  overlay:    { flex: 1, justifyContent: 'center', paddingHorizontal: 24, backgroundColor: 'rgba(10,20,40,0.55)' },
   sheet: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    borderRadius: 20,
     overflow: 'hidden', maxHeight: '90%',
   },
   handle: {
@@ -204,10 +203,10 @@ const styles = StyleSheet.create({
   createBtnGrad:    { paddingVertical: 15, alignItems: 'center' },
   createText:       { fontSize: 15, color: '#0c2d75', fontWeight: '800', letterSpacing: 0.3 },
 
-  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', paddingHorizontal: 24 },
   pickerSheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    padding: 20, paddingBottom: 40,
+    backgroundColor: '#fff', borderRadius: 20,
+    padding: 20, maxHeight: '80%',
   },
   pickerTitle: {
     fontSize: 13, fontWeight: '900', color: '#1a2a3a',

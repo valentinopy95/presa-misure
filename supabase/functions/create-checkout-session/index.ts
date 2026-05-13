@@ -24,20 +24,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Non autenticato' }), { status: 401, headers: CORS });
     }
 
-    const { plan, period } = await req.json() as { plan: 'base' | 'pro'; period: 'monthly' | 'yearly' };
-
-    // Price IDs configurati come env vars in Supabase
-    const PRICE_IDS: Record<string, string> = {
-      base_monthly: Deno.env.get('STRIPE_PRICE_BASE_MONTHLY')!,
-      base_yearly:  Deno.env.get('STRIPE_PRICE_BASE_YEARLY')!,
-      pro_monthly:  Deno.env.get('STRIPE_PRICE_PRO_MONTHLY')!,
-      pro_yearly:   Deno.env.get('STRIPE_PRICE_PRO_YEARLY')!,
-    };
-
-    const priceId = PRICE_IDS[`${plan}_${period}`];
-    if (!priceId) {
-      return new Response(JSON.stringify({ error: 'Piano non valido' }), { status: 400, headers: CORS });
-    }
+    const body = await req.json() as { plan?: 'base' | 'pro'; period?: 'monthly' | 'yearly'; type?: string };
 
     // Azienda dell'utente
     const { data: profile } = await supabase
@@ -71,10 +58,51 @@ Deno.serve(async (req) => {
         .eq('id', profile.company_id);
     }
 
-    // Crea sessione checkout
+    // ── Slot extra (serie o utenti) ────────────────────────────────────────────
+    if (body.type === 'extra_series_slot' || body.type === 'extra_user_slot') {
+      const priceId = body.type === 'extra_series_slot'
+        ? Deno.env.get('STRIPE_PRICE_EXTRA_SERIES_SLOT')!
+        : Deno.env.get('STRIPE_PRICE_EXTRA_USER_SLOT')!;
+
+      if (!priceId) {
+        return new Response(JSON.stringify({ error: 'Prezzo non configurato' }), { status: 400, headers: CORS });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer:   customerId,
+        mode:       'subscription',
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: 'presamisure://payment-success',
+        cancel_url:  'presamisure://payment-cancelled',
+        metadata: { company_id: profile.company_id, addon_type: body.type },
+        subscription_data: {
+          metadata: { company_id: profile.company_id, addon_type: body.type },
+        },
+      });
+
+      return new Response(JSON.stringify({ url: session.url }), {
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── Piano base/pro ─────────────────────────────────────────────────────────
+    const { plan, period } = body;
+
+    const PRICE_IDS: Record<string, string> = {
+      base_monthly: Deno.env.get('STRIPE_PRICE_BASE_MONTHLY')!,
+      base_yearly:  Deno.env.get('STRIPE_PRICE_BASE_YEARLY')!,
+      pro_monthly:  Deno.env.get('STRIPE_PRICE_PRO_MONTHLY')!,
+      pro_yearly:   Deno.env.get('STRIPE_PRICE_PRO_YEARLY')!,
+    };
+
+    const priceId = PRICE_IDS[`${plan}_${period}`];
+    if (!priceId) {
+      return new Response(JSON.stringify({ error: 'Piano non valido' }), { status: 400, headers: CORS });
+    }
+
     const session = await stripe.checkout.sessions.create({
-      customer:  customerId,
-      mode:      'subscription',
+      customer:   customerId,
+      mode:       'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: 'presamisure://payment-success',
       cancel_url:  'presamisure://payment-cancelled',

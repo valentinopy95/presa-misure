@@ -13,7 +13,9 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import * as AppAlert from './src/components/AppAlert';
 import { migrateLocalToSupabase, clearDbCache } from './src/storage/database';
-import { migrateSeriesToSupabase, clearSeriesCache } from './src/storage/settings';
+import { migrateSeriesToSupabase, migrateSettingsToSupabase, loadSettingsFromCloud, clearSeriesCache } from './src/storage/settings';
+import { migrateMagazzinoToSupabase } from './src/storage/magazzino';
+import { migrateStatusToSupabase } from './src/storage/statusTracker';
 import { RootStackParamList } from './src/types';
 
 import SplashScreen            from './src/screens/SplashScreen';
@@ -38,6 +40,7 @@ import CuttingProjectsScreen   from './src/screens/CuttingProjectsScreen';
 import PaywallScreen           from './src/screens/PaywallScreen';
 import SeriesEditorScreen      from './src/screens/SeriesEditorScreen';
 import VariantEditorScreen     from './src/screens/VariantEditorScreen';
+import MagazzinoScreen         from './src/screens/MagazzinoScreen';
 import {
   SettingsTolleranzeScreen,
   SettingsParametriScreen,
@@ -97,6 +100,7 @@ function AppNavigator() {
         <Stack.Screen name="SettingsParametri"  component={SettingsParametriScreen}  options={{ title: 'Parametri barra' }}/>
         <Stack.Screen name="SettingsPrezzi"     component={SettingsPrezziScreen}     options={{ title: 'Prezzi al m²' }}/>
         <Stack.Screen name="SettingsGenerico"   component={SettingsGenericoScreen}   options={{ title: 'Calcolo generico' }}/>
+        <Stack.Screen name="Magazzino"          component={MagazzinoScreen}          options={{ title: 'Magazzino avanzi' }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -123,11 +127,15 @@ function AppContent() {
     return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, []);
 
-  // Migrazione locale → Supabase (una tantum al login)
+  // Migrazione locale → Supabase + caricamento impostazioni dal cloud (al login)
   useEffect(() => {
     if (session) {
       migrateLocalToSupabase();
       migrateSeriesToSupabase();
+      migrateMagazzinoToSupabase();
+      migrateStatusToSupabase();
+      // Prima migra le impostazioni locali, poi carica quelle del cloud
+      migrateSettingsToSupabase().then(loadSettingsFromCloud);
     }
   }, [session]);
 

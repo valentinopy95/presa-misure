@@ -22,6 +22,7 @@ import { generateHTML } from '../utils/pdfExport';
 import { getLogoBase64, sharePdf, saveToDevice } from '../utils/pdfActions';
 import * as AppAlert from '../components/AppAlert';
 import TourModal, { TourStep } from '../components/TourModal';
+import { getMagazzino } from '../storage/magazzino';
 
 type Route = RouteProp<RootStackParamList, 'Materials'>;
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'Materials'>;
@@ -50,6 +51,7 @@ export default function MaterialsScreen() {
   const [showPdfModal,   setShowPdfModal]   = useState(false);
   const [pdfBusy,        setPdfBusy]        = useState(false);
   const [extraBars,      setExtraBars]      = useState<Record<string, number>>({});
+  const [magazzinoMatch, setMagazzinoMatch] = useState(false);
 
   const projectRef   = useRef(project);
   const matConfigRef = useRef(matConfig);
@@ -108,6 +110,21 @@ export default function MaterialsScreen() {
     const series = p.catalogSeriesId ? allSeries.find(s => s.id === p.catalogSeriesId) ?? null : null;
     setCatalogSeries(series);
 
+    // Magazzino match
+    if (series) {
+      const magItems = await getMagazzino();
+      const seriesCodes = new Set<string>();
+      for (const v of series.variants)
+        for (const code of Object.values(v.articleCodes ?? {}))
+          if (code?.trim()) seriesCodes.add(code.trim().toLowerCase());
+      setMagazzinoMatch(
+        seriesCodes.size > 0 &&
+        magItems.some(m => m.articleCode && seriesCodes.has(m.articleCode.trim().toLowerCase()))
+      );
+    } else {
+      setMagazzinoMatch(false);
+    }
+
     if (series) {
       // Con serie: catalogo per le aperture eligibili, generico solo per il resto (zanzariere, ecc.)
       const catCutting = calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg, tolByType);
@@ -161,20 +178,6 @@ export default function MaterialsScreen() {
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <TourModal visible={tourVisible} steps={MATERIALS_TOUR} onClose={() => setTourVisible(false)}/>
 
-      {/* Banner serie attiva */}
-      {(() => {
-        const b = catalogSeries
-          ? { label: `Serie: ${catalogSeries.name}`, color: '#6A1B9A', bg: '#F3E5F5' }
-          : { label: 'Calcolo standard (nessuna serie)', color: '#37474F', bg: '#ECEFF1' };
-        return (
-          <View style={{ backgroundColor: b.bg, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 11, color: b.color, fontWeight: '800' }}>●</Text>
-            <Text style={{ fontSize: 12, color: b.color, fontWeight: '700', flex: 1 }}>{b.label}</Text>
-            {!catalogSeries && <Text style={{ fontSize: 10, color: '#78909C' }}>Assegna una serie dal progetto</Text>}
-          </View>
-        );
-      })()}
-
       {/* ── Preset strip ── */}
       {presets.length > 0 && (
         <ScrollView
@@ -193,34 +196,45 @@ export default function MaterialsScreen() {
         </ScrollView>
       )}
 
-      {/* ── Header ── */}
+      {/* ── Header card ── */}
       <View style={s.header}>
-        <Text style={s.projectName}>{project.name}</Text>
-        {!!project.clientName && <Text style={s.projectSub}>{project.clientName}</Text>}
-        <Text style={s.projectSub}>{validCount} aperture elaborate</Text>
+        <View style={s.headerTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.projectName}>{project.clientName || project.name}</Text>
+            {!!project.clientName && <Text style={s.projectSub}>{project.name}</Text>}
+            <Text style={s.projectParams}>{validCount} aperture elaborate</Text>
+          </View>
+          <View style={[s.seriesBadge, { backgroundColor: catalogSeries ? '#6A1B9A' : '#37474F' }]}>
+            <Text style={s.seriesBadgeText}>{catalogSeries ? catalogSeries.name : 'Standard'}</Text>
+          </View>
+        </View>
+        {validCount > 0 && (
+          <TouchableOpacity style={s.cuttingBtn} onPress={() => navigation.navigate('CuttingList', { projectId })} activeOpacity={0.8}>
+            <Text style={s.cuttingBtnIcon}>✂️</Text>
+            <Text style={s.cuttingBtnTitle}>Distinta di taglio</Text>
+            <Text style={s.cuttingBtnArrow}>›</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* ── Distinta di taglio (in alto) ── */}
-      {validCount > 0 && (
-        <TouchableOpacity
-          style={s.cuttingBtn}
-          onPress={() => navigation.navigate('CuttingList', { projectId })}
-        >
-          <Text style={s.cuttingBtnIcon}>✂️</Text>
-          <View style={s.cuttingBtnText}>
-            <Text style={s.cuttingBtnTitle}>Distinta di taglio</Text>
-            <Text style={s.cuttingBtnSub}>Come tagliare ogni barra, barra per barra</Text>
-          </View>
-          <Text style={s.cuttingBtnArrow}>›</Text>
-        </TouchableOpacity>
+      {/* Magazzino hint */}
+      {magazzinoMatch && (
+        <View style={s.magBanner}>
+          <Text style={{ fontSize: 16, marginTop: 1 }}>📦</Text>
+          <Text style={{ flex: 1, fontSize: 12, color: '#5D4037', lineHeight: 18, fontWeight: '500' }}>
+            Hai avanzi in magazzino per alcuni profili di questa serie — verifica la compatibilità del colore prima di ordinare.
+          </Text>
+        </View>
       )}
 
-      {/* ── Disclaimer ── */}
-      <View style={s.disclaimer}>
-        <Text style={s.disclaimerText}>
-          ⚠️ I dati sono stime basate sulle misure rilevate. Il numero di barre e i tagli possono variare del ±5–10% rispetto al reale in base agli accoppiamenti effettivi e alle tolleranze in cantiere. Verificare sempre prima dell'ordine.
-        </Text>
-      </View>
+      {/* ── Disclaimer — solo senza serie (calcolo generico) ── */}
+      {!catalogSeries && (
+        <View style={s.disclaimer}>
+          <Text style={s.disclaimerText}>
+            ⚠️ I dati sono stime basate sulle misure rilevate. Il numero di barre e i tagli possono variare del ±5–10% rispetto al reale in base agli accoppiamenti effettivi e alle tolleranze in cantiere. Verificare sempre prima dell'ordine.
+          </Text>
+        </View>
+      )}
 
       {/* ── Barre al limite ── */}
       {nearLimitProfiles.length > 0 && (
@@ -356,7 +370,6 @@ export default function MaterialsScreen() {
     <Modal visible={showPdfModal} transparent animationType="fade" onRequestClose={() => setShowPdfModal(false)}>
       <Pressable style={pdfM.overlay} onPress={() => !pdfBusy && setShowPdfModal(false)}>
         <Pressable style={pdfM.sheet} onPress={() => {}}>
-          <View style={pdfM.handle}/>
           <Text style={pdfM.title}>Esporta sviluppo materiale</Text>
           {pdfBusy ? (
             <View style={{ alignItems: 'center', paddingVertical: 24 }}>
@@ -431,11 +444,30 @@ const s = StyleSheet.create({
   content:     { padding: 16 },
   loading:     { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
-    backgroundColor: '#1565C0', borderRadius: 14,
-    padding: 18, marginBottom: 16,
+    backgroundColor: '#1565C0', borderRadius: 16,
+    padding: 16, marginBottom: 14,
+    elevation: 4, shadowColor: '#1a3a5c', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
-  projectName: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  projectSub:  { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2 },
+  headerTop:    { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  projectName:  { color: '#fff', fontSize: 17, fontWeight: '800' },
+  projectSub:   { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 },
+  projectParams:{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 },
+  seriesBadge:  { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start', maxWidth: 120 },
+  seriesBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  cuttingBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, gap: 10,
+  },
+  cuttingBtnIcon:  { fontSize: 18 },
+  cuttingBtnTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#fff' },
+  cuttingBtnArrow: { fontSize: 18, color: 'rgba(255,255,255,0.8)', fontWeight: '700' },
+  magBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: '#FFF8E1', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10,
+    borderWidth: 1, borderColor: '#FFE082',
+  },
   disclaimer: {
     backgroundColor: '#FFF8E1', borderRadius: 10, padding: 12,
     marginBottom: 12, borderWidth: 1, borderColor: '#FFE082',
@@ -443,18 +475,6 @@ const s = StyleSheet.create({
   disclaimerText: { fontSize: 11, color: '#6D4C00', lineHeight: 17 },
   empty:       { alignItems: 'center', padding: 32 },
   emptyText:   { color: '#AAA', fontSize: 14, textAlign: 'center', lineHeight: 22 },
-  cuttingBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 14,
-    padding: 16, marginBottom: 8,
-    borderWidth: 1.5, borderColor: '#1565C0',
-    elevation: 2, gap: 12,
-  },
-  cuttingBtnIcon:  { fontSize: 24 },
-  cuttingBtnText:  { flex: 1 },
-  cuttingBtnTitle: { fontSize: 15, fontWeight: '800', color: '#1565C0' },
-  cuttingBtnSub:   { fontSize: 12, color: '#7090C0', marginTop: 2 },
-  cuttingBtnArrow: { fontSize: 22, color: '#1565C0', fontWeight: '700' },
 });
 
 const ps = StyleSheet.create({
@@ -553,8 +573,8 @@ const off = StyleSheet.create({
 });
 
 const pdfM = StyleSheet.create({
-  overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet:      { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 36 },
+  overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 24 },
+  sheet:      { backgroundColor: '#fff', borderRadius: 20, padding: 24 },
   handle:     { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 18 },
   title:      { fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 16 },
   btn:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#1565C0', borderRadius: 14, padding: 16, marginBottom: 10 },

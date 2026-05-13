@@ -35,6 +35,8 @@ export interface Company {
   stripe_subscription_id: string | null;
   current_period_end:    string | null;
   logo_url:              string | null;
+  extra_series_slots:    number;
+  extra_user_slots:      number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -72,7 +74,7 @@ export async function fetchProfile(userId: string, timeoutMs = 10000): Promise<P
 export async function fetchCompany(companyId: string): Promise<Company | null> {
   const { data, error } = await supabase
     .from('companies')
-    .select('id, name, code, owner_id, plan, subscription_status, stripe_customer_id, stripe_subscription_id, current_period_end')
+    .select('id, name, code, owner_id, plan, subscription_status, stripe_customer_id, stripe_subscription_id, current_period_end, extra_series_slots, extra_user_slots')
     .eq('id', companyId)
     .single();
   if (error) return null;
@@ -85,22 +87,26 @@ export async function fetchCompany(companyId: string): Promise<Company | null> {
     stripe_subscription_id: c.stripe_subscription_id ?? null,
     current_period_end: c.current_period_end ?? null,
     logo_url: c.logo_url ?? null,
+    extra_series_slots: c.extra_series_slots ?? 0,
+    extra_user_slots:   c.extra_user_slots   ?? 0,
   } as Company;
 }
 
 /** Carica solo i campi piano/abbonamento di un'azienda */
-export async function fetchCompanyPlan(companyId: string): Promise<Pick<Company, 'plan' | 'subscription_status' | 'current_period_end'> | null> {
+export async function fetchCompanyPlan(companyId: string): Promise<Pick<Company, 'plan' | 'subscription_status' | 'current_period_end' | 'extra_series_slots' | 'extra_user_slots'> | null> {
   const { data, error } = await supabase
     .from('companies')
-    .select('plan, subscription_status, current_period_end')
+    .select('plan, subscription_status, current_period_end, extra_series_slots, extra_user_slots')
     .eq('id', companyId)
     .single();
   if (error) return null;
   const c = data as any;
   return {
-    plan: c.plan ?? 'free',
-    subscription_status: c.subscription_status ?? 'free',
-    current_period_end: c.current_period_end ?? null,
+    plan:                 c.plan                  ?? 'free',
+    subscription_status:  c.subscription_status   ?? 'free',
+    current_period_end:   c.current_period_end     ?? null,
+    extra_series_slots:   c.extra_series_slots     ?? 0,
+    extra_user_slots:     c.extra_user_slots       ?? 0,
   };
 }
 
@@ -291,4 +297,13 @@ export async function uploadCompanyLogo(companyId: string, base64: string, mimeT
 /** Revoca un invito */
 export async function revokeInvite(inviteId: string): Promise<void> {
   await supabase.from('company_invites').delete().eq('id', inviteId);
+}
+
+/** Conta gli utenti attivi in un'azienda */
+export async function getCompanyUserCount(companyId: string): Promise<number> {
+  const { count } = await supabase
+    .from('profiles')
+    .select('*', { count: 'exact', head: true })
+    .eq('company_id', companyId);
+  return count ?? 1;
 }

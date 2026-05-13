@@ -93,9 +93,10 @@ const TOL_TYPES: { key: keyof ToleranceByType; label: string; icon: string }[] =
 ];
 
 const TOL_TOUR: TourStep[] = [
-  { icon: '📐', title: 'Tolleranza da luce a taglio', body: 'La tolleranza è la differenza tra la misura del vano (luce) e la misura di taglio del profilo. Es.: vano 1200mm − 10mm = taglio 1190mm.', spot: null },
-  { icon: '🪟', title: 'Per tipologia', body: 'Ogni tipologia ha la sua tolleranza separata: finestre, porte, persiane e zanzariere possono richiedere scostamenti diversi in base al sistema.', spot: null },
-  { icon: '📏', title: 'L e H separati', body: 'Larghezza e altezza si configurano indipendentemente. La maggior parte dei sistemi usa la stessa tolleranza su entrambi gli assi, ma non è sempre così.', spot: null },
+  { icon: '📐', title: 'Tolleranza da luce a taglio', body: 'La tolleranza è la differenza tra la misura del vano (luce) e la misura di taglio del profilo. Es.: vano 1200 mm − 10 mm = taglio 1190 mm.', spot: null },
+  { icon: '🪟', title: 'Per tipologia', body: 'Ogni tipologia ha la sua tolleranza separata: finestre, porte, persiane e zanzariere possono richiedere scostamenti diversi in base al sistema di profili che usi.', spot: null },
+  { icon: '📏', title: 'L e H separati', body: 'Larghezza e altezza si configurano indipendentemente. Molti sistemi usano la stessa tolleranza su entrambi gli assi, ma alcuni sistemi a nastro o scorrimento richiedono scostamenti diversi.', spot: null },
+  { icon: '☁️', title: 'Sincronizzazione cloud', body: 'Le tolleranze vengono salvate automaticamente per tutta la tua azienda. Ogni membro del team vede sempre le stesse impostazioni senza doverle riconfigurate sul proprio dispositivo.', spot: null },
 ];
 
 export function SettingsTolleranzeScreen() {
@@ -187,10 +188,11 @@ export function SettingsTolleranzeScreen() {
 // ─── PARAMETRI BARRA ─────────────────────────────────────────────────────────
 
 const PARAM_TOUR: TourStep[] = [
-  { icon: '📏', title: 'Lunghezza barra', body: 'Lunghezza utile della barra dopo la prima squadratura. Il valore standard è 6400 mm. Cambialo se usi barre di lunghezza diversa.', spot: null },
-  { icon: '✂️', title: 'Riattestattura 45°', body: 'Spreco di materiale tra un pezzo e l\'altro sulla stessa barra quando si taglia a 45°. Il valore standard è 25 mm (lo spessore della lama più il margine di riattestattura).', spot: null },
+  { icon: '📏', title: 'Lunghezza barra', body: 'Lunghezza utile della barra dopo la prima squadratura. Il valore standard è 6400 mm. Cambialo se usi barre di lunghezza diversa o tagli in cantiere.', spot: null },
+  { icon: '✂️', title: 'Riattestattura 45°', body: 'Spreco di materiale tra un pezzo e l\'altro sulla stessa barra quando si taglia a 45°. Standard 25 mm (lama + riattestattura). Questo valore viene sottratto ad ogni cambio di pezzo.', spot: null },
   { icon: '🔪', title: 'Kerf 90°', body: 'Spessore della lama della troncatrice per i tagli a 90°. Incide sul calcolo degli avanzi. Standard: 4 mm.', spot: null },
-  { icon: '🛡️', title: 'Margine di sicurezza', body: 'Percentuale di barre extra aggiunta al totale calcolato per coprire errori di taglio o scarti imprevisti. 0% = nessun margine.', spot: null },
+  { icon: '🛡️', title: 'Margine di sicurezza', body: 'Percentuale di barre extra aggiunta al totale calcolato per coprire errori di taglio o scarti imprevisti. 0% = nessun margine. Consigliato: 5–10%.', spot: null },
+  { icon: '💾', title: 'Preset impostazioni', body: 'Dalla schermata principale delle impostazioni puoi salvare tutti i parametri come preset con un nome (es. "Cantiere Rossi"). Richiamalo in un tap per applicare immediatamente tutta la configurazione.', spot: null },
 ];
 
 export function SettingsParametriScreen() {
@@ -248,8 +250,9 @@ export function SettingsParametriScreen() {
 
 const PREZZI_TOUR: TourStep[] = [
   { icon: '💰', title: 'Prezzi al m²', body: 'I prezzi sono orientativi e vengono usati per calcolare la stima economica nel rilievo e nel PDF. Lascia 0 per non mostrare il preventivo per quella tipologia.', spot: null },
-  { icon: '🪟', title: 'Per tipologia e ante', body: 'Ogni tipologia ha prezzi separati per numero di ante: 1 anta (singolo), 2 ante (doppio) ecc. Questo ti permette di tarare la stima in base alla complessità del serramento.', spot: null },
-  { icon: '📊', title: 'Stima nel rilievo', body: 'Il prezzo viene moltiplicato per l\'area (L × H in m²) di ogni apertura. La somma di tutte le aperture appare come stima totale nel progetto.', spot: null },
+  { icon: '🪟', title: 'Per tipologia e ante', body: 'Ogni tipologia ha prezzi separati per numero di ante: 1 anta, 2 ante, ecc. Questo ti permette di tarare la stima in base alla complessità del serramento.', spot: null },
+  { icon: '📊', title: 'Stima nel rilievo', body: 'Il prezzo viene moltiplicato per l\'area (L × H in m²) di ogni apertura. La somma appare come stima totale nel progetto e nel PDF esportato.', spot: null },
+  { icon: '☁️', title: 'Condivisi con il team', body: 'I prezzi sono condivisi con tutti i membri della tua azienda in tempo reale. Aggiornarli su un dispositivo li aggiorna per tutti, così il preventivo è sempre coerente tra i collaboratori.', spot: null },
 ];
 
 export function SettingsPrezziScreen() {
@@ -257,6 +260,7 @@ export function SettingsPrezziScreen() {
   const { theme: t } = useTheme();
   const [tourVisible, setTourVisible] = useState(false);
   const [prices, setPricesState] = useState<DetailedPriceConfig>({});
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => { getDetailedPrices().then(setPricesState); }, []);
 
@@ -277,42 +281,67 @@ export function SettingsPrezziScreen() {
     setDetailedPrices(updated);
   };
 
+  const toggleSection = (label: string) =>
+    setOpenSections(prev => ({ ...prev, [label]: !prev[label] }));
+
+  const filledCount = (items: { key: string }[]) =>
+    items.filter(i => prices[i.key] > 0).length;
+
   return (
     <ScrollView style={[ss.screen, { backgroundColor: t.bg }]} contentContainerStyle={ss.content}>
       <TourModal visible={tourVisible} steps={PREZZI_TOUR} onClose={() => setTourVisible(false)}/>
       <View style={ss.infoCard}>
-        <Text style={ss.infoText}>Prezzi orientativi al m² per ogni tipologia. Usati per la stima nel rilievo e nel PDF. Lascia 0 per non mostrare il preventivo.</Text>
+        <Text style={ss.infoText}>Prezzi orientativi al m² per ogni tipologia. Tocca una categoria per espanderla e configurare i prezzi.</Text>
       </View>
 
-      {PRICE_SECTIONS.map(sec => (
-        <View key={sec.label} style={[ss.groupCard, { backgroundColor: t.card, padding: 0, overflow: 'hidden' }]}>
-          <View style={[ss.priceHeader, { backgroundColor: sec.color }]}>
-            <Text style={ss.priceHeaderText}>{sec.label}</Text>
-          </View>
-          {sec.items.map((item, idx) => (
-            <View
-              key={item.key}
-              style={[ss.priceRow, idx > 0 && { borderTopWidth: 1, borderTopColor: '#F0F4F8' }]}
+      {PRICE_SECTIONS.map(sec => {
+        const isOpen = !!openSections[sec.label];
+        const filled = filledCount(sec.items);
+        return (
+          <View key={sec.label} style={[ss.groupCard, { backgroundColor: t.card, padding: 0, overflow: 'hidden' }]}>
+            {/* Header accordion */}
+            <TouchableOpacity
+              style={[ss.priceHeader, { backgroundColor: sec.color, flexDirection: 'row', alignItems: 'center' }]}
+              onPress={() => toggleSection(sec.label)}
+              activeOpacity={0.8}
             >
-              <Text style={[ss.priceLabel, { color: t.textPrimary }]}>{item.label}</Text>
-              <View style={ss.priceInputRow}>
-                <Text style={[ss.priceEuro, { color: t.label }]}>€</Text>
-                <TextInput
-                  style={[nr.input, { backgroundColor: t.inputBg, borderColor: sec.color + '66', color: sec.color, width: 80, fontSize: 16 }]}
-                  keyboardType="decimal-pad"
-                  value={prices[item.key] ? String(prices[item.key]) : ''}
-                  placeholder="0"
-                  placeholderTextColor="#ccc"
-                  selectTextOnFocus
-                  onChangeText={v => updatePrice(item.key, v)}
-                  onBlur={() => setDetailedPrices(prices)}
-                />
-                <Text style={[ss.priceUnit, { color: t.label }]}>/m²</Text>
+              <Text style={[ss.priceHeaderText, { flex: 1 }]}>{sec.label}</Text>
+              {filled > 0 && (
+                <View style={ss.priceBadge}>
+                  <Text style={ss.priceBadgeText}>{filled}/{sec.items.length}</Text>
+                </View>
+              )}
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 18, fontWeight: '700', marginLeft: 8 }}>
+                {isOpen ? '▲' : '▼'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Righe prezzi (visibili solo se aperto) */}
+            {isOpen && sec.items.map((item, idx) => (
+              <View
+                key={item.key}
+                style={[ss.priceRow, idx > 0 && { borderTopWidth: 1, borderTopColor: '#F0F4F8' }]}
+              >
+                <Text style={[ss.priceLabel, { color: t.textPrimary }]}>{item.label}</Text>
+                <View style={ss.priceInputRow}>
+                  <Text style={[ss.priceEuro, { color: t.label }]}>€</Text>
+                  <TextInput
+                    style={[nr.input, { backgroundColor: t.inputBg, borderColor: sec.color + '66', color: sec.color, width: 80, fontSize: 16 }]}
+                    keyboardType="decimal-pad"
+                    value={prices[item.key] ? String(prices[item.key]) : ''}
+                    placeholder="0"
+                    placeholderTextColor="#ccc"
+                    selectTextOnFocus
+                    onChangeText={v => updatePrice(item.key, v)}
+                    onBlur={() => setDetailedPrices(prices)}
+                  />
+                  <Text style={[ss.priceUnit, { color: t.label }]}>/m²</Text>
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
-      ))}
+            ))}
+          </View>
+        );
+      })}
       <View style={{ height: 40 }} />
     </ScrollView>
   );
@@ -322,9 +351,10 @@ export function SettingsPrezziScreen() {
 
 const GENERICO_TOUR: TourStep[] = [
   { icon: '🔧', title: 'Quando si usa il calcolo generico', body: 'Questi parametri entrano in gioco solo per le aperture senza una serie catalogo assegnata, oppure per tipologie non coperte dalla serie (zanzariere, monoblocchi, ecc.).', spot: null },
-  { icon: '🪟', title: 'Riduzione anta', body: 'Differenza totale tra la larghezza del telaio e quella dell\'anta (somma dei due lati). Es.: riduzione 10mm → anta = telaio − 10mm. Con la serie questo valore è gestito dagli offset dei singoli pezzi.', spot: null },
-  { icon: '🌿', title: 'Parametri persiane', body: 'Passo lamella: distanza tra le lamelle (tipicamente 55mm). Altezza zoccolo: profilo inferiore dell\'anta. Questi valori determinano quante lamelle vengono calcolate per ogni anta di persiana.', spot: null },
-  { icon: '🚪', title: 'Posizione fascia', body: 'Distanza dal basso al centro della fascia intermedia in una porta-finestra. Divide il vano vetro in due zone separate per il calcolo del fermavetro.', spot: null },
+  { icon: '🪟', title: 'Riduzione anta', body: 'Differenza totale tra la larghezza del telaio e quella dell\'anta (somma dei due lati). Es.: riduzione 10 mm → anta = telaio − 10 mm. Con la serie catalogo questo valore viene gestito dagli offset dei singoli pezzi nella variante.', spot: null },
+  { icon: '🏠', title: 'Parametri persiane', body: 'Passo lamella: distanza tra le lamelle (tipicamente 55 mm). Altezza zoccolo: profilo inferiore dell\'anta. Traverso superiore anta: profilo alto. Questi valori determinano quante lamelle vengono calcolate per ogni anta.', spot: null },
+  { icon: '🚪', title: 'Posizione fascia', body: 'Distanza dal basso al centro della fascia intermedia in una porta-finestra. Divide il vano vetro in due zone separate per il calcolo del fermavetro. Modifica solo se monti fasce a quota non standard.', spot: null },
+  { icon: '📋', title: 'Usa una serie catalogo', body: 'Con una serie catalogo configurata questi parametri generici non vengono usati per telaio e anta — ogni pezzo ha la sua formula precisa. Il calcolo generico rimane utile per zanzariere, persiane e monoblocchi.', spot: null },
 ];
 
 export function SettingsGenericoScreen() {
@@ -411,8 +441,10 @@ const ss = StyleSheet.create({
   exampleRow:  { backgroundColor: '#F7FAFF', paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#EEF2F7' },
   exampleText: { fontSize: 11, color: '#7090C0', fontStyle: 'italic' },
 
-  priceHeader:     { paddingHorizontal: 14, paddingVertical: 10 },
+  priceHeader:     { paddingHorizontal: 14, paddingVertical: 12 },
   priceHeaderText: { color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 0.3 },
+  priceBadge:      { backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  priceBadgeText:  { color: '#fff', fontSize: 10, fontWeight: '800' },
   priceRow:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10 },
   priceLabel:      { fontSize: 13, flex: 1 },
   priceInputRow:   { flexDirection: 'row', alignItems: 'center', gap: 4 },

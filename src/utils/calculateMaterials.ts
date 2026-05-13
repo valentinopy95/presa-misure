@@ -503,10 +503,17 @@ export function calculateCatalogCuttingList(
       const isShutterT = s.startsWith('shutter');
       const isDoorT    = s.startsWith('door');
       const nTraversi  = (isShutterT || (isDoorT && !isSlidingT && !o.hasBattente)) ? 1 : 2;
-      for (let t = 0; t < nTraversi; t++) push('telaio', false, tW, 'Traverso');
-      push('telaio', false, tHL, 'Montante');
-      if (tHR !== tHL) push('telaio', false, tHR, 'Montante');
-      else             push('telaio', false, tHR, 'Montante');
+      const rW  = Math.round(pcL);
+      const rHL = Math.round(baseHL);
+      const rHR = Math.round(baseHR);
+      const rOff = Math.round(tOff);
+      const wLbl  = tOff > 0 ? `Traverso (${rW}+${rOff})`  : 'Traverso';
+      const hLLbl = tOff > 0 ? `Montante (${rHL}+${rOff})` : 'Montante';
+      const hRLbl = tOff > 0 ? `Montante (${rHR}+${rOff})` : 'Montante';
+      for (let t = 0; t < nTraversi; t++) push('telaio', false, tW, wLbl);
+      push('telaio', false, tHL, hLLbl);
+      if (tHR !== tHL) push('telaio', false, tHR, hRLbl);
+      else             push('telaio', false, tHR, hLLbl);
     }
 
     // ── Pezzi dalla variante ───────────────────────────────────────────────────

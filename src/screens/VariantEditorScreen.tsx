@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -17,7 +17,7 @@ import TourModal, { TourStep } from '../components/TourModal';
 const VARIANT_TOUR: TourStep[] = [
   { icon: '🪟', title: 'Variante per numero di ante', body: 'Ogni variante definisce i pezzi da tagliare per una finestra con 1, 2, 3 o 4 ante. La serie può avere più varianti, una per ogni configurazione.', spot: null },
   { icon: '📦', title: 'Sezioni Telaio / Anta / Fermavetro / Riporto', body: 'I pezzi sono divisi per categoria: Telaio (profilo fisso), Anta (profilo mobile), Fermavetro (solo se selezionato sull\'apertura) e Riporto (coprigiunto tra ante, solo per aperture con 2+ ante).', spot: null },
-  { icon: '📐', title: 'Formula di calcolo', body: 'Per ogni pezzo scegli: base di riferimento (L = larghezza taglio, H = altezza taglio), offset in mm (+/−) e divisore.\n\n−÷ (arancio, default): (L + offset) ÷ divisore → es. traverso: (L − 48) / 2 = 643\n÷− (blu): (L ÷ divisore) + offset → es. L/2 poi − 48 = 619', spot: null },
+  { icon: '📐', title: 'Formula di calcolo', body: 'Per ogni pezzo scegli: base di riferimento (L = larghezza taglio, H = altezza taglio), offset in mm (+/−) e divisore.\n\nFormula: (L + offset) ÷ divisore\nEs. traverso: (L − 48) ÷ 2 = 643', spot: null },
   { icon: '✂️', title: 'Angolo di taglio', body: 'Ang.A e Ang.B indicano l\'angolo di taglio alle due estremità del profilo: 45° per giunti a inglete (telaio e anta), 90° per tagli dritti (fermavetro, riporto).', spot: null },
   { icon: '🔁', title: 'Condizione soglia', body: '"Sempre" include il pezzo in tutti i casi. "Senza soglia" lo esclude se la porta ha soglia. "Con soglia" lo include solo se c\'è la soglia.', spot: null },
 ];
@@ -43,11 +43,15 @@ export default function VariantEditorScreen() {
   const route      = useRoute<Route>();
   const { seriesId, variantId, leafCount: paramLeafCount } = route.params;
 
-  const [leafCount,    setLeafCount]    = useState<number>(paramLeafCount ?? 1);
-  const [pieces,       setPieces]       = useState<CatalogPiece[]>([emptyPiece('anta')]);
-  const [telaiOffset,  setTelaiOffset]  = useState<number>(0);
-  const [saving,       setSaving]       = useState(false);
-  const [tourVisible,  setTourVisible]  = useState(false);
+  const [leafCount,     setLeafCount]     = useState<number>(paramLeafCount ?? 1);
+  const [pieces,        setPieces]        = useState<CatalogPiece[]>([emptyPiece('anta')]);
+  const [telaiOffset,   setTelaiOffset]   = useState<number>(0);
+  const [articleCodes,  setArticleCodes]  = useState<Partial<Record<PieceCategory, string>>>({});
+  const [saving,        setSaving]        = useState(false);
+  const [tourVisible,   setTourVisible]   = useState(false);
+
+  // ID stabile: usa variantId dai params o genera uno nuovo UNA SOLA VOLTA
+  const effectiveId = useRef<string>(variantId ?? uuidv4());
 
   useEffect(() => {
     navigation.setOptions({
@@ -67,6 +71,7 @@ export default function VariantEditorScreen() {
       if (v) {
         setLeafCount(v.leafCount);
         setTelaiOffset(v.telaiOffset ?? 0);
+        setArticleCodes(v.articleCodes ?? {});
         // Migrazione vecchi pezzi senza categoria → anta
         const migrated = v.pieces.map(p => ({ ...p, pieceCategory: p.pieceCategory ?? 'anta' as PieceCategory }));
         setPieces(migrated.length ? migrated : [emptyPiece('anta')]);
@@ -83,21 +88,34 @@ export default function VariantEditorScreen() {
   const removePiece = (id: string) =>
     setPieces(prev => prev.length <= 1 ? prev : prev.filter(p => p.id !== id));
 
+  const saveVariant = async () => {
+    const variant: CatalogVariant = {
+      id:           effectiveId.current,
+      leafCount,
+      pieces:       pieces.filter(p => p.quantity >= 1),
+      telaiOffset,
+      articleCodes,
+    };
+    await upsertCatalogVariant(seriesId, variant);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      const variant: CatalogVariant = {
-        id:          variantId ?? uuidv4(),
-        leafCount,
-        pieces:      pieces.filter(p => p.name.trim()),
-        telaiOffset,
-      };
-      await upsertCatalogVariant(seriesId, variant);
+      await saveVariant();
       navigation.goBack();
     } finally {
       setSaving(false);
     }
   };
+
+  // Auto-salva quando si esce con il tasto indietro
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', () => {
+      saveVariant().catch(() => {});
+    });
+    return unsub;
+  }, [leafCount, pieces, telaiOffset, articleCodes]);
 
   const handleDelete = () => {
     if (!variantId) return;
@@ -110,17 +128,11 @@ export default function VariantEditorScreen() {
     ]);
   };
 
-  const renderPieceRow = (p: CatalogPiece, sectionColor: string) => (
+  const renderPieceRow = (p: CatalogPiece, sectionColor: string) => {
+    const isTelaio = (p.pieceCategory ?? 'anta') === 'telaio';
+    return (
     <View key={p.id}>
       <View style={s.pieceRow}>
-        {/* Nome */}
-        <TextInput
-          style={[s.cellInput, { flex: 3 }]}
-          placeholder="Nome pezzo"
-          placeholderTextColor="#bbb"
-          value={p.name}
-          onChangeText={v => updatePiece(p.id, { name: v })}
-        />
         {/* Quantità */}
         <TextInput
           style={[s.cellInput, { width: 36 }]}
@@ -141,47 +153,49 @@ export default function VariantEditorScreen() {
         >
           <Text style={s.toggleText}>{p.baseVar}</Text>
         </TouchableOpacity>
-        {/* Toggle segno +/- */}
-        <TouchableOpacity
-          style={[s.toggleBtn, { width: 26 }, p.offset < 0 && s.toggleBtnMinus]}
-          onPress={() => updatePiece(p.id, { offset: -p.offset })}
-        >
-          <Text style={s.toggleText}>{p.offset < 0 ? '−' : '+'}</Text>
-        </TouchableOpacity>
-        {/* Offset valore assoluto */}
-        <TextInput
-          style={[s.cellInput, { width: 36 }]}
-          keyboardType="decimal-pad"
-          value={p.offset === 0 ? '' : String(Math.abs(p.offset))}
-          placeholder="0"
-          placeholderTextColor="#ccc"
-          selectTextOnFocus
-          onChangeText={v => {
-            const clean = v.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-            const n = parseFloat(clean) || 0;
-            const sign = p.offset < 0 ? -1 : 1;
-            updatePiece(p.id, { offset: sign * n });
-          }}
-        />
+        {/* Toggle segno +/- (nascosto per telaio) */}
+        {isTelaio ? (
+          <View style={{ width: 26 + 3 + 36 + 3 }} />
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[s.toggleBtn, { width: 26 }, p.offset < 0 && s.toggleBtnMinus]}
+              onPress={() => updatePiece(p.id, { offset: -p.offset })}
+            >
+              <Text style={s.toggleText}>{p.offset < 0 ? '−' : '+'}</Text>
+            </TouchableOpacity>
+            {/* Offset valore assoluto */}
+            <TextInput
+              style={[s.cellInput, { width: 36 }]}
+              keyboardType="numeric"
+              value={p.offset === 0 ? '' : String(Math.abs(p.offset))}
+              placeholder="0"
+              placeholderTextColor="#ccc"
+              selectTextOnFocus
+              onChangeText={v => {
+                const clean = v.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
+                const n = parseFloat(clean) || 0;
+                const sign = p.offset < 0 ? -1 : 1;
+                updatePiece(p.id, { offset: sign * n });
+              }}
+            />
+          </>
+        )}
+        {/* ÷ simbolo */}
+        <Text style={s.divSymbol}>÷</Text>
         {/* Divisore */}
         <TextInput
           style={[s.cellInput, { width: 30 }]}
-          keyboardType="decimal-pad"
+          keyboardType="numeric"
           value={p.divisor === 1 ? '' : String(p.divisor)}
           placeholder="1"
           placeholderTextColor="#ccc"
+          selectTextOnFocus
           onChangeText={v => {
             const clean = v.replace(/,/g, '.').replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
             updatePiece(p.id, { divisor: Math.max(1, parseFloat(clean) || 1) });
           }}
         />
-        {/* Ordine operazioni: ÷ prima o − prima */}
-        <TouchableOpacity
-          style={[s.toggleBtn, { width: 32 }, (p.divideFirst !== true) && s.toggleBtnMinus]}
-          onPress={() => updatePiece(p.id, { divideFirst: p.divideFirst === true ? false : true })}
-        >
-          <Text style={s.toggleText}>{p.divideFirst === true ? '÷−' : '−÷'}</Text>
-        </TouchableOpacity>
         {/* Angolo A */}
         <TouchableOpacity
           style={[s.toggleBtn, { width: 38 }, p.cutAngle1 === 90 && s.toggleBtn90]}
@@ -216,7 +230,8 @@ export default function VariantEditorScreen() {
         ))}
       </View>
     </View>
-  );
+    );
+  };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -257,13 +272,11 @@ export default function VariantEditorScreen() {
 
         {/* Intestazione colonne */}
         <View style={s.headerRow}>
-          <Text style={[s.headerCell, { flex: 3 }]}>Pezzo</Text>
           <Text style={[s.headerCell, { width: 36 }]}>Qtà</Text>
           <Text style={[s.headerCell, { width: 36 }]}>Rif.</Text>
-          <Text style={[s.headerCell, { width: 26 }]}>±</Text>
-          <Text style={[s.headerCell, { width: 36 }]}>mm</Text>
+          <Text style={[s.headerCell, { width: 26 + 3 + 36 }]}>± mm</Text>
+          <Text style={[s.headerCell, { width: 14 }]}></Text>
           <Text style={[s.headerCell, { width: 30 }]}>÷</Text>
-          <Text style={[s.headerCell, { width: 32 }]}>ord.</Text>
           <Text style={[s.headerCell, { width: 38 }]}>Ang.A</Text>
           <Text style={[s.headerCell, { width: 38 }]}>Ang.B</Text>
           <Text style={[s.headerCell, { width: 24 }]}></Text>
@@ -276,8 +289,21 @@ export default function VariantEditorScreen() {
             <View key={sec.cat} style={[s.section, { borderColor: sec.color }]}>
               {/* Header sezione */}
               <View style={[s.sectionHeader, { backgroundColor: sec.bg }]}>
-                <Text style={[s.sectionTitle, { color: sec.color }]}>{sec.label.toUpperCase()}</Text>
-                <Text style={[s.sectionHint, { color: sec.color }]}>{sec.hint}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.sectionTitle, { color: sec.color }]}>{sec.label.toUpperCase()}</Text>
+                  <Text style={[s.sectionHint, { color: sec.color }]}>{sec.hint}</Text>
+                </View>
+                <View style={s.articleWrap}>
+                  <Text style={[s.articleLabel, { color: sec.color }]}>Articolo</Text>
+                  <TextInput
+                    style={[s.articleInput, { borderColor: sec.color }]}
+                    placeholder="cod. articolo"
+                    placeholderTextColor={sec.color + '88'}
+                    value={articleCodes[sec.cat] ?? ''}
+                    onChangeText={v => setArticleCodes(prev => ({ ...prev, [sec.cat]: v }))}
+                    autoCapitalize="characters"
+                  />
+                </View>
               </View>
 
               {/* Pezzi della sezione */}
@@ -302,8 +328,7 @@ export default function VariantEditorScreen() {
         {/* Legenda formula */}
         <View style={s.legend}>
           <Text style={s.legendText}>
-            <Text style={s.legendBold}>−÷</Text> (arancio, default): <Text style={s.legendBold}>(L + offset) ÷ div</Text> es. traverso: (L − 48)/2{'\n'}
-            <Text style={s.legendBold}>÷−</Text> (blu): <Text style={s.legendBold}>(L ÷ div) + offset</Text> es. L/2 poi − 48{'\n'}
+            Formula: <Text style={s.legendBold}>(L + offset) ÷ divisore</Text> · es. traverso: (L − 48) / 2 = 643{'\n'}
             Offset <Text style={s.legendBold}>−</Text> = sottrae · Offset <Text style={s.legendBold}>+</Text> = aggiunge{'\n'}
             Rif. = L (larghezza taglio) · H (altezza taglio){'\n'}
             Condizione: <Text style={s.legendBold}>Sempre / Senza soglia / Con soglia</Text>
@@ -358,8 +383,14 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
   },
   sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  sectionHint:  { fontSize: 10, fontWeight: '500', opacity: 0.7, flex: 1 },
+  sectionHint:  { fontSize: 10, fontWeight: '500', opacity: 0.7, marginTop: 2 },
   sectionBody:  { padding: 10 },
+
+  articleWrap:  { alignItems: 'flex-end', gap: 2 },
+  articleLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.8, opacity: 0.75 },
+  articleInput: { backgroundColor: '#fff', borderRadius: 7, borderWidth: 1.5, paddingHorizontal: 8, paddingVertical: 5, fontSize: 11, fontWeight: '700', textAlign: 'center', minWidth: 90, maxWidth: 110 },
+
+  divSymbol:  { fontSize: 13, fontWeight: '900', color: '#888', width: 14, textAlign: 'center' },
   emptyHint:    { fontSize: 11, color: '#aaa', textAlign: 'center', paddingVertical: 8 },
 
   pieceRow:   { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 },

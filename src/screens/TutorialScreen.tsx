@@ -23,22 +23,27 @@ const STEPS: Step[] = [
   {
     image: require('../../assets/principale.png'),
     title: 'Benvenuto in\nMisu',
-    body: 'App professionale per serramentisti.\nRileva misure, gestisci aperture e calcola il materiale necessario per ogni commessa.',
+    body: 'App professionale per serramentisti.\nRileva misure, gestisci aperture e calcola il materiale necessario per ogni commessa.\nTutti i dati si sincronizzano automaticamente tra i tuoi dispositivi.',
   },
   {
     image: require('../../assets/menu_create.jpeg'),
     title: 'Crea un rilievo',
-    body: 'Dalla schermata principale premi "Crea progetto misure".\nInserisci nome cliente, indirizzo e salva.\nOgni rilievo contiene tutte le aperture del cantiere.',
+    body: 'Dalla schermata principale premi "Crea progetto misure".\nInserisci nome cliente, indirizzo e — se hai già configurato una serie catalogo — selezionala subito.\nOgni rilievo contiene tutte le aperture del cantiere.',
   },
   {
     image: require('../../assets/menu_saved.png'),
-    title: 'Rilievi salvati',
-    body: 'All\'interno del rilievo premi "+" per aggiungere un\'apertura.\nScegli la tipologia (finestra, porta, persiana…), inserisci larghezza e altezza e configura le opzioni aggiuntive.',
+    title: 'Aggiungi aperture',
+    body: 'All\'interno del rilievo premi "+" per aggiungere un\'apertura.\nScegli la tipologia (finestra, porta, persiana…), inserisci larghezza e altezza in luce e configura le opzioni aggiuntive.',
+  },
+  {
+    icon: '📐',
+    title: 'Fuori squadra',
+    body: 'Se il vano non è squadrato, attiva "Fuori squadra" nell\'apertura.\nRileva i 3 punti di misura (top, centro, bottom) e l\'app usa automaticamente la misura minore per garantire che il serramento entri.',
   },
   {
     icon: '📏',
     title: 'Misure luce e taglio',
-    body: 'Inserisci sempre la misura in LUCE (rilevata sul posto).\nL\'app calcola automaticamente la misura di TAGLIO sottraendo la tolleranza configurata in Impostazioni.',
+    body: 'Inserisci sempre la misura in LUCE (rilevata sul posto).\nL\'app calcola automaticamente la misura di TAGLIO sottraendo la tolleranza configurata in Impostazioni — differenziata per tipo apertura.',
   },
   {
     icon: '⚙️',
@@ -48,22 +53,32 @@ const STEPS: Step[] = [
   {
     image: require('../../assets/menu_materials.png'),
     title: 'Sviluppo materiale',
-    body: 'Dal rilievo premi "Sviluppo materiale".\nL\'app calcola automaticamente il numero di barre necessarie per ogni profilo (telaio, anta, fermavetro, lamelle…) con l\'algoritmo di taglio ottimizzato.',
+    body: 'Dal rilievo premi "Sviluppo materiale".\nL\'app calcola quante barre ordinare per ogni profilo (telaio, anta, fermavetro, lamelle…) ottimizzando i tagli per ridurre gli scarti.\nPuoi segnare il materiale come "Ordinato" con un tap.',
   },
   {
     image: require('../../assets/menu_cutting.png'),
     title: 'Distinta di taglio',
-    body: 'La distinta mostra barra per barra come tagliare i profili.\nL\'algoritmo FFD assegna i pezzi più lunghi per primi, riducendo al minimo gli scarti.',
+    body: 'Mostra barra per barra come tagliare i profili.\nPer il telaio vengono indicati la misura base e l\'offset aletta (es. "Traverso 1220+20") così sai esattamente da dove viene la cifra.\nSpunta ogni pezzo mentre lo tagli: quando finisci, gli avanzi utili vengono salvati automaticamente in magazzino.',
+  },
+  {
+    icon: '📦',
+    title: 'Magazzino avanzi',
+    body: 'Il magazzino raccoglie tutti gli avanzi di profilo rimanenti dopo ogni taglio completo (avanzi ≥ 500 mm).\nPuoi anche aggiungere o rimuovere avanzi manualmente per ogni codice articolo.\nI dati sono condivisi con tutto il tuo team in tempo reale.',
   },
   {
     icon: '📋',
     title: 'Serie catalogo',
-    body: 'In Impostazioni crea le tue serie di profili con le formule di taglio per ogni numero di ante (1, 2, 3 o 4).\nAssegna la serie al progetto e l\'app seleziona la variante giusta, calcola ogni pezzo con precisione al mezzo millimetro e genera distinta e sviluppo personalizzati.',
+    body: 'In Impostazioni → Serie crea i tuoi profili con le formule di taglio per ogni numero di ante.\nPer ogni variante puoi impostare l\'aletta telaio e i codici articolo per collegare i profili al magazzino.\nL\'app seleziona la variante giusta e calcola ogni pezzo al millimetro.',
+  },
+  {
+    icon: '👥',
+    title: 'Team e sincronizzazione',
+    body: 'Crea o entra in un\'azienda dalla sezione Account.\nInvita i colleghi: condividerete in tempo reale rilievi, serie catalogo, magazzino e impostazioni.\nCon il piano Base puoi avere fino a 2 utenti e 2 serie; con il Pro fino a 5. Aggiunti extra a €3/mese.',
   },
   {
     icon: '🛠️',
     title: 'Impostazioni',
-    body: 'In Impostazioni puoi configurare:\n• Serie catalogo con varianti per numero ante\n• Tolleranze di taglio\n• Lunghezza barra\n• Kerf e riattestattura\n• Margine di sicurezza\n• Parametri persiane\n• Riduzioni anta e fermavetro',
+    body: 'Configura tolleranze per tipo apertura, lunghezza barra, kerf, riattestattura, margine di sicurezza e prezzi al m².\nSalva i tuoi preset per richiamarli in un tap.\nTutte le impostazioni si sincronizzano con il cloud.',
   },
   {
     icon: '❓',

@@ -3,7 +3,6 @@ import Stripe from 'npm:stripe@^14';
 import { createClient } from 'npm:@supabase/supabase-js@^2';
 
 Deno.serve(async (req) => {
-  // Stripe chiama il webhook senza JWT — rispondi subito alle preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { status: 200 });
   }
@@ -33,10 +32,30 @@ Deno.serve(async (req) => {
     switch (event.type) {
 
       case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session;
+        const session   = event.data.object as Stripe.Checkout.Session;
         const companyId = session.metadata?.company_id;
-        if (!companyId || !session.subscription) break;
+        if (!companyId) break;
 
+        const addonType = session.metadata?.addon_type;
+
+        // ── Slot extra acquistato ──────────────────────────────────────────────
+        if (addonType === 'extra_series_slot') {
+          const { data } = await supabase.from('companies').select('extra_series_slots').eq('id', companyId).single();
+          await supabase.from('companies')
+            .update({ extra_series_slots: (data?.extra_series_slots ?? 0) + 1 })
+            .eq('id', companyId);
+          break;
+        }
+        if (addonType === 'extra_user_slot') {
+          const { data } = await supabase.from('companies').select('extra_user_slots').eq('id', companyId).single();
+          await supabase.from('companies')
+            .update({ extra_user_slots: (data?.extra_user_slots ?? 0) + 1 })
+            .eq('id', companyId);
+          break;
+        }
+
+        // ── Piano base/pro ────────────────────────────────────────────────────
+        if (!session.subscription) break;
         const sub  = await stripe.subscriptions.retrieve(session.subscription as string);
         const plan = (sub.metadata?.plan as 'base' | 'pro') ?? 'base';
 
@@ -54,6 +73,9 @@ Deno.serve(async (req) => {
         const companyId = sub.metadata?.company_id;
         if (!companyId) break;
 
+        // Ignora aggiornamenti di addon subscriptions
+        if (sub.metadata?.addon_type) break;
+
         const status: string =
           sub.status === 'active'   ? 'active'   :
           sub.status === 'past_due' ? 'past_due'  : 'canceled';
@@ -70,6 +92,25 @@ Deno.serve(async (req) => {
         const companyId = sub.metadata?.company_id;
         if (!companyId) break;
 
+        const addonType = sub.metadata?.addon_type;
+
+        // ── Cancellazione slot extra ──────────────────────────────────────────
+        if (addonType === 'extra_series_slot') {
+          const { data } = await supabase.from('companies').select('extra_series_slots').eq('id', companyId).single();
+          await supabase.from('companies')
+            .update({ extra_series_slots: Math.max(0, (data?.extra_series_slots ?? 0) - 1) })
+            .eq('id', companyId);
+          break;
+        }
+        if (addonType === 'extra_user_slot') {
+          const { data } = await supabase.from('companies').select('extra_user_slots').eq('id', companyId).single();
+          await supabase.from('companies')
+            .update({ extra_user_slots: Math.max(0, (data?.extra_user_slots ?? 0) - 1) })
+            .eq('id', companyId);
+          break;
+        }
+
+        // ── Cancellazione piano principale ────────────────────────────────────
         await supabase.from('companies').update({
           plan:                    'free',
           subscription_status:     'canceled',

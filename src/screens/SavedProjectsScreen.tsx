@@ -9,6 +9,7 @@ import { getAllProjects, deleteProject } from '../storage/database';
 import ProjectCard from '../components/ProjectCard';
 import TourModal, { TourStep } from '../components/TourModal';
 import { getTourSeen, setTourSeen } from '../storage/settings';
+import NavBurgerModal from '../components/NavBurgerModal';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'SavedProjects'>;
 
@@ -37,9 +38,10 @@ const SAVED_TOUR: TourStep[] = [
 export default function SavedProjectsScreen() {
   const navigation = useNavigation<Nav>();
   const { theme: t } = useTheme();
-  const [projects,    setProjects]    = useState<Project[]>([]);
-  const [query,       setQuery]       = useState('');
-  const [tourVisible, setTourVisible] = useState(false);
+  const [projects,     setProjects]     = useState<Project[]>([]);
+  const [query,        setQuery]        = useState('');
+  const [tourVisible,  setTourVisible]  = useState(false);
+  const [navMenuOpen,  setNavMenuOpen]  = useState(false);
 
   const filtered = query.trim()
     ? projects.filter(p =>
@@ -64,9 +66,16 @@ export default function SavedProjectsScreen() {
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity onPress={() => setTourVisible(true)} style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
-          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          <TouchableOpacity onPress={() => setTourVisible(true)} style={{ paddingHorizontal: 10, paddingVertical: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setNavMenuOpen(true)} style={{ paddingHorizontal: 10, paddingVertical: 8, gap: 5, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ width: 16, height: 2, borderRadius: 1, backgroundColor: '#fff' }} />
+            <View style={{ width: 16, height: 2, borderRadius: 1, backgroundColor: '#fff' }} />
+            <View style={{ width: 16, height: 2, borderRadius: 1, backgroundColor: '#fff' }} />
+          </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation]);
@@ -96,6 +105,12 @@ export default function SavedProjectsScreen() {
         visible={tourVisible}
         steps={SAVED_TOUR}
         onClose={() => { setTourVisible(false); setTourSeen('saved'); }}
+      />
+      <NavBurgerModal
+        visible={navMenuOpen}
+        current="saved"
+        onClose={() => setNavMenuOpen(false)}
+        navigation={navigation}
       />
       <View style={styles.searchBox}>
         <TextInput

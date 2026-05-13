@@ -528,11 +528,10 @@ export default function ProjectScreen() {
       />
 
       {/* ── Edit Project Modal ── */}
-      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
+      <Modal visible={showEditModal} transparent animationType="fade" onRequestClose={() => setShowEditModal(false)}>
         <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Pressable style={{ flex: 1 }} onPress={() => setShowEditModal(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowEditModal(false)} />
           <View style={[styles.sheet, { backgroundColor: t.card, paddingBottom: 32 }]}>
-            <View style={styles.handle} />
             <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Modifica progetto</Text>
 
             {[
@@ -567,13 +566,16 @@ export default function ProjectScreen() {
       </Modal>
 
       {/* Modal picker serie catalogo — salva direttamente sul progetto */}
-      <Modal visible={showSeriesPicker} transparent animationType="slide" onRequestClose={() => setShowSeriesPicker(false)}>
+      <Modal visible={showSeriesPicker} transparent animationType="fade" onRequestClose={() => setShowSeriesPicker(false)}>
         <Pressable style={styles.overlay} onPress={() => setShowSeriesPicker(false)}>
-          <Pressable style={[styles.sheet, { backgroundColor: t.card, paddingBottom: 36 }]}>
-            <View style={styles.handle} />
-            <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Serie catalogo</Text>
+          <Pressable style={[styles.sheet, { backgroundColor: t.card }]} onPress={() => {}}>
+            <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Seleziona serie</Text>
+            <Text style={styles.seriesPickerHint}>La serie determina i profili usati per distinta e sviluppo materiale.</Text>
+
+            {/* Opzione "Nessuna" */}
             <TouchableOpacity
-              style={[styles.seriesPickerRow, !activeProject.catalogSeriesId && styles.seriesPickerRowActive]}
+              style={[styles.seriesCard, !activeProject.catalogSeriesId && styles.seriesCardActive]}
+              activeOpacity={0.7}
               onPress={async () => {
                 setShowSeriesPicker(false);
                 const updated = { ...activeProject, catalogSeriesId: null, updatedAt: new Date().toISOString() };
@@ -581,27 +583,50 @@ export default function ProjectScreen() {
                 await saveProject(updated);
               }}
             >
-              <Text style={styles.seriesPickerName}>Nessuna</Text>
-              {!activeProject.catalogSeriesId && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
-            </TouchableOpacity>
-            {allSeries.map(s => (
-              <TouchableOpacity
-                key={s.id}
-                style={[styles.seriesPickerRow, activeProject.catalogSeriesId === s.id && styles.seriesPickerRowActive]}
-                onPress={async () => {
-                  setShowSeriesPicker(false);
-                  const updated = { ...activeProject, catalogSeriesId: s.id, updatedAt: new Date().toISOString() };
-                  setFamily(prev => prev.map(p => p.id === updated.id ? updated : p));
-                  await saveProject(updated);
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.seriesPickerName}>{s.name}</Text>
-                  <Text style={styles.seriesPickerSub}>{s.variants.length} varianti</Text>
+              <View style={[styles.seriesCardIcon, { backgroundColor: '#ECEFF1' }]}>
+                <Text style={{ fontSize: 16 }}>✕</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.seriesCardName, !activeProject.catalogSeriesId && styles.seriesCardNameActive]}>Nessuna serie</Text>
+                <Text style={styles.seriesCardSub}>Calcolo generico standard</Text>
+              </View>
+              {!activeProject.catalogSeriesId && (
+                <View style={styles.seriesCardCheck}>
+                  <Text style={styles.seriesCardCheckText}>✓</Text>
                 </View>
-                {activeProject.catalogSeriesId === s.id && <Text style={{ color: '#0c2d75', fontWeight: '800' }}>✓</Text>}
-              </TouchableOpacity>
-            ))}
+              )}
+            </TouchableOpacity>
+
+            {/* Serie disponibili */}
+            {allSeries.map(s => {
+              const isActive = activeProject.catalogSeriesId === s.id;
+              return (
+                <TouchableOpacity
+                  key={s.id}
+                  style={[styles.seriesCard, isActive && styles.seriesCardActive]}
+                  activeOpacity={0.7}
+                  onPress={async () => {
+                    setShowSeriesPicker(false);
+                    const updated = { ...activeProject, catalogSeriesId: s.id, updatedAt: new Date().toISOString() };
+                    setFamily(prev => prev.map(p => p.id === updated.id ? updated : p));
+                    await saveProject(updated);
+                  }}
+                >
+                  <View style={[styles.seriesCardIcon, { backgroundColor: isActive ? '#EDE7F6' : '#F3E5F5' }]}>
+                    <Text style={{ fontSize: 16 }}>📋</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.seriesCardName, isActive && styles.seriesCardNameActive]}>{s.name}</Text>
+                    <Text style={styles.seriesCardSub}>{s.variants.length} variant{s.variants.length === 1 ? 'e' : 'i'}</Text>
+                  </View>
+                  {isActive && (
+                    <View style={styles.seriesCardCheck}>
+                      <Text style={styles.seriesCardCheckText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </Pressable>
         </Pressable>
       </Modal>
@@ -610,7 +635,6 @@ export default function ProjectScreen() {
       <Modal visible={showExportModal} transparent animationType="fade" onRequestClose={() => setShowExportModal(false)}>
         <Pressable style={styles.overlay} onPress={() => !exporting && setShowExportModal(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: t.card }]} onPress={() => {}}>
-            <View style={styles.handle} />
             <Text style={[styles.sheetTitle, { color: t.textPrimary }]}>Esporta PDF</Text>
 
             {exporting ? (
@@ -731,10 +755,26 @@ const styles = StyleSheet.create({
   editField:   { marginBottom: 12 },
   editLabel:   { fontSize: 11, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 5 },
   editInput:   { borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 },
-  seriesPickerRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F0F4F8' },
-  seriesPickerRowActive: { backgroundColor: '#EEF4FF' },
-  seriesPickerName:      { fontSize: 15, fontWeight: '700', color: '#1a2a3a', flex: 1 },
-  seriesPickerSub:       { fontSize: 11, color: '#aaa', marginTop: 2 },
+  seriesPickerHint: { fontSize: 12, color: '#8090A0', marginBottom: 14, lineHeight: 17 },
+  seriesCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#F7FAFF', borderRadius: 12,
+    padding: 12, marginBottom: 8,
+    borderWidth: 1.5, borderColor: '#E4ECF7',
+  },
+  seriesCardActive: { backgroundColor: '#EDE7F6', borderColor: '#9C27B0' },
+  seriesCardIcon: {
+    width: 40, height: 40, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  seriesCardName:       { fontSize: 15, fontWeight: '700', color: '#1a2a3a' },
+  seriesCardNameActive: { color: '#6A1B9A' },
+  seriesCardSub:        { fontSize: 11, color: '#8090A0', marginTop: 2 },
+  seriesCardCheck: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: '#9C27B0', alignItems: 'center', justifyContent: 'center',
+  },
+  seriesCardCheckText: { color: '#fff', fontSize: 13, fontWeight: '900' },
   countBadge:  {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20,
@@ -785,8 +825,8 @@ const styles = StyleSheet.create({
   emptyTitle:     { fontSize: 20, fontWeight: '600', color: '#333', marginBottom: 8 },
   emptySubtitle:  { fontSize: 15, color: '#999', textAlign: 'center' },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet:   { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 36 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 24 },
+  sheet:   { backgroundColor: '#fff', borderRadius: 20, padding: 24, maxHeight: '85%' },
   handle:  { width: 40, height: 4, borderRadius: 2, backgroundColor: '#DDD', alignSelf: 'center', marginBottom: 18 },
   sheetTitle: { fontSize: 18, fontWeight: '800', color: '#1a2a3a', marginBottom: 4 },
   sheetFile:  { fontSize: 12, color: '#888', marginBottom: 20, fontStyle: 'italic' },

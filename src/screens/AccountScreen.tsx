@@ -90,6 +90,21 @@ export default function AccountScreen() {
       return;
     }
     if (!company || !user) return;
+    // Controlla limite utenti
+    if (!subscription.canAddUser) {
+      if (subscription.plan === 'base') {
+        AppAlert.show(
+          'Limite utenti raggiunto',
+          `Con il piano Base puoi avere fino a ${subscription.userLimit} utenti. Passa al piano Pro per aggiungerne fino a 5.`
+        );
+      } else {
+        AppAlert.show(
+          'Limite utenti raggiunto',
+          `Hai raggiunto il limite di ${subscription.userLimit} utenti inclusi nel piano Pro. Puoi acquistare slot extra dalle Impostazioni.`
+        );
+      }
+      return;
+    }
     setSending(true);
     try {
       const result = await inviteToCompany(company.id, user.id, email);
@@ -301,6 +316,9 @@ export default function AccountScreen() {
                 <View style={s.row}>
                   <Text style={s.rowHint}>
                     Inserisci la email del collega. Riceverà l'invito nella sezione Account dell'app.
+                  </Text>
+                  <Text style={[s.rowHint, { marginTop: 4, fontWeight: '700', color: subscription.canAddUser ? '#2E7D32' : '#DC2626' }]}>
+                    {subscription.userCount}/{subscription.userLimit} utenti
                   </Text>
                 </View>
                 <View style={[s.row, s.rowBorder, { gap: 10 }]}>

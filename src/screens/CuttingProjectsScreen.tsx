@@ -6,6 +6,8 @@ import { Project, RootStackParamList } from '../types';
 import { getAllProjectsWithOpenings } from '../storage/database';
 import TourModal, { TourStep } from '../components/TourModal';
 import { getTourSeen, setTourSeen } from '../storage/settings';
+import NavBurgerModal from '../components/NavBurgerModal';
+import { getCuttingCompleteStatuses } from '../storage/statusTracker';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'CuttingProjects'>;
 
@@ -37,9 +39,11 @@ const CUTTING_PROJECTS_TOUR: TourStep[] = [
 
 export default function CuttingProjectsScreen() {
   const navigation  = useNavigation<Nav>();
-  const [projects,    setProjects]    = useState<Project[]>([]);
-  const [query,       setQuery]       = useState('');
-  const [tourVisible, setTourVisible] = useState(false);
+  const [projects,      setProjects]      = useState<Project[]>([]);
+  const [query,         setQuery]         = useState('');
+  const [tourVisible,   setTourVisible]   = useState(false);
+  const [navMenuOpen,   setNavMenuOpen]   = useState(false);
+  const [completedMap,  setCompletedMap]  = useState<Record<string, boolean>>({});
 
   const filtered = query.trim()
     ? projects.filter(p =>
@@ -53,6 +57,7 @@ export default function CuttingProjectsScreen() {
       getAllProjectsWithOpenings().then(all =>
         setProjects([...all].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
       ).catch(() => {});
+      getCuttingCompleteStatuses().then(setCompletedMap).catch(() => {});
     }, [])
   );
 
@@ -63,9 +68,16 @@ export default function CuttingProjectsScreen() {
   useEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity onPress={() => setTourVisible(true)} style={{ paddingHorizontal: 14, paddingVertical: 8 }}>
-          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          <TouchableOpacity onPress={() => setTourVisible(true)} style={{ paddingHorizontal: 10, paddingVertical: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>?</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setNavMenuOpen(true)} style={{ paddingHorizontal: 10, paddingVertical: 8, gap: 5, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ width: 16, height: 2, borderRadius: 1, backgroundColor: '#fff' }} />
+            <View style={{ width: 16, height: 2, borderRadius: 1, backgroundColor: '#fff' }} />
+            <View style={{ width: 16, height: 2, borderRadius: 1, backgroundColor: '#fff' }} />
+          </TouchableOpacity>
+        </View>
       ),
     });
   }, [navigation]);
@@ -76,6 +88,12 @@ export default function CuttingProjectsScreen() {
         visible={tourVisible}
         steps={CUTTING_PROJECTS_TOUR}
         onClose={() => { setTourVisible(false); setTourSeen('cutting_projects'); }}
+      />
+      <NavBurgerModal
+        visible={navMenuOpen}
+        current="cutting"
+        onClose={() => setNavMenuOpen(false)}
+        navigation={navigation}
       />
       <View style={styles.searchBox}>
         <TextInput
@@ -116,6 +134,11 @@ export default function CuttingProjectsScreen() {
                   </Text>
                 </View>
                 <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
+                {completedMap[item.id] && (
+                  <View style={styles.completeBadge}>
+                    <Text style={styles.completeText}>✓ Taglio completo</Text>
+                  </View>
+                )}
               </View>
             </View>
             <View style={styles.arrowBadge}>
@@ -153,7 +176,7 @@ const styles = StyleSheet.create({
   cardBody: { flex: 1, paddingVertical: 14, paddingLeft: 14, paddingRight: 4 },
   name:     { fontSize: 15, fontWeight: '800', color: '#1a2a3a', marginBottom: 3 },
   client:   { fontSize: 12, color: '#556070', marginBottom: 7, fontWeight: '500' },
-  meta:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  meta:     { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   countBadge: {
     backgroundColor: '#EEF2F7', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20,
   },
@@ -165,4 +188,9 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   arrowChar:  { fontSize: 22, fontWeight: '700', color: '#0c2d75', lineHeight: 28 },
+  completeBadge: {
+    backgroundColor: '#E8F5E9', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20,
+    borderWidth: 1, borderColor: '#A5D6A7',
+  },
+  completeText: { fontSize: 11, fontWeight: '700', color: '#2E7D32' },
 });

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  StatusBar, Animated, Easing, Image,
+  StatusBar, Animated, Easing, Image, Linking, Modal, Pressable,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
@@ -63,9 +63,13 @@ export default function HomeScreen() {
   const [tourVisible,    setTourVisible]    = useState(false);
   const [tourSteps,      setTourSteps]      = useState<TourStep[]>([]);
   const [userName,       setUserName]       = useState<string | null>(null);
+  const [userEmail,      setUserEmail]      = useState<string | null>(null);
   const [hasCompany,     setHasCompany]     = useState(false);
   const [companyLoading, setCompanyLoading] = useState(true);
   const [hasInvites,     setHasInvites]     = useState(false);
+  const [menuOpen,       setMenuOpen]       = useState(false);
+  const [supportOpen,    setSupportOpen]    = useState(false);
+  const menuAnim = useRef(new Animated.Value(0)).current;
 
   const anims      = useRef(MENU_ITEMS.map(() => new Animated.Value(0))).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
@@ -149,9 +153,10 @@ export default function HomeScreen() {
     // Carica badge inviti pendenti + nome utente
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { setCompanyLoading(false); return; }
+      setUserEmail(user.email ?? null);
       const profile = await fetchProfile(user.id);
       if (profile?.full_name) {
-        setUserName(profile.full_name.trim().split(' ')[0]);
+        setUserName(profile.full_name.trim());
       }
       if (!profile?.company_id) {
         setHasCompany(false);
@@ -200,6 +205,14 @@ export default function HomeScreen() {
     setModalVisible(false);
     subscription.refresh();
     navigation.navigate('Project', { projectId: project.id });
+  };
+
+  const openMenu = () => {
+    setMenuOpen(true);
+    Animated.spring(menuAnim, { toValue: 1, useNativeDriver: true, damping: 20, stiffness: 200 }).start();
+  };
+  const closeMenu = () => {
+    Animated.timing(menuAnim, { toValue: 0, duration: 180, useNativeDriver: true, easing: Easing.out(Easing.quad) }).start(() => setMenuOpen(false));
   };
 
   const handlePress = (key: string) => {
@@ -255,14 +268,10 @@ export default function HomeScreen() {
               )}
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.helpBtn} onPress={openTour} activeOpacity={0.75}>
-            <Text style={styles.headerIcon}>?</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.settingsBtn} onPress={() => navigation.navigate('Settings')} activeOpacity={0.75}>
-            <Text style={styles.headerIcon}>⚙</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.statsBtn} onPress={() => navigation.navigate('Stats')} activeOpacity={0.75}>
-            <Text style={styles.headerIcon}>📊</Text>
+          <TouchableOpacity style={styles.burgerBtn} onPress={openMenu} activeOpacity={0.75}>
+            <View style={styles.burgerLine} />
+            <View style={styles.burgerLine} />
+            <View style={styles.burgerLine} />
           </TouchableOpacity>
 
           {/* Saluto + titolo centrati */}
@@ -347,6 +356,75 @@ export default function HomeScreen() {
         steps={tourSteps}
         onClose={() => { setTourVisible(false); setTourSeen('home'); }}
       />
+
+      {/* ── Menu burger ── */}
+      <Modal visible={menuOpen} transparent animationType="none" onRequestClose={closeMenu}>
+        <Pressable style={styles.menuBackdrop} onPress={closeMenu}>
+          <Animated.View
+            style={[styles.menuPanel, {
+              transform: [{ translateX: menuAnim.interpolate({ inputRange: [0, 1], outputRange: [280, 0] }) }],
+              opacity: menuAnim,
+            }]}
+          >
+            <Pressable onPress={() => {}}>
+              {/* Profilo */}
+              <View style={styles.menuProfileBlock}>
+                <View style={styles.menuAvatar}>
+                  <Text style={styles.menuAvatarText}>{(userName || 'U')[0].toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.menuProfileName} numberOfLines={1}>{userName || 'Utente'}</Text>
+                  {userEmail && <Text style={styles.menuProfileEmail} numberOfLines={1}>{userEmail}</Text>}
+                </View>
+              </View>
+
+              <View style={styles.menuDivider} />
+
+              {/* Voci */}
+              {[
+                { icon: '📊', label: 'Statistiche',      action: () => { closeMenu(); setTimeout(() => navigation.navigate('Stats'), 200); } },
+                { icon: '📦', label: 'Magazzino avanzi', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Magazzino'), 200); } },
+                { icon: '⚙️', label: 'Impostazioni',     action: () => { closeMenu(); setTimeout(() => navigation.navigate('Settings'), 200); } },
+                { icon: '?',  label: 'Tour guidato',     action: () => { closeMenu(); setTimeout(openTour, 200); } },
+                { icon: '🎧', label: 'Supporto tecnico', action: () => { closeMenu(); setTimeout(() => setSupportOpen(true), 200); } },
+              ].map(item => (
+                <TouchableOpacity key={item.label} style={styles.menuItem} onPress={item.action} activeOpacity={0.7}>
+                  <Text style={styles.menuItemIcon}>{item.icon}</Text>
+                  <Text style={styles.menuItemText}>{item.label}</Text>
+                  <Text style={styles.menuItemArrow}>›</Text>
+                </TouchableOpacity>
+              ))}
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Supporto tecnico modal ── */}
+      <Modal visible={supportOpen} transparent animationType="fade" onRequestClose={() => setSupportOpen(false)}>
+        <Pressable style={styles.supportOverlay} onPress={() => setSupportOpen(false)}>
+          <Pressable style={styles.supportSheet} onPress={() => {}}>
+            <Text style={styles.supportIcon}>🎧</Text>
+            <Text style={styles.supportTitle}>Supporto tecnico</Text>
+            <Text style={styles.supportBody}>
+              Hai bisogno di aiuto? Scrivici una email e ti risponderemo il prima possibile.
+            </Text>
+            <Text style={styles.supportEmail}>valentinopy95@gmail.com</Text>
+            <TouchableOpacity
+              style={styles.supportBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                setSupportOpen(false);
+                Linking.openURL('mailto:valentinopy95@gmail.com?subject=Supporto%20Misu');
+              }}
+            >
+              <Text style={styles.supportBtnText}>Apri app email</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.supportCancel} onPress={() => setSupportOpen(false)}>
+              <Text style={styles.supportCancelText}>Annulla</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -400,23 +478,15 @@ const styles = StyleSheet.create({
   arrowChar: { fontSize: 22, fontWeight: '700', color: NAVY, lineHeight: 28 },
 
   // ── Buttons header ──
-  settingsBtn: {
+  burgerBtn: {
     position: 'absolute', top: 52, right: 18,
     width: 36, height: 36, borderRadius: 10,
     backgroundColor: '#F0F4F8',
     alignItems: 'center', justifyContent: 'center',
+    gap: 5,
   },
-  statsBtn: {
-    position: 'absolute', top: 52, right: 106,
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: '#F0F4F8',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  helpBtn: {
-    position: 'absolute', top: 52, right: 62,
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: '#F0F4F8',
-    alignItems: 'center', justifyContent: 'center',
+  burgerLine: {
+    width: 18, height: 2, borderRadius: 2, backgroundColor: NAVY,
   },
   accountBtn: {
     position: 'absolute', top: 52, left: 18,
@@ -425,6 +495,43 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerIcon: { fontSize: 17 },
+
+  // ── Menu burger panel ──
+  menuBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-start', alignItems: 'flex-end',
+  },
+  menuPanel: {
+    width: 260, minHeight: '100%',
+    backgroundColor: '#fff',
+    paddingTop: 56, paddingBottom: 30,
+    elevation: 16,
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20, shadowOffset: { width: -4, height: 0 },
+  },
+  menuProfileBlock: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingBottom: 20, gap: 12,
+  },
+  menuAvatar: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: NAVY,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  menuAvatarText:    { color: '#fff', fontWeight: '900', fontSize: 18 },
+  menuProfileName:   { fontSize: 14, fontWeight: '800', color: '#1a2a3a' },
+  menuProfileEmail:  { fontSize: 11, color: '#8a9ab0', marginTop: 2 },
+  menuDivider:       { height: 1, backgroundColor: '#EEF2F7', marginHorizontal: 16, marginBottom: 8 },
+  menuItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 14, gap: 14,
+  },
+  menuNavIconBox:   { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  menuNavSub:       { fontSize: 10, color: '#8a9ab0', marginTop: 1 },
+  menuSecondaryItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, gap: 14 },
+  menuSecondaryText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#555' },
+  menuItemIcon:  { fontSize: 18, width: 26, textAlign: 'center' },
+  menuItemText:  { fontSize: 14, fontWeight: '700' },
+  menuItemArrow: { fontSize: 20, color: '#ccc', fontWeight: '700' },
   companyBanner: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#1a3f8f',
@@ -444,4 +551,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
   },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+
+  // ── Supporto modal ──
+  supportOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', paddingHorizontal: 28,
+  },
+  supportSheet: {
+    backgroundColor: NAVY, borderRadius: 22,
+    padding: 28, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+  },
+  supportIcon:   { fontSize: 40, marginBottom: 12 },
+  supportTitle:  { fontSize: 20, fontWeight: '900', color: '#fff', marginBottom: 10, textAlign: 'center' },
+  supportBody:   { fontSize: 14, color: 'rgba(255,255,255,0.75)', textAlign: 'center', lineHeight: 21, marginBottom: 12 },
+  supportEmail:  { fontSize: 13, fontWeight: '700', color: '#90CAF9', marginBottom: 24 },
+  supportBtn: {
+    backgroundColor: '#fff', borderRadius: 14,
+    paddingHorizontal: 32, paddingVertical: 14,
+    width: '100%', alignItems: 'center', marginBottom: 10,
+  },
+  supportBtnText:    { fontSize: 15, fontWeight: '800', color: NAVY },
+  supportCancel:     { paddingVertical: 10 },
+  supportCancelText: { fontSize: 14, color: 'rgba(255,255,255,0.5)', fontWeight: '600' },
 });

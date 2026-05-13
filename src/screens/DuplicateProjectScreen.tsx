@@ -242,9 +242,9 @@ export default function DuplicateProjectScreen() {
       </ScrollView>
 
       {/* Modal picker serie */}
-      <Modal visible={showSeriesPicker} transparent animationType="slide" onRequestClose={() => setShowSeriesPicker(false)}>
+      <Modal visible={showSeriesPicker} transparent animationType="fade" onRequestClose={() => setShowSeriesPicker(false)}>
         <Pressable style={s.overlay} onPress={() => setShowSeriesPicker(false)}>
-          <Pressable style={s.pickerSheet}>
+          <Pressable style={s.pickerSheet} onPress={() => {}}>
             <Text style={s.pickerTitle}>Serie catalogo</Text>
             <TouchableOpacity
               style={[s.pickerRow, !catalogSeriesId && s.pickerRowActive]}
@@ -327,8 +327,8 @@ const s = StyleSheet.create({
   seriesBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDE3ED', paddingHorizontal: 14, paddingVertical: 12 },
   seriesBtnText: { fontSize: 14, fontWeight: '600', color: '#1a2a3a', flex: 1 },
 
-  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  pickerSheet: { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 40 },
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', paddingHorizontal: 24 },
+  pickerSheet: { backgroundColor: '#fff', borderRadius: 20, padding: 24, maxHeight: '80%' },
   pickerTitle: { fontSize: 13, fontWeight: '900', color: '#1a2a3a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
   pickerRow:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F0F4F8' },
   pickerRowActive:{ backgroundColor: '#EEF4FF' },

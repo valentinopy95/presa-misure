@@ -18,8 +18,16 @@ const PLANS = [
     yearly:      190,
     yearlyPromo: false,
     users:       2,
+    series:      2,
     color:       '#1565C0',
     light:       '#E3F2FD',
+    features: [
+      'Progetti illimitati',
+      'PDF rilievo, materiale e taglio',
+      'Fuori squadra',
+      'Serie catalogo: fino a 2',
+      '2 utenti inclusi',
+    ],
   },
   {
     key:         'pro' as const,
@@ -28,16 +36,18 @@ const PLANS = [
     yearly:      290,
     yearlyPromo: true,
     users:       5,
+    series:      5,
     color:       '#6A1B9A',
     light:       '#F3E5F5',
+    features: [
+      'Progetti illimitati',
+      'PDF rilievo, materiale e taglio',
+      'Fuori squadra',
+      'Serie catalogo: fino a 5',
+      '5 utenti inclusi',
+      'Serie/utente extra: +€3/mese',
+    ],
   },
-];
-
-const FEATURES = [
-  'Progetti illimitati',
-  'Tutte le funzionalità',
-  'PDF rilievo, materiale e taglio',
-  'Fuori squadra',
 ];
 
 function openURL(url: string) {
@@ -98,12 +108,16 @@ export default function PaywallScreen() {
 
       {/* ─── Piano attivo ─── */}
       {isPaid && (
-        <View style={s.activeCard}>
-          <Text style={s.activeIcon}>{plan === 'pro' ? '★' : '✓'}</Text>
+        <View style={[s.activeCard, { borderTopWidth: 4, borderTopColor: plan === 'pro' ? '#6A1B9A' : '#1565C0' }]}>
+          <Text style={[s.activeIcon, { color: plan === 'pro' ? '#6A1B9A' : '#1565C0' }]}>{plan === 'pro' ? '★' : '✓'}</Text>
           <Text style={s.activeTitle}>
             Piano {plan === 'base' ? 'Base' : 'Pro'} attivo
           </Text>
-          <Text style={s.activeSub}>Hai accesso a tutte le funzionalità senza limiti.</Text>
+          <Text style={s.activeSub}>
+            {plan === 'base'
+              ? `Fino a 2 serie catalogo e 2 utenti inclusi.\nPer aggiungerne di più, passa al piano Pro.`
+              : `Fino a 5 serie catalogo e 5 utenti inclusi.\nSerie/utente extra disponibili a €3/mese dalle Impostazioni.`}
+          </Text>
           <TouchableOpacity
             style={s.manageBtn}
             onPress={handleManage}
@@ -188,7 +202,7 @@ export default function PaywallScreen() {
                   <Text style={[s.planUsers, { color: p.color }]}>fino a {p.users} utenti</Text>
                 </View>
                 <View style={s.planBody}>
-                  {FEATURES.map(f => (
+                  {p.features.map(f => (
                     <View key={f} style={s.featureRow}>
                       <Text style={[s.featureCheck, { color: p.color }]}>✓</Text>
                       <Text style={s.featureText}>{f}</Text>
@@ -221,8 +235,8 @@ const s = StyleSheet.create({
   content: { padding: 20, paddingBottom: 48 },
 
   // Attivo
-  activeCard:  { backgroundColor: '#fff', borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 20, elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
-  activeIcon:  { fontSize: 36, color: '#6A1B9A', marginBottom: 10 },
+  activeCard:  { backgroundColor: '#fff', borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 20, elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, overflow: 'hidden' },
+  activeIcon:  { fontSize: 36, marginBottom: 10 },
   activeTitle: { fontSize: 20, fontWeight: '900', color: '#1a2a3a', marginBottom: 6 },
   activeSub:   { fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 20, lineHeight: 19 },
 

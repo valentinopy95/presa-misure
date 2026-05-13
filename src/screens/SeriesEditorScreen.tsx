@@ -8,6 +8,9 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { v4 as uuidv4 } from 'uuid';
 import * as AppAlert from '../components/AppAlert';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import {
   CatalogSeries, CatalogVariant,
   getCatalogSeries, upsertCatalogSeries, deleteCatalogSeries,
@@ -78,8 +81,12 @@ export default function SeriesEditorScreen() {
   };
 
   const handleSave = async () => {
-    const id = await saveName();
-    if (id) navigation.goBack();
+    try {
+      const id = await saveName();
+      if (id) navigation.goBack();
+    } catch (e: any) {
+      AppAlert.show('Errore salvataggio', e?.message ?? 'Impossibile salvare la serie. Riprova.');
+    }
   };
 
   const handleAddVariant = async (leafCount: number) => {
@@ -112,6 +119,44 @@ export default function SeriesEditorScreen() {
         navigation.goBack();
       }},
     ]);
+  };
+
+  const handleExport = async () => {
+    if (!currentId) {
+      AppAlert.show('Salva prima', 'Salva la serie prima di esportarla.');
+      return;
+    }
+    const all = await getCatalogSeries();
+    const series = all.find(s => s.id === currentId);
+    if (!series) return;
+    const json = JSON.stringify(series, null, 2);
+    const fileName = `${series.name.replace(/[^a-zA-Z0-9_\-]/g, '_')}.misu.json`;
+    const path = FileSystem.cacheDirectory + fileName;
+    await FileSystem.writeAsStringAsync(path, json, { encoding: FileSystem.EncodingType.UTF8 });
+    await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Esporta serie' });
+  };
+
+  const handleImport = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/json', 'text/plain', '*/*'],
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    try {
+      const raw = await FileSystem.readAsStringAsync(result.assets[0].uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const parsed = JSON.parse(raw) as CatalogSeries;
+      if (!parsed.id || !parsed.name || !Array.isArray(parsed.variants)) {
+        AppAlert.show('File non valido', 'Il file non è una serie Misu valida.');
+        return;
+      }
+      // Assegna nuovo ID per evitare conflitti
+      const imported: CatalogSeries = { ...parsed, id: uuidv4() };
+      await upsertCatalogSeries(imported);
+      AppAlert.show('Serie importata', `"${imported.name}" è stata aggiunta alle tue serie.`);
+      navigation.goBack();
+    } catch {
+      AppAlert.show('Errore', 'Impossibile leggere il file. Assicurati che sia un file .misu.json valido.');
+    }
   };
 
   const usedLeafCounts = variants.map(v => v.leafCount);
@@ -185,6 +230,12 @@ export default function SeriesEditorScreen() {
         </TouchableOpacity>
 
         {currentId && (
+          <TouchableOpacity style={s.exportBtn} onPress={handleExport}>
+            <Text style={s.exportBtnText}>Esporta file .misu.json</Text>
+          </TouchableOpacity>
+        )}
+
+        {currentId && (
           <TouchableOpacity style={s.deleteBtn} onPress={handleDelete}>
             <Text style={s.deleteBtnText}>Elimina serie</Text>
           </TouchableOpacity>
@@ -193,9 +244,9 @@ export default function SeriesEditorScreen() {
       </ScrollView>
 
       {/* Modal picker numero ante */}
-      <Modal visible={showLeafPicker} transparent animationType="slide" onRequestClose={() => setShowLeafPicker(false)}>
+      <Modal visible={showLeafPicker} transparent animationType="fade" onRequestClose={() => setShowLeafPicker(false)}>
         <Pressable style={s.overlay} onPress={() => setShowLeafPicker(false)}>
-          <Pressable style={s.sheet}>
+          <Pressable style={s.sheet} onPress={() => {}}>
             <Text style={s.sheetTitle}>Seleziona numero ante</Text>
             <View style={s.leafGrid}>
               {LEAF_OPTIONS.map(n => {
@@ -261,12 +312,14 @@ const s = StyleSheet.create({
 
   saveBtn:       { backgroundColor: '#0c2d75', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 24, marginBottom: 12 },
   saveBtnText:   { color: '#fff', fontWeight: '900', fontSize: 16 },
+  exportBtn:     { borderWidth: 1.5, borderColor: '#0c2d75', borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginBottom: 12 },
+  exportBtnText: { color: '#0c2d75', fontWeight: '700', fontSize: 14 },
   deleteBtn:     { borderWidth: 1.5, borderColor: '#DC2626', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   deleteBtnText: { color: '#DC2626', fontWeight: '700', fontSize: 14 },
 
   // Modal
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  sheet:   { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 36 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', paddingHorizontal: 24 },
+  sheet:   { backgroundColor: '#fff', borderRadius: 20, padding: 24 },
   sheetTitle: { fontSize: 13, fontWeight: '900', color: '#1a2a3a', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 20, textAlign: 'center' },
 
   leafGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 20 },
