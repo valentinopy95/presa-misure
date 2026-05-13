@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Serie catalogo — Misu</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F0F4F8; color: #1a2a3a; min-height: 100vh; }
+
+    nav {
+      background: #0c2d75; padding: 0 24px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo { color: #fff; font-size: 20px; font-weight: 900; letter-spacing: 1px; text-decoration: none; }
+    .nav-user  { color: rgba(255,255,255,0.75); font-size: 13px; }
+
+    .container { max-width: 760px; margin: 0 auto; padding: 32px 20px 60px; }
+
+    /* AUTH */
+    .auth-card {
+      background: #fff; border-radius: 20px; padding: 40px 32px;
+      max-width: 400px; margin: 60px auto;
+      box-shadow: 0 4px 24px rgba(12,45,117,0.10);
+    }
+    .auth-card h2 { font-size: 22px; font-weight: 900; color: #0c2d75; margin-bottom: 8px; }
+    .auth-card p  { font-size: 14px; color: #7a8a9a; margin-bottom: 28px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 11px; font-weight: 800; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .field input {
+      width: 100%; padding: 11px 14px; border: 1.5px solid #DDE3ED; border-radius: 10px;
+      font-size: 14px; color: #1a2a3a; outline: none; transition: border-color 0.15s;
+    }
+    .field input:focus { border-color: #0c2d75; }
+    .btn-primary {
+      width: 100%; padding: 14px; background: #0c2d75; color: #fff;
+      border: none; border-radius: 12px; font-size: 15px; font-weight: 800;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .auth-err { color: #DC2626; font-size: 13px; margin-top: 12px; text-align: center; }
+
+    /* HEADER */
+    .page-header { margin-bottom: 28px; }
+    .page-header h1 { font-size: 26px; font-weight: 900; color: #0c2d75; }
+    .page-header p  { font-size: 14px; color: #7a8a9a; margin-top: 4px; }
+
+    /* AZIONI */
+    .actions { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+    .btn-import {
+      padding: 10px 20px; background: #0c2d75; color: #fff;
+      border: none; border-radius: 10px; font-size: 13px; font-weight: 800;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+    }
+    .btn-import:hover { opacity: 0.88; }
+    #fileInput { display: none; }
+
+    /* CARD SERIE */
+    .series-list { display: flex; flex-direction: column; gap: 14px; }
+    .series-card {
+      background: #fff; border-radius: 16px; padding: 18px 20px;
+      box-shadow: 0 2px 12px rgba(12,45,117,0.07);
+      display: flex; align-items: center; gap: 16px;
+    }
+    .series-icon {
+      width: 48px; height: 48px; border-radius: 14px; background: #EEF4FF;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .series-info { flex: 1; min-width: 0; }
+    .series-name { font-size: 16px; font-weight: 800; color: #1a2a3a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .series-meta { font-size: 12px; color: #7a8a9a; margin-top: 3px; }
+    .series-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .btn-download {
+      padding: 8px 16px; background: #0c2d75; color: #fff;
+      border: none; border-radius: 9px; font-size: 12px; font-weight: 800;
+      cursor: pointer; white-space: nowrap;
+    }
+    .btn-download:hover { opacity: 0.88; }
+    .btn-delete {
+      padding: 8px 14px; background: #FEF2F2; color: #DC2626;
+      border: 1.5px solid #FCA5A5; border-radius: 9px; font-size: 12px; font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-delete:hover { background: #FEE2E2; }
+
+    /* EMPTY */
+    .empty {
+      text-align: center; padding: 60px 20px;
+      background: #fff; border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(12,45,117,0.07);
+    }
+    .empty-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty h3 { font-size: 17px; font-weight: 800; color: #1a2a3a; margin-bottom: 8px; }
+    .empty p  { font-size: 14px; color: #7a8a9a; line-height: 1.6; }
+
+    /* SPINNER */
+    .spinner { text-align: center; padding: 60px; color: #7a8a9a; font-size: 14px; }
+
+    /* TOAST */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: #1a2a3a; color: #fff; padding: 12px 24px;
+      border-radius: 12px; font-size: 14px; font-weight: 600;
+      opacity: 0; transition: opacity 0.25s; pointer-events: none; white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    .toast.show { opacity: 1; }
+
+    .logout-btn { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 13px; cursor: pointer; padding: 4px 8px; }
+    .logout-btn:hover { color: #fff; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">MISU</a>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="nav-user" id="navUser"></span>
+    <button class="logout-btn" id="logoutBtn" style="display:none" onclick="logout()">Esci</button>
+  </div>
+</nav>
+
+<div id="authSection" style="display:none">
+  <div class="auth-card">
+    <h2>Accedi</h2>
+    <p>Usa le stesse credenziali dell'app Misu per gestire le tue serie catalogo dal PC.</p>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="tua@email.com" autocomplete="email"/>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <button class="btn-primary" id="loginBtn" onclick="login()">Accedi</button>
+    <div class="auth-err" id="authErr"></div>
+  </div>
+</div>
+
+<div id="appSection" style="display:none">
+  <div class="container">
+    <div class="page-header">
+      <h1>Serie catalogo</h1>
+      <p>Gestisci le tue serie di profili. Esporta per condividerle, importa da un file .misu.json ricevuto.</p>
+    </div>
+
+    <div class="actions">
+      <button class="btn-import" onclick="document.getElementById('fileInput').click()">
+        ↑ Importa serie
+      </button>
+      <input type="file" id="fileInput" accept=".json,.misu.json,application/json,text/plain" onchange="importSeries(event)"/>
+    </div>
+
+    <div id="seriesList"><div class="spinner">Caricamento serie...</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  const SUPABASE_URL  = 'https://vhsfdvkuzqqlmpuucfbt.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoc2Zkdmt1enFxbG1wdXVjZmJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NDk3NDYsImV4cCI6MjA5MTIyNTc0Nn0.2GZUKWmNj_c8hTKizXsL35wqbhpgmk1fMP5mAnTqhfw';
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  window._sb = sb;
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+  window.showToast = showToast;
+
+  async function getCompanyId(userId) {
+    const { data } = await sb.from('profiles').select('company_id').eq('id', userId).single();
+    return data?.company_id ?? null;
+  }
+
+  async function loadSeries() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+    const companyId = await getCompanyId(user.id);
+    if (!companyId) { renderSeries([]); return; }
+
+    const { data, error } = await sb.from('catalog_series').select('data').eq('company_id', companyId);
+    if (error || !data) { renderSeries([]); return; }
+    renderSeries(data.map(r => r.data));
+  }
+  window.loadSeries = loadSeries;
+
+  function renderSeries(list) {
+    const el = document.getElementById('seriesList');
+    if (list.length === 0) {
+      el.innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">📂</div>
+          <h3>Nessuna serie</h3>
+          <p>Importa un file .misu.json ricevuto da Misu<br>oppure crea le serie direttamente nell'app.</p>
+        </div>`;
+      return;
+    }
+    el.innerHTML = `<div class="series-list">${list.map(s => `
+      <div class="series-card">
+        <div class="series-icon">📋</div>
+        <div class="series-info">
+          <div class="series-name">${escHtml(s.name)}</div>
+          <div class="series-meta">${s.variants?.length ?? 0} varianti</div>
+        </div>
+        <div class="series-actions">
+          <button class="btn-download" onclick="downloadSeries(${escAttr(JSON.stringify(s))})">↓ Esporta</button>
+          <button class="btn-delete"   onclick="deleteSeries('${escHtml(s.id)}', '${escHtml(s.name)}')">Elimina</button>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function escAttr(s) { return s.replace(/'/g, '&#39;').replace(/"/g, '&quot;'); }
+
+  window.downloadSeries = function(series) {
+    const json = JSON.stringify(series, null, 2);
+    const name = series.name.replace(/[^a-zA-Z0-9_\-]/g, '_') + '.misu.json';
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+    showToast(`"${series.name}" esportata`);
+  };
+
+  window.deleteSeries = async function(id, name) {
+    if (!confirm(`Eliminare la serie "${name}"? L'operazione è irreversibile.`)) return;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+    await sb.from('catalog_series').delete().eq('id', id);
+    showToast(`"${name}" eliminata`);
+    loadSeries();
+  };
+
+  window.importSeries = async function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    event.target.value = '';
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed.id || !parsed.name || !Array.isArray(parsed.variants)) {
+        alert('File non valido. Assicurati che sia un file .misu.json esportato da Misu.');
+        return;
+      }
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) return;
+      const companyId = await getCompanyId(user.id);
+      if (!companyId) return;
+
+      // Nuovo ID per evitare conflitti
+      const newId = crypto.randomUUID();
+      const imported = { ...parsed, id: newId };
+
+      const { error } = await sb.from('catalog_series').upsert({
+        id:         newId,
+        company_id: companyId,
+        user_id:    user.id,
+        data:       imported,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) { alert('Errore durante l\'importazione: ' + error.message); return; }
+      showToast(`"${imported.name}" importata`);
+      loadSeries();
+    } catch(e) {
+      alert('Impossibile leggere il file. Verifica che sia un .misu.json valido.');
+    }
+  };
+
+  window.login = async function() {
+    const email    = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const btn      = document.getElementById('loginBtn');
+    const errEl    = document.getElementById('authErr');
+    errEl.textContent = '';
+    btn.disabled = true; btn.textContent = 'Accesso...';
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    btn.disabled = false; btn.textContent = 'Accedi';
+    if (error) { errEl.textContent = 'Email o password errati. Riprova.'; return; }
+    initApp();
+  };
+
+  window.logout = async function() {
+    await sb.auth.signOut();
+    document.getElementById('appSection').style.display  = 'none';
+    document.getElementById('authSection').style.display = 'block';
+    document.getElementById('navUser').textContent = '';
+    document.getElementById('logoutBtn').style.display = 'none';
+  };
+
+  async function initApp() {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) {
+      document.getElementById('authSection').style.display = 'block';
+      return;
+    }
+    document.getElementById('authSection').style.display = 'none';
+    document.getElementById('appSection').style.display  = 'block';
+    document.getElementById('navUser').textContent = user.email;
+    document.getElementById('logoutBtn').style.display = 'inline-block';
+    loadSeries();
+  }
+
+  // Enter per login
+  document.getElementById('loginPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') window.login();
+  });
+
+  initApp();
+</script>
+</body>
+</html>

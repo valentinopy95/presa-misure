@@ -15,9 +15,9 @@ import {
   CatalogSeries, getCatalogSeries,
 } from '../storage/settings';
 import {
-  calculateMaterials, calculateCatalogCuttingList, catalogCuttingToMaterials, openingsWithoutSeries,
   MaterialsResult, MaterialsConfig, ProfileResult, MIN_REMNANT_MM, CuttingListResult,
 } from '../utils/calculateMaterials';
+import { calculateRemote } from '../utils/calculateRemote';
 import { generateHTML } from '../utils/pdfExport';
 import { getLogoBase64, sharePdf, saveToDevice } from '../utils/pdfActions';
 import * as AppAlert from '../components/AppAlert';
@@ -47,6 +47,7 @@ export default function MaterialsScreen() {
   const [catalogResult,  setCatalogResult]  = useState<MaterialsResult | null>(null);
   const [catalogSeries,  setCatalogSeries]  = useState<CatalogSeries | null>(null);
   const [matConfig,      setMatConfig]      = useState<MaterialsConfig | null>(null);
+  const [calcError,      setCalcError]      = useState(false);
 
   const activeProjectId = family[activeIdx]?.id ?? projectId;
 
@@ -61,10 +62,14 @@ export default function MaterialsScreen() {
   const [extraBars,      setExtraBars]      = useState<Record<string, number>>({});
   const [magazzinoMatch, setMagazzinoMatch] = useState(false);
 
-  const projectRef   = useRef(project);
-  const matConfigRef = useRef(matConfig);
-  projectRef.current   = project;
-  matConfigRef.current = matConfig;
+  const projectRef        = useRef(project);
+  const matConfigRef      = useRef(matConfig);
+  const resultRef         = useRef(result);
+  const catalogResultRef2 = useRef(catalogResult);
+  projectRef.current        = project;
+  matConfigRef.current      = matConfig;
+  resultRef.current         = result;
+  catalogResultRef2.current = catalogResult;
 
   const handlePdfAction = useCallback(async (action: 'share' | 'save') => {
     const p   = projectRef.current;
@@ -74,7 +79,8 @@ export default function MaterialsScreen() {
     setPdfBusy(true);
     try {
       const [tolW, tolH, logo] = await Promise.all([getToleranceW(), getToleranceH(), getLogoBase64()]);
-      const html = generateHTML(p, tolW, tolH, logo, { mode: 'materiale', materialsConfig: cfg });
+      const precomputedMaterials = catalogResultRef2.current ?? resultRef.current ?? undefined;
+      const html = generateHTML(p, tolW, tolH, logo, { mode: 'materiale', materialsConfig: cfg, precomputedMaterials });
       const safe = p.name.replace(/[^a-zA-Z0-9À-ÿ \-_]/g, '_').trim();
       if (action === 'share') {
         await sharePdf(html, `${safe}_sviluppo`);
@@ -133,15 +139,17 @@ export default function MaterialsScreen() {
       setMagazzinoMatch(false);
     }
 
-    if (series) {
-      // Con serie: catalogo per le aperture eligibili, generico solo per il resto (zanzariere, ecc.)
-      const catCutting = calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg, tolByType);
-      setCatalogResult(catalogCuttingToMaterials(catCutting, margin));
-      setResult(calculateMaterials(openingsWithoutSeries(p.openings), cfg));
-    } else {
-      // Senza serie: calcolo standard su tutto
-      setCatalogResult(null);
-      setResult(calculateMaterials(p.openings, cfg));
+    try {
+      const calc = await calculateRemote({
+        openings: p.openings, config: cfg,
+        series: series ?? null,
+        toleranceW: tolW, toleranceH: tolH, toleranceByType: tolByType,
+      });
+      setCalcError(false);
+      setResult(calc.materialsResult);
+      setCatalogResult(calc.catalogMaterialsResult);
+    } catch {
+      setCalcError(true);
     }
   }, [activeProjectId]);
 
@@ -173,6 +181,19 @@ export default function MaterialsScreen() {
       if (n <= 0) { const { [label]: _, ...rest } = prev; return rest; }
       return { ...prev, [label]: n };
     });
+
+  if (calcError) {
+    return (
+      <View style={s.loading}>
+        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 16 }}>
+          Connessione assente.{'\n'}Controlla la rete e riprova.
+        </Text>
+        <TouchableOpacity onPress={loadAndCalculate} style={{ backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
+          <Text style={{ color: '#0c2d75', fontWeight: '800', fontSize: 15 }}>Riprova</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (!project || !result) {
     return <View style={s.loading}><ActivityIndicator color="#1565C0" size="large"/></View>;
@@ -459,7 +480,7 @@ function ProfileTable({ rows, extraBars }: { rows: ProfileResult[]; extraBars: R
 const s = StyleSheet.create({
   screen:      { flex: 1, backgroundColor: '#F0F4F8' },
   content:     { padding: 16 },
-  loading:     { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loading:     { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0c2d75' },
   topHeader:    { backgroundColor: '#0c2d75', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14 },
   tabContent:   { gap: 8 },
   tab: {

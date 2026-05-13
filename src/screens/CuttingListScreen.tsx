@@ -17,10 +17,10 @@ import {
   CatalogSeries, getCatalogSeries,
 } from '../storage/settings';
 import {
-  calculateCuttingList, calculateCatalogCuttingList, openingsWithoutSeries,
   CuttingListResult, CuttingProfile, CuttingBin, CuttingBinPiece,
   PieceGroup, MIN_REMNANT_MM,
 } from '../utils/calculateMaterials';
+import { calculateRemote } from '../utils/calculateRemote';
 import { generateCuttingListHTML } from '../utils/pdfExport';
 import { saveCuttingComplete } from '../storage/statusTracker';
 import { getMagazzino, saveMagazzino, emptyItem } from '../storage/magazzino';
@@ -46,6 +46,7 @@ export default function CuttingListScreen() {
   const [project,        setProject]        = useState<Project | null>(null);
   const [result,         setResult]         = useState<CuttingListResult | null>(null);
   const [catalogResult,  setCatalogResult]  = useState<CuttingListResult | null>(null);
+  const [calcError,      setCalcError]      = useState(false);
   const [catalogSeries,  setCatalogSeries]  = useState<CatalogSeries | null>(null);
   const [config,         setConfig]         = useState<{ barLength: number; riattestattura: number; kerf90: number; antaReduction: number } | null>(null);
   const [presets,        setPresets]        = useState<SettingsPreset[]>([]);
@@ -141,13 +142,17 @@ export default function CuttingListScreen() {
       setMagazzinoMatch(false);
     }
 
-    if (series) {
-      // Catalogo per aperture eligibili, default per il resto
-      setCatalogResult(calculateCatalogCuttingList(p.openings, series, tolW, tolH, cfg, tolByType));
-      setResult(calculateCuttingList(openingsWithoutSeries(p.openings), cfg));
-    } else {
-      setCatalogResult(null);
-      setResult(calculateCuttingList(p.openings, cfg));
+    try {
+      const calc = await calculateRemote({
+        openings: p.openings, config: cfg,
+        series: series ?? null,
+        toleranceW: tolW, toleranceH: tolH, toleranceByType: tolByType,
+      });
+      setCalcError(false);
+      setResult(calc.cuttingResult);
+      setCatalogResult(calc.catalogCuttingResult);
+    } catch {
+      setCalcError(true);
     }
   }, [activeProjectId]);
 
@@ -211,6 +216,19 @@ export default function CuttingListScreen() {
   const seriesBanner = catalogSeries
     ? { label: `Serie: ${catalogSeries.name}`, color: '#6A1B9A', bg: '#F3E5F5' }
     : { label: 'Calcolo standard (nessuna serie)', color: '#37474F', bg: '#ECEFF1' };
+
+  if (calcError) {
+    return (
+      <View style={s.loading}>
+        <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 16 }}>
+          Connessione assente.{'\n'}Controlla la rete e riprova.
+        </Text>
+        <TouchableOpacity onPress={loadAndCalculate} style={{ backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 }}>
+          <Text style={{ color: '#0c2d75', fontWeight: '800', fontSize: 15 }}>Riprova</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (!project || !result || !config) {
     return <View style={s.loading}><ActivityIndicator color="#1565C0" size="large"/></View>;
@@ -604,7 +622,7 @@ const s = StyleSheet.create({
   switchBtnIcon:  { fontSize: 15 },
   switchBtnTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#fff' },
   switchBtnArrow: { fontSize: 18, color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
-  loading:     { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loading:     { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0c2d75' },
   header: {
     backgroundColor: '#1565C0', borderRadius: 16,
     padding: 16, marginBottom: 14,

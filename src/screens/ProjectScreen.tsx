@@ -13,7 +13,7 @@ import { Project, Opening, OpeningStyle, RootStackParamList } from '../types';
 import { getProject, getProjectFamily, deleteOpening, saveOpening, deleteProject, saveProject } from '../storage/database';
 import { getToleranceW, getToleranceH, getToleranceByType, toleranceForStyle, ToleranceByType, getPrices, priceForStyle, PriceConfig, getRiattestattura, getBarLength, getKerf90, getSafetyMargin, getSlatPitch, getZoccoloH, getFasciaH, getAntaReduction, getAntaTopRail, getCatalogSeries, CatalogSeries, getDefaultCatalogSeriesId, getDetailedPrices, priceForStyleDetailed, DetailedPriceConfig } from '../storage/settings';
 import { generateHTML, generateCuttingListHTML, generateFullPDF, generateCuttingListCSV } from '../utils/pdfExport';
-import { calculateCuttingList } from '../utils/calculateMaterials';
+import { calculateRemote } from '../utils/calculateRemote';
 import { getLogoBase64, sharePdf, saveToDevice, shareCSV } from '../utils/pdfActions';
 import * as FileSystem from 'expo-file-system/legacy';
 import OpeningCard from '../components/OpeningCard';
@@ -192,23 +192,15 @@ export default function ProjectScreen() {
     setShowExportModal(false);
     setExporting(true);
     try {
-      const matConfig = {
-        riattestattura: await getRiattestattura(),
-        barLength:      await getBarLength(),
-        kerf90:         await getKerf90(),
-        safetyMargin:   await getSafetyMargin(),
-        slatPitch:      await getSlatPitch(),
-        zoccoloH:       await getZoccoloH(),
-        fasciaH:        await getFasciaH(),
-        antaReduction:  await getAntaReduction(),
-        antaTopRail:    await getAntaTopRail(),
-      };
-      const [cuttingResult, allSeriesList, tolW, tolH] = await Promise.all([
-        Promise.resolve(calculateCuttingList(activeProject.openings, matConfig)),
-        getCatalogSeries(),
-        getToleranceW(),
-        getToleranceH(),
+      const [riatt, barLen, kerf, margin, slatP, zocH, fasH, antaRed, antaTop, allSeriesList, tolW, tolH, tolByType] = await Promise.all([
+        getRiattestattura(), getBarLength(), getKerf90(), getSafetyMargin(),
+        getSlatPitch(), getZoccoloH(), getFasciaH(), getAntaReduction(), getAntaTopRail(),
+        getCatalogSeries(), getToleranceW(), getToleranceH(), getToleranceByType(),
       ]);
+      const matConfig = { riattestattura: riatt, barLength: barLen, kerf90: kerf, safetyMarginPct: margin, slatPitch: slatP, zoccoloH: zocH, fasciaH: fasH, antaReduction: antaRed, antaTopRail: antaTop };
+      const series = activeProject.catalogSeriesId ? allSeriesList.find(s => s.id === activeProject.catalogSeriesId) ?? null : null;
+      const calc = await calculateRemote({ openings: activeProject.openings, config: matConfig, series, toleranceW: tolW, toleranceH: tolH, toleranceByType: tolByType });
+      const cuttingResult = calc.catalogCuttingResult ?? calc.cuttingResult;
       // Usa la serie del progetto se impostata
       const projectSeries = activeProject.catalogSeriesId
         ? allSeriesList.filter(s => s.id === activeProject.catalogSeriesId)
@@ -251,7 +243,7 @@ export default function ProjectScreen() {
       let filename: string;
 
       if (pdfType === 'rilievo') {
-        // Carica solo la prima foto di ogni apertura come base64
+        // Solo misure — nessun calcolo necessario
         const photoMap: Record<string, string[]> = {};
         await Promise.all(activeProject!.openings.map(async o => {
           if (!o.photos?.length) return;
@@ -262,18 +254,25 @@ export default function ProjectScreen() {
         }));
         html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'misure', prices, photoMap });
         filename = `${safe}_rilievo`;
-      } else if (pdfType === 'sviluppo') {
-        html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'materiale', materialsConfig: matConfig, prices });
-        filename = `${safe}_sviluppo`;
-      } else if (pdfType === 'distinta') {
-        const cuttingResult = calculateCuttingList(activeProject!.openings, matConfig);
-        html = generateCuttingListHTML(activeProject!, cuttingResult, logo);
-        filename = `${safe}_distinta`;
       } else {
-        // completo — tutti e 3 in un unico PDF
-        const cuttingResult = calculateCuttingList(activeProject!.openings, matConfig);
-        html = generateFullPDF(activeProject!, tolW, tolH, cuttingResult, logo, matConfig, prices);
-        filename = `${safe}_completo`;
+        // Tutti i tipi che richiedono calcoli → Edge Function
+        const [allSeriesList, tolByType] = await Promise.all([getCatalogSeries(), getToleranceByType()]);
+        const series = activeProject!.catalogSeriesId ? allSeriesList.find(s => s.id === activeProject!.catalogSeriesId) ?? null : null;
+        const calc = await calculateRemote({ openings: activeProject!.openings, config: matConfig, series, toleranceW: tolW, toleranceH: tolH, toleranceByType: tolByType });
+        const cuttingResult = calc.catalogCuttingResult ?? calc.cuttingResult;
+        const materialsResult = calc.catalogMaterialsResult ?? calc.materialsResult;
+
+        if (pdfType === 'sviluppo') {
+          html = generateHTML(activeProject!, tolW, tolH, logo, { mode: 'materiale', materialsConfig: matConfig, prices, precomputedMaterials: materialsResult });
+          filename = `${safe}_sviluppo`;
+        } else if (pdfType === 'distinta') {
+          html = generateCuttingListHTML(activeProject!, cuttingResult, logo);
+          filename = `${safe}_distinta`;
+        } else {
+          // completo — tutti e 3 in un unico PDF
+          html = generateFullPDF(activeProject!, tolW, tolH, cuttingResult, logo, matConfig, prices, materialsResult);
+          filename = `${safe}_completo`;
+        }
       }
 
       if (action === 'share') {

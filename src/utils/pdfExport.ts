@@ -1,5 +1,5 @@
 import { Project, Opening, OpeningStyle } from '../types';
-import { calculateMaterials, MaterialsResult, MaterialsConfig, CuttingListResult, CuttingProfile, computePieceLength } from './calculateMaterials';
+import { MaterialsResult, MaterialsConfig, CuttingListResult, CuttingProfile, computePieceLength } from './calculateMaterials';
 import { PriceConfig, priceForStyle, CatalogSeries, findBestVariant } from '../storage/settings';
 
 export type PdfMode = 'both' | 'misure' | 'materiale';
@@ -540,6 +540,7 @@ export interface GenerateHTMLOptions {
   photoMap?: Record<string, string[]>;
   materialsConfig?: MaterialsConfig;
   prices?: PriceConfig;
+  precomputedMaterials?: MaterialsResult;
 }
 
 function preventivoSection(openings: Opening[], prices: PriceConfig): string {
@@ -632,7 +633,7 @@ export function generateHTML(
     return html;
   }).join('');
 
-  const matResult = showMateriale ? calculateMaterials(project.openings, matConfig) : null;
+  const matResult = showMateriale ? (opts?.precomputedMaterials ?? null) : null;
   const matHTML = matResult ? materialsSection(matResult, barLength) : '';
   const prevHTML = opts?.prices ? preventivoSection(project.openings, opts.prices) : '';
 
@@ -753,9 +754,10 @@ export function generateFullPDF(
   logoBase64?: string,
   matConfig?: Partial<MaterialsConfig>,
   prices?: PriceConfig,
+  precomputedMaterials?: MaterialsResult,
 ): string {
   const rilievoBody   = generateHTML(project, toleranceW, toleranceH, logoBase64, { mode: 'misure', prices });
-  const materialeBody = generateHTML(project, toleranceW, toleranceH, logoBase64, { mode: 'materiale', materialsConfig: matConfig });
+  const materialeBody = generateHTML(project, toleranceW, toleranceH, logoBase64, { mode: 'materiale', materialsConfig: matConfig, precomputedMaterials });
   const distintatBody = generateCuttingListHTML(project, cuttingResult, logoBase64);
 
   // Estrai il contenuto <body> da ciascun HTML e li unisce con page-break
