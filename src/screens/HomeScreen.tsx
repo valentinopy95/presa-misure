@@ -52,6 +52,14 @@ const MENU_ITEMS = [
     color: '#37474F',
     light: '#ECEFF1',
   },
+  {
+    key: 'series',
+    image: require('../../assets/menu_cutting.png'),
+    title: 'Serie catalogo',
+    subtitle: 'Gestisci i profili e le formule di taglio',
+    color: '#00695C',
+    light: '#E0F2F1',
+  },
 ];
 
 export default function HomeScreen() {
@@ -78,6 +86,7 @@ export default function HomeScreen() {
   const card1Ref   = useRef<View>(null);
   const card2Ref   = useRef<View>(null);
   const card3Ref   = useRef<View>(null);
+  const card4Ref   = useRef<View>(null);
 
   const measureEl = (ref: React.RefObject<View>): Promise<SpotRect | null> =>
     new Promise(resolve => {
@@ -241,6 +250,7 @@ export default function HomeScreen() {
     else if (key === 'saved') navigation.navigate('SavedProjects');
     else if (key === 'materials') navigation.navigate('MaterialsProjects');
     else if (key === 'cutting') navigation.navigate('CuttingProjects');
+    else if (key === 'series') navigation.navigate('CatalogSeries');
   };
 
   return (
@@ -309,7 +319,7 @@ export default function HomeScreen() {
       <View style={styles.menu}>
         {MENU_ITEMS.map((item, i) => {
           const anim = anims[i];
-          const cardRef = i === 0 ? card0Ref : i === 1 ? card1Ref : i === 2 ? card2Ref : card3Ref;
+          const cardRef = i === 0 ? card0Ref : i === 1 ? card1Ref : i === 2 ? card2Ref : i === 3 ? card3Ref : card4Ref;
           return (
             <Animated.View
               key={item.key}

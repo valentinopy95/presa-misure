@@ -41,6 +41,7 @@ import PaywallScreen           from './src/screens/PaywallScreen';
 import SeriesEditorScreen      from './src/screens/SeriesEditorScreen';
 import VariantEditorScreen     from './src/screens/VariantEditorScreen';
 import MagazzinoScreen         from './src/screens/MagazzinoScreen';
+import CatalogSeriesScreen     from './src/screens/CatalogSeriesScreen';
 import {
   SettingsTolleranzeScreen,
   SettingsParametriScreen,
@@ -101,6 +102,7 @@ function AppNavigator() {
         <Stack.Screen name="SettingsPrezzi"     component={SettingsPrezziScreen}     options={{ title: 'Prezzi al m²' }}/>
         <Stack.Screen name="SettingsGenerico"   component={SettingsGenericoScreen}   options={{ title: 'Calcolo generico' }}/>
         <Stack.Screen name="Magazzino"          component={MagazzinoScreen}          options={{ title: 'Magazzino avanzi' }}/>
+        <Stack.Screen name="CatalogSeries"      component={CatalogSeriesScreen}      options={{ title: 'Serie catalogo' }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );
