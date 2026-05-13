@@ -1043,14 +1043,37 @@ export function generateCuttingListCSV(
       const variantLabel = variant.leafCount === 1 ? '1 anta' : `${variant.leafCount} ante`;
 
       const hasSoglia = o.hasSoglia === true;
+
+      // Auto-telaio: se la variante non ha pezzi telaio, aggiungili automaticamente
+      const hasTelaioInVariant = variant.pieces.some(p => (p.pieceCategory ?? 'anta') === 'telaio');
+      if (!hasTelaioInVariant) {
+        const tOff = variant.telaiOffset ?? 0;
+        const s = o.style!;
+        const isSlidingT = s === 'window_sliding' || s === 'door_sliding';
+        const isShutterT = s.startsWith('shutter');
+        const isDoorT    = s.startsWith('door');
+        const nTraversi  = (isShutterT || (isDoorT && !isSlidingT && !o.hasBattente)) ? 1 : 2;
+        const tW  = Math.round(pcL + tOff);
+        const tH  = Math.round(pcH + tOff);
+        const wLbl = tOff > 0 ? `Traverso (${Math.round(pcL)}+${Math.round(tOff)})` : 'Traverso';
+        const hLbl = tOff > 0 ? `Montante (${Math.round(pcH)}+${Math.round(tOff)})` : 'Montante';
+        for (let t = 0; t < nTraversi; t++)
+          lines.push(`${o.name};${styleLabel};${o.leafCount ?? '—'};${variantLabel};${wLbl};1;${tW};45°;45°`);
+        lines.push(`${o.name};${styleLabel};${o.leafCount ?? '—'};${variantLabel};${hLbl};2;${tH};45°;45°`);
+      }
+
       for (const piece of variant.pieces) {
         const cond = piece.condition ?? 'always';
         if (cond === 'no_soglia'   &&  hasSoglia) continue;
         if (cond === 'with_soglia' && !hasSoglia) continue;
-        const base   = piece.baseVar === 'L' ? pcL : pcH;
-        const length = Math.round(((base - piece.offset) / piece.divisor) * 2) / 2;
-        const angA   = piece.cutAngle1 === 45 ? '45°' : '90°';
-        const angB   = piece.cutAngle2 === 45 ? '45°' : '90°';
+        const base = piece.baseVar === 'L' ? pcL : pcH;
+        const df   = piece.divideFirst === true;
+        const length = df
+          ? Math.round(((base / piece.divisor) + piece.offset) * 2) / 2
+          : Math.round(((base + piece.offset) / piece.divisor) * 2) / 2;
+        if (length <= 0) continue;
+        const angA = piece.cutAngle1 === 45 ? '45°' : '90°';
+        const angB = piece.cutAngle2 === 45 ? '45°' : '90°';
         lines.push(`${o.name};${styleLabel};${o.leafCount ?? '—'};${variantLabel};${piece.name};${piece.quantity};${length};${angA};${angB}`);
       }
     }
