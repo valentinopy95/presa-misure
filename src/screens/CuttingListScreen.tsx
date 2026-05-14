@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
   TouchableOpacity, Modal, Pressable,
 } from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as AppAlert from '../components/AppAlert';
 import { RootStackParamList, Project } from '../types';
@@ -57,6 +57,8 @@ export default function CuttingListScreen() {
   const [magazzinoMatch, setMagazzinoMatch] = useState(false);
 
   const activeProjectId = family[activeIdx]?.id ?? projectId;
+  const activeProjectIdRef = useRef(activeProjectId);
+  activeProjectIdRef.current = activeProjectId;
 
   useEffect(() => {
     getProjectFamily(projectId).then(fam => {
@@ -64,10 +66,15 @@ export default function CuttingListScreen() {
     });
   }, [projectId]);
 
+  useFocusEffect(useCallback(() => {
+    getCuttingProgress(activeProjectIdRef.current).then(keys => {
+      setChecked(keys.length > 0 ? new Set(keys) : new Set());
+    });
+  }, []));
+
   useEffect(() => {
     getCuttingProgress(activeProjectId).then(keys => {
-      if (keys.length > 0) setChecked(new Set(keys));
-      else setChecked(new Set());
+      setChecked(keys.length > 0 ? new Set(keys) : new Set());
     });
   }, [activeProjectId]);
 
@@ -87,10 +94,11 @@ export default function CuttingListScreen() {
     setChecked(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
-      saveCuttingProgress(projectId, [...next]);
+      const pid = activeProjectIdRef.current;
+      saveCuttingProgress(pid, [...next]);
       const nowComplete  = totalPieces > 0 && next.size >= totalPieces;
       const wasComplete  = totalPieces > 0 && prev.size >= totalPieces;
-      saveCuttingComplete(projectId, nowComplete);
+      saveCuttingComplete(pid, nowComplete);
       if (nowComplete && !wasComplete) {
         // snapshot refs so the closure stays stable
         const catRes = catalogResultRef.current;
@@ -535,10 +543,12 @@ function BarRow({
           {bin.pieces.map((piece, pi) => {
             const widthPct = (piece.length / barLength) * 100;
             const color = PIECE_COLORS[pi % PIECE_COLORS.length];
+            const ck   = `${profileKey}_b${barIndex}_p${pi}`;
+            const done = checked.has(ck);
             return (
               <View
                 key={pi}
-                style={[br.segment, { width: `${widthPct}%` as any, backgroundColor: color }]}
+                style={[br.segment, { width: `${widthPct}%` as any, backgroundColor: color, opacity: done ? 0.25 : 1 }]}
               />
             );
           })}
