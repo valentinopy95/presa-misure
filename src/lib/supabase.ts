@@ -15,10 +15,20 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
 });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+export type MemberRole = 'owner' | 'admin' | 'member';
+
 export interface Profile {
   id:         string;
   full_name:  string | null;
   company_id: string | null;
+  role:       MemberRole;
+}
+
+export interface CompanyMember {
+  id:        string;
+  full_name: string | null;
+  email:     string | null;
+  role:      MemberRole;
 }
 
 export type CompanyPlan      = 'free' | 'base' | 'pro';
@@ -59,10 +69,14 @@ export async function fetchProfile(userId: string, timeoutMs = 10000): Promise<P
     );
     const fetchPromise = supabase
       .from('profiles')
-      .select('id, full_name, company_id')
+      .select('id, full_name, company_id, role')
       .eq('id', userId)
       .single()
-      .then(({ data, error }) => (error ? null : (data as Profile)));
+      .then(({ data, error }) => {
+        if (error || !data) return null;
+        const d = data as any;
+        return { ...d, role: d.role ?? 'member' } as Profile;
+      });
 
     return await Promise.race([fetchPromise, timeoutPromise]);
   } catch {
@@ -132,7 +146,7 @@ export async function createCompany(userId: string, name: string): Promise<Compa
       .select()
       .single();
     if (!error && data) {
-      await supabase.from('profiles').update({ company_id: data.id }).eq('id', userId);
+      await supabase.from('profiles').update({ company_id: data.id, role: 'owner' }).eq('id', userId);
       return data as Company;
     }
     code = generateCompanyCode();
@@ -219,8 +233,8 @@ export async function checkAndAcceptInvite(userId: string): Promise<Company | nu
 
   const invite = invites[0];
 
-  // Aggiorna il profilo con la company
-  await supabase.from('profiles').update({ company_id: invite.company_id }).eq('id', userId);
+  // Aggiorna il profilo con la company e imposta ruolo member
+  await supabase.from('profiles').update({ company_id: invite.company_id, role: 'member' }).eq('id', userId);
 
   // Elimina l'invito accettato
   await supabase.from('company_invites').delete().eq('id', invite.id);
@@ -306,4 +320,66 @@ export async function getCompanyUserCount(companyId: string): Promise<number> {
     .select('*', { count: 'exact', head: true })
     .eq('company_id', companyId);
   return count ?? 1;
+}
+
+// ─── Gestione membri ──────────────────────────────────────────────────────────
+
+/** Lista tutti i membri dell'azienda con email e ruolo */
+export async function listCompanyMembers(companyId: string): Promise<CompanyMember[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .eq('company_id', companyId)
+    .order('role', { ascending: true });
+
+  if (error || !data) return [];
+
+  // Recupera le email da auth.users tramite la funzione RPC o fallback email utente corrente
+  const members: CompanyMember[] = await Promise.all(
+    (data as any[]).map(async (p) => {
+      // Prova a recuperare l'email dall'identità (solo per l'utente corrente funziona lato client)
+      return {
+        id:        p.id,
+        full_name: p.full_name ?? null,
+        email:     null, // verrà riempito lato UI per l'utente corrente
+        role:      (p.role ?? 'member') as MemberRole,
+      };
+    })
+  );
+  return members;
+}
+
+/** Aggiorna il ruolo di un membro (solo owner/admin possono farlo) */
+export async function updateMemberRole(memberId: string, role: MemberRole): Promise<boolean> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ role })
+    .eq('id', memberId);
+  return !error;
+}
+
+/** Rimuove un membro dall'azienda (scollegalo, non lo cancella) */
+export async function removeMember(memberId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ company_id: null, role: 'member' })
+    .eq('id', memberId);
+  return !error;
+}
+
+/** Elimina l'azienda — solo owner. Scollega tutti i membri prima. */
+export async function deleteCompany(companyId: string, ownerId: string): Promise<boolean> {
+  // Verifica che chi chiama sia l'owner
+  const { data: company } = await supabase
+    .from('companies')
+    .select('owner_id')
+    .eq('id', companyId)
+    .single();
+  if (!company || company.owner_id !== ownerId) return false;
+
+  // Scollega tutti i membri
+  await supabase.from('profiles').update({ company_id: null, role: 'member' }).eq('company_id', companyId);
+  // Elimina l'azienda
+  const { error } = await supabase.from('companies').delete().eq('id', companyId);
+  return !error;
 }

@@ -248,6 +248,40 @@ export default function DuplicateProjectScreen() {
                     />
                   </View>
                 </View>
+
+                {/* Colore profilo */}
+                <Text style={[s.catLabel, { marginTop: 12 }]}>Colore profilo</Text>
+                <View style={s.colorRow}>
+                  {(['Bianco', 'Legno', 'Anodizzato'] as const).map(c => (
+                    <TouchableOpacity
+                      key={c}
+                      style={[s.colorChip, draft.color === c && s.colorChipActive]}
+                      onPress={() => updateDraft(index, { color: draft.color === c ? null : c })}
+                    >
+                      <Text style={[s.colorChipText, draft.color === c && s.colorChipTextActive]}>{c}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    style={[s.colorChip, (draft.color !== null && draft.color !== undefined && !['Bianco', 'Legno', 'Anodizzato'].includes(draft.color ?? '')) && s.colorChipActive]}
+                    onPress={() => {
+                      const isRal = draft.color !== null && draft.color !== undefined && !['Bianco', 'Legno', 'Anodizzato'].includes(draft.color ?? '');
+                      updateDraft(index, { color: isRal ? null : '' });
+                    }}
+                  >
+                    <Text style={[s.colorChipText, (draft.color !== null && draft.color !== undefined && !['Bianco', 'Legno', 'Anodizzato'].includes(draft.color ?? '')) && s.colorChipTextActive]}>
+                      RAL
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {draft.color !== null && draft.color !== undefined && !['Bianco', 'Legno', 'Anodizzato'].includes(draft.color ?? '') && (
+                  <TextInput
+                    style={s.dimInput}
+                    placeholder="Es. RAL 9005, Bronzo..."
+                    placeholderTextColor="#aaa"
+                    value={draft.color ?? ''}
+                    onChangeText={t => updateDraft(index, { color: t })}
+                  />
+                )}
               </>
             )}
           </View>
@@ -339,6 +373,15 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC',
   },
   catChipText: { fontSize: 12, fontWeight: '700', color: '#555' },
+
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  colorChip: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+    borderWidth: 1.5, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC',
+  },
+  colorChipActive:     { backgroundColor: '#FFF8E1', borderColor: '#F57F17' },
+  colorChipText:       { fontSize: 12, fontWeight: '700', color: '#555' },
+  colorChipTextActive: { color: '#F57F17' },
 
   dimsRow: { flexDirection: 'row', gap: 12 },
   dimWrap: { flex: 1 },

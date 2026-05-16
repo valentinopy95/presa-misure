@@ -25,10 +25,10 @@ const VARIANT_TOUR: TourStep[] = [
 type Nav   = NativeStackNavigationProp<RootStackParamList, 'VariantEditor'>;
 type Route = RouteProp<RootStackParamList, 'VariantEditor'>;
 
-type PieceCategory = 'telaio' | 'anta' | 'fermavetro' | 'riporto';
+type PieceCategory = 'telaio' | 'anta' | 'fermavetro' | 'riporto' | 'fascia_zoccolo' | 'lamella' | 'mezza_lamella' | 'posizionatore';
 
-function emptyPiece(cat: PieceCategory): CatalogPiece {
-  return { id: uuidv4(), name: '', quantity: 1, baseVar: 'L', offset: 0, divisor: 1, cutAngle1: 45, cutAngle2: 45, pieceCategory: cat, op1: '-', val1: 0, op2: '÷', val2: 1 };
+function emptyPiece(cat: PieceCategory, angle: 45 | 90 = 45): CatalogPiece {
+  return { id: uuidv4(), name: '', quantity: 1, baseVar: 'L', offset: 0, divisor: 1, cutAngle1: angle, cutAngle2: angle, pieceCategory: cat, op1: '-', val1: 0, op2: '÷', val2: 1 };
 }
 
 // Converte pezzi vecchio formato (offset/divisor) in nuovo formato (op1/val1/op2/val2)
@@ -55,18 +55,62 @@ const SECTIONS: { cat: PieceCategory; label: string; color: string; bg: string; 
   { cat: 'riporto',    label: 'Riporto',    color: '#2E7D32', bg: '#E8F5E9', hint: 'Coprigiunto tra ante (solo battente multiplo)' },
 ];
 
+const EXTRA_SECTIONS: { cat: PieceCategory; label: string; color: string; bg: string; hint: string }[] = [
+  { cat: 'fascia_zoccolo', label: 'Fascia / Zoccolo', color: '#E65100', bg: '#FFF3E0', hint: 'Profilo fascia o zoccolo (taglio 90°)' },
+  { cat: 'lamella',        label: 'Lamella',           color: '#00838F', bg: '#E0F7FA', hint: 'Lamella veneziana (taglio 90°)' },
+  { cat: 'mezza_lamella',  label: 'Mezza Lamella',     color: '#00695C', bg: '#E0F2F1', hint: 'Mezza lamella (taglio 90°)' },
+  { cat: 'posizionatore',  label: 'Posizionatore',     color: '#546E7A', bg: '#ECEFF1', hint: 'Posizionatore lamella (taglio 90°)' },
+];
+
+type SubConditionKey = 'always' | 'con_battente' | 'senza_battente' | 'with_soglia';
+interface SubSec { key: SubConditionKey; label: string }
+
+const SUB_SECTIONS: Partial<Record<string, { telaio: SubSec[]; anta: SubSec[] }>> = {
+  porta_fredda: {
+    telaio: [
+      { key: 'con_battente',   label: 'Con battente' },
+      { key: 'senza_battente', label: 'Senza battente' },
+      { key: 'with_soglia',    label: 'Soglia ribassata' },
+    ],
+    anta: [
+      { key: 'con_battente',   label: 'Con battente' },
+      { key: 'senza_battente', label: 'Senza battente' },
+      { key: 'with_soglia',    label: 'Soglia ribassata' },
+    ],
+  },
+  porta_termica: {
+    telaio: [
+      { key: 'always',      label: 'Standard' },
+      { key: 'with_soglia', label: 'Soglia ribassata' },
+    ],
+    anta: [
+      { key: 'always',      label: 'Standard' },
+      { key: 'with_soglia', label: 'Soglia ribassata' },
+    ],
+  },
+};
+
 export default function VariantEditorScreen() {
   const navigation = useNavigation<Nav>();
   const route      = useRoute<Route>();
   const { seriesId, variantId, leafCount: paramLeafCount } = route.params;
 
-  const [leafCount,     setLeafCount]     = useState<number>(paramLeafCount ?? 1);
-  const [pieces,        setPieces]        = useState<CatalogPiece[]>([emptyPiece('anta')]);
-  const [telaiOffset,   setTelaiOffset]   = useState<number>(0);
-  const [articleCodes,  setArticleCodes]  = useState<Partial<Record<PieceCategory, string>>>({});
-  const [saving,        setSaving]        = useState(false);
-  const [tourVisible,   setTourVisible]   = useState(false);
-  const [seriesName,    setSeriesName]    = useState<string>('');
+  const [leafCount,       setLeafCount]       = useState<number>(paramLeafCount ?? 1);
+  const [pieces,          setPieces]          = useState<CatalogPiece[]>([emptyPiece('anta')]);
+  const [telaiOffset,     setTelaiOffset]     = useState<number>(0);
+  const [articleCodes,    setArticleCodes]    = useState<Partial<Record<PieceCategory, string>>>({});
+  const [saving,          setSaving]          = useState(false);
+  const [tourVisible,     setTourVisible]     = useState(false);
+  const [seriesName,      setSeriesName]      = useState<string>('');
+  const [seriesType,      setSeriesType]      = useState<NonNullable<import('../storage/settings').CatalogSeries['seriesType']>>([]);
+  const [openSections,    setOpenSections]    = useState<Set<PieceCategory>>(new Set());
+  const [openSubSections, setOpenSubSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = (cat: PieceCategory) =>
+    setOpenSections(prev => { const s = new Set(prev); s.has(cat) ? s.delete(cat) : s.add(cat); return s; });
+
+  const toggleSubSection = (key: string) =>
+    setOpenSubSections(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s; });
 
   // ID stabile: usa variantId dai params o genera uno nuovo UNA SOLA VOLTA
   const effectiveId = useRef<string>(variantId ?? uuidv4());
@@ -90,7 +134,7 @@ export default function VariantEditorScreen() {
   useEffect(() => {
     getCatalogSeries().then(list => {
       const s = list.find(x => x.id === seriesId);
-      if (s) setSeriesName(s.name);
+      if (s) { setSeriesName(s.name); setSeriesType(s.seriesType ?? []); }
     });
   }, [seriesId]);
 
@@ -103,11 +147,18 @@ export default function VariantEditorScreen() {
         setLeafCount(v.leafCount);
         setTelaiOffset(v.telaiOffset ?? 0);
         setArticleCodes(v.articleCodes ?? {});
-        // Migrazione: categoria → anta, e vecchio formato offset/divisor → op1/val1/op2/val2
         const migrated = v.pieces
           .map(p => ({ ...p, pieceCategory: p.pieceCategory ?? 'anta' as PieceCategory }))
           .map(migratePiece);
         setPieces(migrated.length ? migrated : [emptyPiece('anta')]);
+        // Auto-apri le sezioni che hanno già pezzi
+        const catsWithPieces = new Set(migrated.map(p => (p.pieceCategory ?? 'anta') as PieceCategory));
+        setOpenSections(catsWithPieces);
+        // Auto-apri le sotto-sezioni che hanno già pezzi
+        const subKeys = new Set(migrated
+          .filter(p => (p.pieceCategory ?? 'anta') === 'telaio' || (p.pieceCategory ?? 'anta') === 'anta')
+          .map(p => `${p.pieceCategory ?? 'anta'}|${p.condition ?? 'always'}`));
+        setOpenSubSections(subKeys);
       }
     });
   }, [variantId, seriesId]);
@@ -115,8 +166,10 @@ export default function VariantEditorScreen() {
   const updatePiece = (id: string, patch: Partial<CatalogPiece>) =>
     setPieces(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
 
-  const addPiece = (cat: PieceCategory) =>
-    setPieces(prev => [...prev, emptyPiece(cat)]);
+  const addPiece   = (cat: PieceCategory) => setPieces(prev => [...prev, emptyPiece(cat, 45)]);
+  const addPiece90 = (cat: PieceCategory) => setPieces(prev => [...prev, emptyPiece(cat, 90)]);
+  const addPieceWithCondition = (cat: PieceCategory, condition: CatalogPiece['condition']) =>
+    setPieces(prev => [...prev, { ...emptyPiece(cat, 45), condition }]);
 
   const removePiece = (id: string) =>
     setPieces(prev => prev.length <= 1 ? prev : prev.filter(p => p.id !== id));
@@ -192,8 +245,7 @@ export default function VariantEditorScreen() {
         <Text style={[s.pieceHdrCell, { width: 34 }]}>Val1</Text>
         <Text style={[s.pieceHdrCell, { width: 26 }]}>Op2</Text>
         <Text style={[s.pieceHdrCell, { width: 30 }]}>Val2</Text>
-        <Text style={[s.pieceHdrCell, { width: 38 }]}>Ang.A</Text>
-        <Text style={[s.pieceHdrCell, { width: 38 }]}>Ang.B</Text>
+        <Text style={[s.pieceHdrCell, { width: 58 }]}>Taglio</Text>
         <Text style={[s.pieceHdrCell, { width: 24 }]}></Text>
       </View>
       <View style={s.pieceRow}>
@@ -259,38 +311,25 @@ export default function VariantEditorScreen() {
             updatePiece(p.id, { val2: parseFloat(clean) || 1 });
           }}
         />
-        {/* Angolo A */}
+        {/* Tipo taglio: cicla 45/45 → 45/90 → 90/90 */}
         <TouchableOpacity
-          style={[s.toggleBtn, { width: 38 }, p.cutAngle1 === 90 && s.toggleBtn90]}
-          onPress={() => updatePiece(p.id, { cutAngle1: p.cutAngle1 === 45 ? 90 : 45 })}
+          style={[s.toggleBtn, { width: 58 },
+            (p.cutAngle1 === 90 || p.cutAngle2 === 90) && s.toggleBtn90]}
+          onPress={() => {
+            if (p.cutAngle1 === 45 && p.cutAngle2 === 45)
+              updatePiece(p.id, { cutAngle1: 45, cutAngle2: 90 });
+            else if (p.cutAngle1 === 45 && p.cutAngle2 === 90)
+              updatePiece(p.id, { cutAngle1: 90, cutAngle2: 90 });
+            else
+              updatePiece(p.id, { cutAngle1: 45, cutAngle2: 45 });
+          }}
         >
-          <Text style={s.toggleText}>{p.cutAngle1}°</Text>
-        </TouchableOpacity>
-        {/* Angolo B */}
-        <TouchableOpacity
-          style={[s.toggleBtn, { width: 38 }, p.cutAngle2 === 90 && s.toggleBtn90]}
-          onPress={() => updatePiece(p.id, { cutAngle2: p.cutAngle2 === 45 ? 90 : 45 })}
-        >
-          <Text style={s.toggleText}>{p.cutAngle2}°</Text>
+          <Text style={s.toggleText}>{p.cutAngle1}°/{p.cutAngle2}°</Text>
         </TouchableOpacity>
         {/* Rimuovi */}
         <TouchableOpacity style={s.removeBtn} onPress={() => removePiece(p.id)}>
           <Text style={s.removeBtnText}>×</Text>
         </TouchableOpacity>
-      </View>
-      {/* Condizione soglia */}
-      <View style={s.condRow}>
-        {(['always', 'no_soglia', 'with_soglia'] as const).map(cond => (
-          <TouchableOpacity
-            key={cond}
-            style={[s.condChip, (p.condition ?? 'always') === cond && { borderColor: sectionColor, backgroundColor: '#F0F4FF' }]}
-            onPress={() => updatePiece(p.id, { condition: cond })}
-          >
-            <Text style={[s.condChipText, (p.condition ?? 'always') === cond && { color: sectionColor }]}>
-              {cond === 'always' ? 'Sempre' : cond === 'no_soglia' ? 'Senza soglia' : 'Con soglia'}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
       <View style={s.pieceDivider}/>
     </View>
@@ -308,32 +347,6 @@ export default function VariantEditorScreen() {
           <Text style={s.configBadgeLabel}>{leafCount === 1 ? 'anta' : 'ante'}</Text>
         </View>
 
-        {/* Aletta telaio */}
-        <View style={s.telaiCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.telaiLabel}>ALETTA TELAIO</Text>
-            <Text style={s.telaiHint}>
-              mm aggiunti alla misura taglio per traversi e montanti.{'\n'}
-              Se hai pezzi telaio nella sezione Telaio, questo campo viene ignorato.
-            </Text>
-          </View>
-          <View style={s.telaiInputWrap}>
-            <TextInput
-              style={s.telaiInput}
-              keyboardType="number-pad"
-              value={telaiOffset === 0 ? '' : String(telaiOffset)}
-              placeholder="0"
-              placeholderTextColor="#aaa"
-              selectTextOnFocus
-              onChangeText={v => {
-                const n = parseInt(v.replace(/[^0-9]/g, ''), 10);
-                setTelaiOffset(isNaN(n) ? 0 : n);
-              }}
-            />
-            <Text style={s.telaiUnit}>mm</Text>
-          </View>
-        </View>
-
         {/* Intestazione colonne globale */}
         <View style={[s.headerRow, { backgroundColor: '#EEF2F7', borderRadius: 8, paddingVertical: 4, paddingHorizontal: 4 }]}>
           <Text style={[s.headerCell, { width: 36 }]}>Qtà{'\n'}pezzi</Text>
@@ -342,50 +355,109 @@ export default function VariantEditorScreen() {
           <Text style={[s.headerCell, { width: 34 }]}>Val1{'\n'}(mm)</Text>
           <Text style={[s.headerCell, { width: 26 }]}>Op2</Text>
           <Text style={[s.headerCell, { width: 30 }]}>Val2</Text>
-          <Text style={[s.headerCell, { width: 38 }]}>Ang.A</Text>
-          <Text style={[s.headerCell, { width: 38 }]}>Ang.B</Text>
+          <Text style={[s.headerCell, { width: 58 }]}>Taglio</Text>
           <Text style={[s.headerCell, { width: 24 }]}></Text>
         </View>
 
-        {/* Sezioni per categoria */}
-        {SECTIONS.map(sec => {
+        {/* Sezioni per categoria — tutte a tendina */}
+        {[...SECTIONS, ...EXTRA_SECTIONS].map(sec => {
           const secPieces = pieces.filter(p => (p.pieceCategory ?? 'anta') === sec.cat);
+          const isOpen    = openSections.has(sec.cat);
+          const isExtra   = ['fascia_zoccolo','lamella','mezza_lamella','posizionatore'].includes(sec.cat);
           return (
             <View key={sec.cat} style={[s.section, { borderColor: sec.color }]}>
-              {/* Header sezione */}
-              <View style={[s.sectionHeader, { backgroundColor: sec.bg }]}>
+              {/* Header accordion */}
+              <TouchableOpacity
+                style={[s.sectionHeader, { backgroundColor: sec.bg }]}
+                onPress={() => toggleSection(sec.cat)}
+                activeOpacity={0.75}
+              >
                 <View style={{ flex: 1 }}>
                   <Text style={[s.sectionTitle, { color: sec.color }]}>{sec.label.toUpperCase()}</Text>
-                  <Text style={[s.sectionHint, { color: sec.color }]}>{sec.hint}</Text>
+                  {!isOpen && <Text style={[s.sectionHint, { color: sec.color }]}>{sec.hint}</Text>}
                 </View>
-                <View style={s.articleWrap}>
-                  <Text style={[s.articleLabel, { color: sec.color }]}>Articolo</Text>
-                  <TextInput
-                    style={[s.articleInput, { borderColor: sec.color }]}
-                    placeholder="cod. articolo"
-                    placeholderTextColor={sec.color + '88'}
-                    value={articleCodes[sec.cat] ?? ''}
-                    onChangeText={v => setArticleCodes(prev => ({ ...prev, [sec.cat]: v }))}
-                    autoCapitalize="characters"
-                  />
-                </View>
-              </View>
-
-              {/* Pezzi della sezione */}
-              <View style={s.sectionBody}>
-                {secPieces.length === 0 && (
-                  <Text style={s.emptyHint}>Nessun pezzo — premi + per aggiungere</Text>
+                {secPieces.length > 0 && (
+                  <View style={[s.piecesCountBadge, { backgroundColor: sec.color }]}>
+                    <Text style={s.piecesCountText}>{secPieces.length}</Text>
+                  </View>
                 )}
-                {secPieces.map(p => renderPieceRow(p, sec.color))}
+                <Text style={[s.sectionArrow, { color: sec.color }]}>{isOpen ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
 
-                {/* Aggiungi */}
-                <TouchableOpacity
-                  style={[s.addPieceBtn, { borderColor: sec.color }]}
-                  onPress={() => addPiece(sec.cat)}
-                >
-                  <Text style={[s.addPieceBtnText, { color: sec.color }]}>+ Aggiungi pezzo {sec.label.toLowerCase()}</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Body: visibile solo se aperto */}
+              {isOpen && (
+                <View style={s.sectionBody}>
+                  <View style={s.articleRowInline}>
+                    <Text style={[s.articleLabel, { color: sec.color }]}>Articolo</Text>
+                    <TextInput
+                      style={[s.articleInput, { borderColor: sec.color }]}
+                      placeholder="cod. articolo"
+                      placeholderTextColor={sec.color + '88'}
+                      value={articleCodes[sec.cat] ?? ''}
+                      onChangeText={v => setArticleCodes(prev => ({ ...prev, [sec.cat]: v }))}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+
+                  {/* Sotto-sezioni fisse (telaio/anta per porta) */}
+                  {(() => {
+                    // Priorità: porta_fredda > porta_termica > resto (più sotto-sezioni vince)
+                    const PRIORITY = ['porta_fredda', 'porta_termica'];
+                    const activeType = PRIORITY.find(t => seriesType.includes(t)) ?? seriesType[0];
+                    const subSecs = activeType ? SUB_SECTIONS[activeType]?.[sec.cat as 'telaio' | 'anta'] : undefined;
+                    if (!subSecs) {
+                      // Nessuna sotto-sezione: rendering diretto
+                      return (
+                        <>
+                          {secPieces.length === 0 && <Text style={s.emptyHint}>Nessun pezzo — premi + per aggiungere</Text>}
+                          {secPieces.map(p => renderPieceRow(p, sec.color))}
+                          <TouchableOpacity
+                            style={[s.addPieceBtn, { borderColor: sec.color }]}
+                            onPress={() => isExtra ? addPiece90(sec.cat) : addPiece(sec.cat)}
+                          >
+                            <Text style={[s.addPieceBtnText, { color: sec.color }]}>+ Aggiungi {sec.label.toLowerCase()}</Text>
+                          </TouchableOpacity>
+                        </>
+                      );
+                    }
+                    // Con sotto-sezioni
+                    return subSecs.map(sub => {
+                      const subKey     = `${sec.cat}|${sub.key}`;
+                      const isSubOpen  = openSubSections.has(subKey);
+                      const subPieces  = secPieces.filter(p => (p.condition ?? 'always') === sub.key);
+                      return (
+                        <View key={sub.key} style={s.subSection}>
+                          <TouchableOpacity
+                            style={[s.subHeader, { borderLeftColor: sec.color }]}
+                            onPress={() => toggleSubSection(subKey)}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={[s.subTitle, { color: sec.color }]}>{sub.label.toUpperCase()}</Text>
+                            {subPieces.length > 0 && (
+                              <View style={[s.piecesCountBadge, { backgroundColor: sec.color }]}>
+                                <Text style={s.piecesCountText}>{subPieces.length}</Text>
+                              </View>
+                            )}
+                            <Text style={[s.sectionArrow, { color: sec.color }]}>{isSubOpen ? '▲' : '▼'}</Text>
+                          </TouchableOpacity>
+                          {isSubOpen && (
+                            <View style={s.subBody}>
+                              {subPieces.length === 0 && <Text style={s.emptyHint}>Nessun pezzo — premi + per aggiungere</Text>}
+                              {subPieces.map(p => renderPieceRow(p, sec.color))}
+                              <TouchableOpacity
+                                style={[s.addPieceBtn, { borderColor: sec.color }]}
+                                onPress={() => addPieceWithCondition(sec.cat, sub.key)}
+                              >
+                                <Text style={[s.addPieceBtnText, { color: sec.color }]}>+ Aggiungi pezzo</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    });
+                  })()}
+                </View>
+              )}
             </View>
           );
         })}
@@ -432,7 +504,7 @@ const s = StyleSheet.create({
 
   telaiCard:      { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E5F5', borderRadius: 12, padding: 12, marginBottom: 16, gap: 12, borderWidth: 1.5, borderColor: '#CE93D8' },
   telaiLabel:     { fontSize: 10, fontWeight: '900', color: '#7B1FA2', letterSpacing: 1, marginBottom: 3 },
-  telaiHint:      { fontSize: 10, color: '#9C27B0', lineHeight: 14 },
+  telaiHint:      { fontSize: 10, color: '#9C27B0', lineHeight: 15 },
   telaiInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   telaiInput:     { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1.5, borderColor: '#CE93D8', width: 56, paddingVertical: 8, paddingHorizontal: 6, fontSize: 16, fontWeight: '800', color: '#7B1FA2', textAlign: 'center' },
   telaiUnit:      { fontSize: 12, fontWeight: '700', color: '#7B1FA2' },
@@ -451,9 +523,22 @@ const s = StyleSheet.create({
   sectionHint:  { fontSize: 10, fontWeight: '500', opacity: 0.7, marginTop: 2 },
   sectionBody:  { padding: 10 },
 
-  articleWrap:  { alignItems: 'flex-end', gap: 2 },
-  articleLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.8, opacity: 0.75 },
-  articleInput: { backgroundColor: '#fff', borderRadius: 7, borderWidth: 1.5, paddingHorizontal: 8, paddingVertical: 5, fontSize: 11, fontWeight: '700', textAlign: 'center', minWidth: 90, maxWidth: 110 },
+  articleWrap:       { alignItems: 'flex-end', gap: 2 },
+  articleRowInline:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  articleLabel:      { fontSize: 8, fontWeight: '900', letterSpacing: 0.8, opacity: 0.75 },
+  articleInput:      { backgroundColor: '#fff', borderRadius: 7, borderWidth: 1.5, paddingHorizontal: 8, paddingVertical: 5, fontSize: 11, fontWeight: '700', textAlign: 'center', minWidth: 90, maxWidth: 110 },
+  sectionArrow:      { fontSize: 12, fontWeight: '800', marginLeft: 6 },
+  piecesCountBadge:  { borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, marginRight: 4 },
+  piecesCountText:   { fontSize: 11, fontWeight: '900', color: '#fff' },
+
+  subSection: { marginBottom: 6 },
+  subHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderLeftWidth: 3, paddingLeft: 10, paddingVertical: 8, paddingRight: 6,
+    backgroundColor: '#F7F9FC', borderRadius: 8,
+  },
+  subTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8, flex: 1, textTransform: 'uppercase' },
+  subBody:  { paddingLeft: 8, paddingTop: 6 },
 
   divSymbol:  { fontSize: 13, fontWeight: '900', color: '#888', width: 14, textAlign: 'center' },
   emptyHint:    { fontSize: 11, color: '#aaa', textAlign: 'center', paddingVertical: 8 },

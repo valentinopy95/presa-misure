@@ -28,7 +28,7 @@ function accentColor(style: OpeningStyle | null): string {
 
 export default function OpeningCard({ opening, onPress, onDelete, onDuplicate, pricePerSqm, tolW, tolH }: Props) {
   const hasDims = opening.width || opening.height;
-  const color = accentColor(opening.style);
+  const accentCol = accentColor(opening.style);
   // Misura taglio = luce − tolleranza (se disponibile)
   const displayW = (tolW != null && tolW > 0 && opening.width) ? opening.width - tolW : opening.width;
   const displayH = (tolH != null && tolH > 0 && opening.height) ? opening.height - tolH : opening.height;
@@ -41,7 +41,7 @@ export default function OpeningCard({ opening, onPress, onDelete, onDuplicate, p
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.78}>
       {/* Left accent */}
-      <View style={[styles.accent, { backgroundColor: color }]}/>
+      <View style={[styles.accent, { backgroundColor: accentCol }]}/>
 
       {/* Photo thumbnail */}
       {opening.photos.length > 0 && (
@@ -85,27 +85,30 @@ export default function OpeningCard({ opening, onPress, onDelete, onDuplicate, p
         {hasDims && (
           <View style={styles.dims}>
             {showTaglio && <Text style={styles.taglioLabel}>✂</Text>}
-            <View style={[styles.dimChip, { borderColor: color + '40' }]}>
+            <View style={[styles.dimChip, { borderColor: accentCol + '40' }]}>
               <Text style={styles.dimLabel}>L</Text>
-              <Text style={[styles.dimVal, { color }]}>{formatDim(displayW)}</Text>
+              <Text style={[styles.dimVal, { color: accentCol }]}>{formatDim(displayW)}</Text>
               <Text style={styles.dimUnit}>mm</Text>
             </View>
             <Text style={styles.dimSep}>×</Text>
-            <View style={[styles.dimChip, { borderColor: color + '40' }]}>
+            <View style={[styles.dimChip, { borderColor: accentCol + '40' }]}>
               <Text style={styles.dimLabel}>H</Text>
-              <Text style={[styles.dimVal, { color }]}>{formatDim(displayH)}</Text>
+              <Text style={[styles.dimVal, { color: accentCol }]}>{formatDim(displayH)}</Text>
               <Text style={styles.dimUnit}>mm</Text>
             </View>
           </View>
         )}
 
-        {(opening.profileSeries || opening.glassType) && (
+        {(opening.profileSeries || opening.glassType || (opening.color && opening.color !== '')) && (
           <View style={styles.specRow}>
             {opening.profileSeries && (
               <Text style={styles.specTag}>{opening.profileSeries}</Text>
             )}
             {opening.glassType && (
               <Text style={[styles.specTag, styles.specGlass]}>{opening.glassType}</Text>
+            )}
+            {opening.color && opening.color !== '' && (
+              <Text style={[styles.specTag, styles.specColor]}>{opening.color}</Text>
             )}
           </View>
         )}
@@ -182,6 +185,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 2,
   },
   specGlass: { backgroundColor: '#E3F2FD', color: '#1565C0' },
+  specColor: { backgroundColor: '#FFF8E1', color: '#F57F17' },
 
   styleRow:   { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 2 },
   infoBadges: { flexDirection: 'row', gap: 4 },

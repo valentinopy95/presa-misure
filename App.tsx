@@ -42,6 +42,7 @@ import SeriesEditorScreen      from './src/screens/SeriesEditorScreen';
 import VariantEditorScreen     from './src/screens/VariantEditorScreen';
 import MagazzinoScreen         from './src/screens/MagazzinoScreen';
 import CatalogSeriesScreen     from './src/screens/CatalogSeriesScreen';
+import DeliveryNoteScreen      from './src/screens/DeliveryNoteScreen';
 import {
   SettingsTolleranzeScreen,
   SettingsParametriScreen,
@@ -103,6 +104,7 @@ function AppNavigator() {
         <Stack.Screen name="SettingsGenerico"   component={SettingsGenericoScreen}   options={{ title: 'Calcolo generico' }}/>
         <Stack.Screen name="Magazzino"          component={MagazzinoScreen}          options={{ title: 'Magazzino avanzi' }}/>
         <Stack.Screen name="CatalogSeries"      component={CatalogSeriesScreen}      options={{ title: 'Serie catalogo' }}/>
+        <Stack.Screen name="DeliveryNote"       component={DeliveryNoteScreen}       options={{ title: 'Bolla di consegna' }}/>
       </Stack.Navigator>
     </NavigationContainer>
   );

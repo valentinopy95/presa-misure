@@ -1,17 +1,27 @@
 export type UserRole = 'builder' | 'sales' | 'surveyor';
 
 export type OpeningStyle =
-  // Finestre
+  // Finestre taglio freddo
   | 'window_fixed'
   | 'window_single'
   | 'window_double'
   | 'window_sliding'
   | 'window_tilt_turn'
-  // Porte
+  // Finestre taglio termico
+  | 'window_fixed_t'
+  | 'window_single_t'
+  | 'window_double_t'
+  | 'window_sliding_t'
+  | 'window_tilt_turn_t'
+  // Porte taglio freddo
   | 'door_single'
   | 'door_sliding'
   | 'door_entrance'
-  // Persiane
+  // Porte taglio termico
+  | 'door_single_t'
+  | 'door_sliding_t'
+  | 'door_entrance_t'
+  // Persiane (solo taglio freddo)
   | 'shutter_single'
   | 'shutter_double'
   // Monoblocchi con tapparella
@@ -24,6 +34,16 @@ export type OpeningStyle =
   | 'mosquito_lateral'
   // Personalizzata (disegno libero)
   | 'custom'
+
+export type SeriesType =
+  | 'finestra_freddo'
+  | 'finestra_termico'
+  | 'porta_fredda'
+  | 'porta_termica'
+  | 'persiana'
+  | 'zanzariera'
+  | 'controtelaio'
+  | 'personalizzato'
 export type OpeningSide = 'left' | 'right' | 'center' | 'center-left' | 'center-right' | 'top' | 'bottom' | 'both';
 
 export interface AudioNote {
@@ -60,6 +80,7 @@ export interface Opening {
   profileSeries: string | null;    // serie profilo (es. EKOS 100, EKU 66 TT)
   catalogSeriesId: string | null;  // id serie catalogo per calcolo taglio
   glassType: string | null;        // tipo vetro (es. Doppio 4/16/4 Ar)
+  color: string | null;            // colore profilo (es. Bianco, Legno, Anodizzato, RAL 9005)
   photos: Photo[];
   textNote: string;
   audioNote: AudioNote | null;
@@ -114,4 +135,5 @@ export type RootStackParamList = {
   SettingsGenerico:   undefined;
   Magazzino:          undefined;
   CatalogSeries:      undefined;
+  DeliveryNote:       undefined;
 };

@@ -8,7 +8,7 @@ const CORS = {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type PieceOp = '+' | '-' | '÷';
-type PieceGroup = 'telaio' | 'anta' | 'fermavetro' | 'riporto';
+type PieceGroup = 'telaio' | 'anta' | 'fermavetro' | 'riporto' | 'fascia_zoccolo' | 'lamella' | 'mezza_lamella' | 'posizionatore';
 
 interface Opening {
   id: string;
@@ -36,7 +36,7 @@ interface CatalogPiece {
   divisor: number;
   cutAngle1: 45 | 90;
   cutAngle2: 45 | 90;
-  condition?: 'always' | 'no_soglia' | 'with_soglia';
+  condition?: 'always' | 'no_soglia' | 'with_soglia' | 'con_battente' | 'senza_battente';
   pieceCategory?: PieceGroup;
   divideFirst?: boolean;
   op1?: PieceOp;
@@ -326,11 +326,17 @@ function gatherPieces(openings: Opening[], config: MaterialsConfig) {
       const leafW = Math.round(W / nDoorLeaves);
       const antaW = Math.max(1, leafW - antaReduction);
       const luceW = Math.max(0, antaW - 2 * antaTopRail);
+      const noBattenteDoor = !o.hasBattente && style !== 'door_sliding';
       for (let i = 0; i < nDoorLeaves; i++) {
         const fL = i / nDoorLeaves, fR = (i + 1) / nDoorLeaves;
         const leafHL = Math.max(1, Math.round(hL + (hR - hL) * fL) - SLH - antaReduction);
         const leafHR = Math.max(1, Math.round(hL + (hR - hL) * fR) - SLH - antaReduction);
-        push45('Profilo anta', antaW, antaW, leafHL, leafHR);
+        if (noBattenteDoor) {
+          push45('Profilo anta', antaW, leafHL, leafHR); // 3 pezzi: traverso sup + 2 montanti
+          push90('Zoccolo', Math.max(0, antaW - 2 * antaReduction)); // zoccolo inferiore
+        } else {
+          push45('Profilo anta', antaW, antaW, leafHL, leafHR);
+        }
         if (o.hasFermavetro) {
           if (o.hasFascia) {
             const FASCIA_PROFILE_H = 110;
@@ -445,8 +451,8 @@ function calculateCuttingList(openings: Opening[], config: MaterialsConfig = {})
 
 // ─── calculateCatalogCuttingList ──────────────────────────────────────────────
 
-const GROUP_ORDER:  PieceGroup[]               = ['telaio', 'anta', 'fermavetro', 'riporto'];
-const GROUP_LABELS: Record<PieceGroup, string> = { telaio: 'Telaio', anta: 'Anta', fermavetro: 'Fermavetro', riporto: 'Riporto' };
+const GROUP_ORDER:  PieceGroup[]               = ['telaio', 'anta', 'fermavetro', 'riporto', 'fascia_zoccolo', 'lamella', 'mezza_lamella', 'posizionatore'];
+const GROUP_LABELS: Record<PieceGroup, string> = { telaio: 'Telaio', anta: 'Anta', fermavetro: 'Fermavetro', riporto: 'Riporto', fascia_zoccolo: 'Fascia/Zoccolo', lamella: 'Lamella', mezza_lamella: 'Mezza Lamella', posizionatore: 'Posizionatore' };
 
 function isSeriesEligible(o: Opening): boolean {
   if (!o.width || !o.height || !o.style) return false;
@@ -501,7 +507,7 @@ function calculateCatalogCuttingList(
       const rHL  = Math.round(baseHL);
       const rHR  = Math.round(baseHR);
       const rOff = Math.round(tOff);
-      const wLbl  = tOff > 0 ? `Traverso (${rW}+${rOff})`  : 'Traverso';
+      const wLbl  = tOff > 0 ? `Traverso (${rW}+${rOff})` : 'Traverso';
       const hLLbl = tOff > 0 ? `Montante (${rHL}+${rOff})` : 'Montante';
       const hRLbl = tOff > 0 ? `Montante (${rHR}+${rOff})` : 'Montante';
       for (let t = 0; t < nTraversi; t++) push('telaio', false, pcL + tOff, wLbl);
@@ -512,8 +518,11 @@ function calculateCatalogCuttingList(
 
     for (const piece of variant.pieces) {
       const cond = piece.condition ?? 'always';
-      if (cond === 'no_soglia'   &&  hasSoglia) continue;
-      if (cond === 'with_soglia' && !hasSoglia) continue;
+      const hasBatt = o.hasBattente === true;
+      if (cond === 'no_soglia'      &&  hasSoglia)            continue;
+      if (cond === 'with_soglia'    && !hasSoglia)            continue;
+      if (cond === 'con_battente'   && !hasBatt)              continue;
+      if (cond === 'senza_battente' && (hasBatt || hasSoglia)) continue;
 
       const cat = piece.pieceCategory ?? 'anta';
       if (o.style === 'window_fixed' && (cat === 'anta' || cat === 'riporto')) continue;

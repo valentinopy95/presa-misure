@@ -60,11 +60,15 @@ export default function CatalogSeriesScreen() {
   }, []));
 
   const handleExportSeries = async (series: CatalogSeries) => {
-    const json = JSON.stringify(series, null, 2);
-    const fileName = `${series.name.replace(/[^a-zA-Z0-9_\-]/g, '_')}.misu.json`;
-    const path = FileSystem.cacheDirectory + fileName;
-    await FileSystem.writeAsStringAsync(path, json, { encoding: FileSystem.EncodingType.UTF8 });
-    await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Esporta serie' });
+    try {
+      const json = JSON.stringify(series, null, 2);
+      const fileName = `${series.name.replace(/[^a-zA-Z0-9_\-]/g, '_')}.misu.json`;
+      const path = FileSystem.cacheDirectory + fileName;
+      await FileSystem.writeAsStringAsync(path, json, { encoding: FileSystem.EncodingType.UTF8 });
+      await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Esporta serie' });
+    } catch {
+      AppAlert.show('Errore', 'Impossibile esportare la serie.');
+    }
   };
 
   const handleImportSeries = async () => {
@@ -76,15 +80,33 @@ export default function CatalogSeriesScreen() {
     try {
       const raw = await FileSystem.readAsStringAsync(result.assets[0].uri, { encoding: FileSystem.EncodingType.UTF8 });
       const parsed = JSON.parse(raw) as CatalogSeries;
-      if (!parsed.id || !parsed.name || !Array.isArray(parsed.variants)) {
+      if (!parsed.name || !Array.isArray(parsed.variants)) {
         AppAlert.show('File non valido', 'Il file non è una serie Misu valida.');
         return;
       }
-      const imported: CatalogSeries = { ...parsed, id: uuidv4() };
+      // Nuovo ID per evitare conflitti; normalizza le varianti
+      const imported: CatalogSeries = {
+        ...parsed,
+        id: uuidv4(),
+        variants: parsed.variants.map((v: any) => ({
+          ...v,
+          id:          v.id ?? uuidv4(),
+          leafCount:   v.leafCount ?? 1,
+          telaiOffset: v.telaiOffset ?? 0,
+          articleCodes: v.articleCodes ?? {},
+          pieces: Array.isArray(v.pieces) ? v.pieces.map((p: any) => ({
+            ...p,
+            id:          p.id ?? uuidv4(),
+            quantity:    p.quantity ?? 1,
+            cutAngle1:   p.cutAngle1 ?? 45,
+            cutAngle2:   p.cutAngle2 ?? 45,
+            pieceCategory: p.pieceCategory ?? 'anta',
+          })) : [],
+        })),
+      };
       await upsertCatalogSeries(imported);
-      const updated = await getCatalogSeries();
-      setCatalogSeries(updated);
-      AppAlert.show('Serie importata', `"${imported.name}" è stata aggiunta alle tue serie.`);
+      setCatalogSeries(await getCatalogSeries());
+      AppAlert.show('Serie importata', `"${imported.name}" aggiunta (${imported.variants.length} varianti).`);
     } catch {
       AppAlert.show('Errore', 'Impossibile leggere il file. Assicurati che sia un file .misu.json valido.');
     }
@@ -145,7 +167,7 @@ export default function CatalogSeriesScreen() {
           </View>
           <View style={s.btnRow}>
             <TouchableOpacity style={s.importBtn} onPress={handleImportSeries}>
-              <Text style={s.importBtnText}>↑ Importa</Text>
+              <Text style={s.importBtnText}>↓ Importa</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.addBtn} onPress={handleNewSeries}>
               <Text style={s.addBtnText}>+ Nuova</Text>

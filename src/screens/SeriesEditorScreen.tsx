@@ -22,10 +22,11 @@ type Nav   = NativeStackNavigationProp<RootStackParamList, 'SeriesEditor'>;
 type Route = RouteProp<RootStackParamList, 'SeriesEditor'>;
 
 const SERIES_TOUR: TourStep[] = [
-  { icon: '📋', title: 'Cos\'è una serie catalogo', body: 'Una serie rappresenta un sistema di profili (es. EKOS 100). Contiene una o più varianti, una per ogni numero di ante (1 anta, 2 ante, ecc.).', spot: null },
-  { icon: '🔢', title: 'Varianti per numero di ante', body: 'Per ogni configurazione (1 anta, 2 ante…) crei una variante separata. Quando assegni la serie a un progetto, l\'app sceglie automaticamente la variante giusta per ogni apertura.', spot: null },
-  { icon: '✏️', title: 'Modifica variante', body: 'Tocca una variante esistente per aprire l\'editor e configurare i pezzi (traversi, montanti, fermavetro, riporto) con le formule di calcolo specifiche della serie.', spot: null },
-  { icon: '🏷️', title: 'Assegna al progetto', body: 'Dopo aver creato la serie, torna nel progetto e tocca il badge 📋 nell\'header per assegnarla. Distinta e sviluppo useranno le misure della serie.', spot: null },
+  { icon: '📋', title: 'Cos\'è una serie catalogo', body: 'Una serie rappresenta un sistema di profili (es. EKOS 100). Contiene una o più varianti, una per ogni numero di ante (1 anta, 2 ante, ecc.). Una serie può coprire più tipologie: finestre taglio freddo e termico, porte, persiane…', spot: null },
+  { icon: '🏷️', title: 'Tipo serie', body: 'Seleziona una o più tipologie per cui vale questa serie. L\'app usa questa info per proporre la serie giusta quando assegni il profilo a un\'apertura (es. una porta termica vede solo le serie per "porta termica").', spot: null },
+  { icon: '🔢', title: 'Varianti per numero di ante', body: 'Per ogni configurazione (1 anta, 2 ante…) crei una variante separata. Nell\'editor della variante puoi definire sotto-sezioni per le porte: "Con battente", "Senza battente" e "Soglia ribassata" — l\'app sceglie automaticamente i pezzi giusti.', spot: null },
+  { icon: '✏️', title: 'Formule di taglio', body: 'Ogni pezzo ha: riferimento (L = larghezza, H = altezza), offset ±mm, divisore e angoli A/B. Esempio: montante telaio → L − 10 ÷ 1. Anta a 2 ante → L − 15 ÷ 2.', spot: null },
+  { icon: '🏗️', title: 'Assegna al progetto', body: 'Dopo aver creato la serie, torna nel progetto e tocca il badge 📋 nell\'header per assegnarla. Distinta e sviluppo useranno le misure della serie. La serie viene filtrata automaticamente per tipologia apertura.', spot: null },
 ];
 
 const LEAF_OPTIONS = [1, 2, 3, 4];
@@ -35,10 +36,14 @@ export default function SeriesEditorScreen() {
   const route      = useRoute<Route>();
   const { seriesId } = route.params ?? {};
 
-  const [name,     setName]     = useState('');
-  const [variants, setVariants] = useState<CatalogVariant[]>([]);
-  const [saving,   setSaving]   = useState(false);
-  const [currentId, setCurrentId] = useState<string | undefined>(seriesId);
+  const [name,       setName]       = useState('');
+  const [variants,   setVariants]   = useState<CatalogVariant[]>([]);
+  const [saving,     setSaving]     = useState(false);
+  const [currentId,  setCurrentId]  = useState<string | undefined>(seriesId);
+  const [seriesType, setSeriesType] = useState<NonNullable<CatalogSeries['seriesType']>>([]);
+
+  const toggleType = (v: NonNullable<CatalogSeries['seriesType']>[number]) =>
+    setSeriesType(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
 
   // Modal selezione numero ante per nuova variante
   const [showLeafPicker, setShowLeafPicker] = useState(false);
@@ -52,6 +57,7 @@ export default function SeriesEditorScreen() {
       if (s) {
         setName(s.name);
         setVariants(s.variants);
+        setSeriesType(s.seriesType ?? []);
       }
     });
   }, [currentId]));
@@ -69,8 +75,9 @@ export default function SeriesEditorScreen() {
       const current  = existing.find(s => s.id === id);
       const series: CatalogSeries = {
         id,
-        name:     name.trim(),
-        variants: current?.variants ?? variants,
+        name:       name.trim(),
+        variants:   current?.variants ?? variants,
+        seriesType: seriesType.length > 0 ? seriesType : undefined,
       };
       await upsertCatalogSeries(series);
       setCurrentId(id);
@@ -144,15 +151,38 @@ export default function SeriesEditorScreen() {
     if (result.canceled || !result.assets?.[0]) return;
     try {
       const raw = await FileSystem.readAsStringAsync(result.assets[0].uri, { encoding: FileSystem.EncodingType.UTF8 });
-      const parsed = JSON.parse(raw) as CatalogSeries;
-      if (!parsed.id || !parsed.name || !Array.isArray(parsed.variants)) {
+      const parsed = JSON.parse(raw);
+      if (!parsed.name || !Array.isArray(parsed.variants)) {
         AppAlert.show('File non valido', 'Il file non è una serie Misu valida.');
         return;
       }
-      // Assegna nuovo ID per evitare conflitti
-      const imported: CatalogSeries = { ...parsed, id: uuidv4() };
+      const imported: CatalogSeries = {
+        ...parsed,
+        id: uuidv4(),
+        // Normalizza seriesType: vecchi file avevano stringa singola, ora è array
+        seriesType: Array.isArray(parsed.seriesType)
+          ? parsed.seriesType
+          : parsed.seriesType
+            ? [parsed.seriesType]
+            : undefined,
+        variants: parsed.variants.map((v: any) => ({
+          ...v,
+          id: v.id ?? uuidv4(),
+          leafCount: v.leafCount ?? 1,
+          telaiOffset: v.telaiOffset ?? 0,
+          articleCodes: v.articleCodes ?? {},
+          pieces: Array.isArray(v.pieces) ? v.pieces.map((p: any) => ({
+            ...p,
+            id: p.id ?? uuidv4(),
+            quantity: p.quantity ?? 1,
+            cutAngle1: p.cutAngle1 ?? 45,
+            cutAngle2: p.cutAngle2 ?? 45,
+            pieceCategory: p.pieceCategory ?? 'anta',
+          })) : [],
+        })),
+      };
       await upsertCatalogSeries(imported);
-      AppAlert.show('Serie importata', `"${imported.name}" è stata aggiunta alle tue serie.`);
+      AppAlert.show('Serie importata', `"${imported.name}" importata con ${imported.variants.length} varianti.`);
       navigation.goBack();
     } catch {
       AppAlert.show('Errore', 'Impossibile leggere il file. Assicurati che sia un file .misu.json valido.');
@@ -175,6 +205,46 @@ export default function SeriesEditorScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TourModal visible={tourVisible} steps={SERIES_TOUR} onClose={() => setTourVisible(false)}/>
       <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+
+        {/* Tipo serie */}
+        <Text style={s.label}>Tipo serie</Text>
+        {([
+          { group: 'Finestre', color: '#1565C0', items: [
+            { v: 'finestra_freddo'  as const, label: 'Taglio freddo' },
+            { v: 'finestra_termico' as const, label: 'Taglio termico' },
+          ]},
+          { group: 'Porte', color: '#6A1B9A', items: [
+            { v: 'porta_fredda'  as const, label: 'Taglio freddo' },
+            { v: 'porta_termica' as const, label: 'Taglio termico' },
+          ]},
+          { group: 'Persiane', color: '#2E7D32', items: [
+            { v: 'persiana' as const, label: 'Persiana' },
+          ]},
+          { group: 'Zanzariere', color: '#00838F', items: [
+            { v: 'zanzariera' as const, label: 'Zanzariera' },
+          ]},
+          { group: 'Controtelai', color: '#795548', items: [
+            { v: 'controtelaio' as const, label: 'Controtelaio' },
+          ]},
+          { group: 'Altro', color: '#455A64', items: [
+            { v: 'personalizzato' as const, label: 'Personalizzato' },
+          ]},
+        ]).map(({ group, color, items }) => (
+          <View key={group} style={s.typeGroup}>
+            <Text style={[s.typeGroupLabel, { color }]}>{group}</Text>
+            <View style={s.typeRow}>
+              {items.map(({ v, label }) => (
+                <TouchableOpacity
+                  key={v}
+                  style={[s.typeChip, seriesType.includes(v) && { borderColor: color, backgroundColor: color + '18' }]}
+                  onPress={() => toggleType(v)}
+                >
+                  <Text style={[s.typeChipText, seriesType.includes(v) && { color }]}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ))}
 
         {/* Nome serie */}
         <Text style={s.label}>Nome serie</Text>
@@ -283,6 +353,12 @@ const s = StyleSheet.create({
 
   label: { fontSize: 11, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
   input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDE3ED', paddingHorizontal: 12, paddingVertical: 11, fontSize: 15, color: '#1a2a3a', marginBottom: 20 },
+
+  typeGroup:      { marginBottom: 10 },
+  typeGroupLabel: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
+  typeRow:        { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  typeChip:       { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDE3ED', backgroundColor: '#fff' },
+  typeChipText:   { fontSize: 13, fontWeight: '600', color: '#888' },
 
   variantsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle:   { fontSize: 11, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 1 },

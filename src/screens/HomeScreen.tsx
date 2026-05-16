@@ -383,9 +383,10 @@ export default function HomeScreen() {
 
               {/* Voci */}
               {([
-                { icon: 'bar-chart',    label: 'Statistiche',      sub: 'Riepilogo rilievi e misure',    color: '#1565C0', bg: '#E3F2FD', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Stats'), 200); } },
-                { icon: 'cube',         label: 'Magazzino avanzi', sub: 'Riutilizza i profili avanzati', color: '#E65100', bg: '#FFF3E0', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Magazzino'), 200); } },
-                { icon: 'layers',       label: 'Serie catalogo',   sub: 'Profili e formule di taglio',  color: '#00695C', bg: '#E0F2F1', action: () => { closeMenu(); setTimeout(() => navigation.navigate('CatalogSeries'), 200); } },
+                { icon: 'cube',          label: 'Magazzino avanzi', sub: 'Riutilizza i profili avanzati', color: '#E65100', bg: '#FFF3E0', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Magazzino'), 200); } },
+                { icon: 'layers',        label: 'Serie catalogo',   sub: 'Profili e formule di taglio',  color: '#00695C', bg: '#E0F2F1', action: () => { closeMenu(); setTimeout(() => navigation.navigate('CatalogSeries'), 200); } },
+                { icon: 'document-text', label: 'Bolla di consegna', sub: 'Genera bolla firmata per il cliente', color: '#1B5E20', bg: '#E8F5E9', action: () => { closeMenu(); setTimeout(() => navigation.navigate('DeliveryNote'), 200); } },
+                { icon: 'bar-chart',     label: 'Statistiche',      sub: 'Riepilogo rilievi e misure',    color: '#1565C0', bg: '#E3F2FD', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Stats'), 200); } },
                 { icon: 'settings',     label: 'Impostazioni',     sub: 'Parametri calcolo e barre',    color: '#37474F', bg: '#ECEFF1', action: () => { closeMenu(); setTimeout(() => navigation.navigate('Settings'), 200); } },
                 { icon: 'compass',      label: 'Tour guidato',     sub: 'Rivedere le funzionalità',     color: '#6A1B9A', bg: '#F3E5F5', action: () => { closeMenu(); setTimeout(openTour, 200); } },
                 { icon: 'headset',      label: 'Supporto tecnico', sub: 'Scrivici per assistenza',      color: '#C62828', bg: '#FFEBEE', action: () => { closeMenu(); setTimeout(() => setSupportOpen(true), 200); } },

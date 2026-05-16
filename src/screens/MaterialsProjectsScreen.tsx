@@ -146,10 +146,10 @@ export default function MaterialsProjectsScreen() {
             >
               {/* Body */}
               <View style={styles.cardBody}>
-                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
                 {!!item.clientName && (
-                  <Text style={styles.client} numberOfLines={1}>{item.clientName}</Text>
+                  <Text style={styles.client} numberOfLines={1}>{item.name}</Text>
                 )}
+                <Text style={styles.name} numberOfLines={1}>{item.clientName || item.name}</Text>
                 <View style={styles.meta}>
                   <View style={styles.countBadge}>
                     <Text style={styles.countText}>

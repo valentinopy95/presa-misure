@@ -36,7 +36,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Quali tipologie sono disponibili?',
-        a: 'Finestre: battente, scorrevole, vasistas, fissa.\nPorte: singola, scorrevole, portoncino d\'ingresso.\nPersiane: singola, portafinestra.\nMonoblocco con tapparella.\nControtelaio.\nZanzariere: fissa, avvolgibile, laterale.\nPersonalizzata: per misure libere senza calcolo materiale.',
+        a: 'Finestre taglio freddo: battente, doppio battente, scorrevole, vasistas, fissa.\nFinestre taglio termico: stesse tipologie con profilo termico.\nPorte taglio freddo: singola, scorrevole, portoncino.\nPorte taglio termico: stesse tipologie con profilo termico.\nPersiane: singola, portafinestra.\nMonoblocco con tapparella.\nControtelaio.\nZanzariere: fissa, avvolgibile, laterale.\nPersonalizzata: per misure libere senza calcolo materiale.',
       },
       {
         q: 'Come modifico un\'apertura già inserita?',
@@ -144,7 +144,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Come creo una serie catalogo?',
-        a: 'Vai in Impostazioni → Serie catalogo → "Nuova serie". Dai un nome alla serie (es. "Infisso termico 70mm"), poi premi "+ Aggiungi" per creare le varianti per numero di ante.',
+        a: 'Apri il menu burger (≡) dalla schermata principale → "Serie catalogo" → "Nuova serie". Seleziona il tipo (finestra freddo, termico, porta, ecc.), dai un nome (es. "EKOS 100") e premi "+ Aggiungi" per creare le varianti per numero di ante. Una serie può coprire più tipologie: seleziona tutti i tipi per cui vale.',
       },
       {
         q: 'Cos\'è una variante?',
@@ -159,12 +159,12 @@ const SECTIONS: Section[] = [
         a: 'Apri il progetto → premi il tasto modifica (matita) → seleziona la serie nel campo "Serie catalogo taglio". Puoi impostare una serie di default in Impostazioni, usata automaticamente sui nuovi progetti.',
       },
       {
-        q: 'Cosa sono le condizioni Sempre / Senza soglia / Con soglia?',
-        a: 'Ogni pezzo ha una condizione che decide quando viene incluso nel calcolo:\n• Sempre → il pezzo c\'è sempre\n• Senza soglia → solo se la porta NON ha soglia ribassata (es. traverso inferiore telaio)\n• Con soglia → solo se la porta HA soglia ribassata (es. profilo soglia)\nQuesto permette di avere una sola variante che si adatta automaticamente.',
+        q: 'Cosa sono le sotto-sezioni nelle varianti porta?',
+        a: 'Per le varianti porta (taglio freddo e termico), i pezzi di telaio e anta sono organizzati in sotto-sezioni:\n• Con battente → pezzi presenti solo se la porta ha il traverso inferiore\n• Senza battente → pezzi presenti solo se NON ha il traverso inferiore\n• Soglia ribassata → pezzi presenti solo se la porta ha la soglia ribassata\n• Standard (solo termico) → pezzi sempre presenti per porta termica\nL\'app sceglie automaticamente i pezzi giusti in base alle opzioni del rilievo.',
       },
       {
         q: 'Quali aperture usano la serie catalogo?',
-        a: 'La serie si applica a finestre (tranne fissa), porte e persiane. Zanzariere, monoblocchi con tapparella, controtelai e finestre fisse usano sempre il calcolo standard.',
+        a: 'Dipende dal tipo impostato sulla serie. Una serie "finestra freddo" si applica alle finestre taglio freddo, una "porta termica" alle porte termiche, ecc. Una serie può coprire più tipologie contemporaneamente. Zanzariere, monoblocchi con tapparella, controtelai usano sempre il calcolo standard.',
       },
     ],
   },
@@ -207,6 +207,28 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    icon: '📦',
+    title: 'Bolla di consegna',
+    items: [
+      {
+        q: 'Come genero una bolla di consegna?',
+        a: 'Dal menu burger (≡) premi "Bolla di consegna". Seleziona il progetto, spunta gli infissi da includere (vengono mostrati anche quelli dei sotto-progetti), aggiungi la firma del cliente e premi "Genera e condividi bolla". Il PDF viene generato sul dispositivo e puoi condividerlo o stamparlo.',
+      },
+      {
+        q: 'Come inserisco i dati della mia azienda nella bolla?',
+        a: 'Nella schermata Bolla di consegna, premi "⚙ Azienda" in alto a destra. Inserisci ragione sociale, indirizzo, P.IVA, telefono ed email. I dati vengono salvati sul dispositivo e riutilizzati per le bolle successive.',
+      },
+      {
+        q: 'Come funziona la firma?',
+        a: 'Premi "Aggiungi firma cliente" e disegna la firma con il dito. Premi "Conferma firma" per acquisirla. La firma viene incorporata nel PDF. Se non aggiungi la firma, il PDF include uno spazio vuoto per la firma cartacea.',
+      },
+      {
+        q: 'Come viene numerata la bolla?',
+        a: 'La bolla viene numerata progressivamente in automatico (0001, 0002, …). Il contatore è salvato sul dispositivo. Se cambi dispositivo il contatore riparte da 1.',
+      },
+    ],
+  },
+  {
     icon: '📐',
     title: 'Persiane e monoblocchi',
     items: [
@@ -230,7 +252,7 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'Quanti tipi di PDF posso generare?',
-        a: 'Tre tipi distinti:\n• Rilievo misure — elenco aperture con misure, note e foto\n• Sviluppo materiale — barre e profili da ordinare\n• Distinta di taglio — sequenza di taglio barra per barra',
+        a: 'Quattro tipi distinti:\n• Rilievo misure — elenco aperture con misure, note e foto\n• Sviluppo materiale — barre e profili da ordinare\n• Distinta di taglio — sequenza di taglio barra per barra\n• Bolla di consegna — documento firmabile da consegnare al cliente',
       },
       {
         q: 'Come esporto i PDF dal rilievo?',

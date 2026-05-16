@@ -251,8 +251,8 @@ export default function CuttingListScreen() {
     <View style={s.topHeader}>
       <View style={s.headerTop}>
         <View style={{ flex: 1 }}>
-          <Text style={s.projectName}>{project.clientName || project.name}</Text>
           {!!project.clientName && <Text style={s.projectSub}>{project.name}</Text>}
+          <Text style={s.projectName}>{project.clientName || project.name}</Text>
           <Text style={s.projectParams}>Barre {config.barLength} mm · Riatt. {config.riattestattura} mm</Text>
         </View>
         <View style={[s.seriesBadge, { backgroundColor: seriesBanner.color }]}>

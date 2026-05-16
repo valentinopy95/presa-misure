@@ -15,6 +15,22 @@ import { Opening, Photo, RootStackParamList, OpeningStyle, OpeningSide } from '.
 import { getProject, saveOpening } from '../storage/database';
 import { getToleranceW, getToleranceH, getToleranceByType, toleranceForStyle, getDimMode, getCatalogSeries, CatalogSeries } from '../storage/settings';
 
+import { SeriesType } from '../types';
+
+function seriesTypeForStyle(style: OpeningStyle | null): SeriesType | null {
+  if (!style) return null;
+  if (style.startsWith('window_') && style.endsWith('_t')) return 'finestra_termico';
+  if (style.startsWith('window_')) return 'finestra_freddo';
+  if (style.startsWith('door_') && style.endsWith('_t')) return 'porta_termica';
+  if (style.startsWith('door_')) return 'porta_fredda';
+  if (style.startsWith('shutter_')) return 'persiana';
+  if (style.startsWith('mosquito_')) return 'zanzariera';
+  if (style === 'subframe_window') return 'controtelaio';
+  if (style === 'roller_blind') return null; // monoblocco: nessun filtro
+  if (style === 'custom') return 'personalizzato';
+  return null;
+}
+
 const parseMm = (t: string): number | null => {
   const clean = t.replace(/[^0-9]/g, '');
   if (!clean) return null;
@@ -31,6 +47,7 @@ type Route = RouteProp<RootStackParamList, 'Measurement'>;
 
 const SCREEN_W = Dimensions.get('window').width;
 const DRAWING_W = SCREEN_W - 40;
+const MINI_DRAWING_W = Math.floor(SCREEN_W * 0.42);
 
 function getOpeningSides(style: OpeningStyle | null, leafCount: number | null): { value: OpeningSide; label: string }[] {
   if (style === 'window_tilt_turn') {
@@ -82,6 +99,7 @@ const emptyOpening = (): Opening => ({
   profileSeries: null,
   catalogSeriesId: null,
   glassType: null,
+  color: null,
   photos: [],
   textNote: '',
   audioNote: null,
@@ -162,6 +180,7 @@ export default function MeasurementScreen() {
     heightLeft:       o.heightLeft       ?? null,
     heightRight:      o.heightRight      ?? null,
     catalogSeriesId:  o.catalogSeriesId  ?? null,
+    color:            o.color            ?? null,
   });
 
   useEffect(() => {
@@ -330,107 +349,139 @@ export default function MeasurementScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.rootContainer}>
       <TourModal
         visible={tourVisible}
         steps={MEASUREMENT_TOUR}
         onClose={() => setTourVisible(false)}
       />
 
-      {/* ── Banner informativo per tipologia personalizzata ── */}
-      {isCustom && (
-        <View style={styles.customBanner}>
-          <Text style={styles.customBannerIcon}>✏️</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.customBannerTitle}>Elemento personalizzato</Text>
-            <Text style={styles.customBannerDesc}>
-              Usa questo tipo per verande, box doccia, infissi fuori misura o qualsiasi elemento non standard.{'\n'}
-              Inserisci le misure che ti servono e usa lo schizzo qui sotto per disegnare la forma a mano libera.
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* ── Disegno 2D live (nascosto per tipologia personalizzata) ── */}
-      {!isCustom && <View style={styles.drawingCard}>
-        {/* Badge serie + toggle int/est sopra il disegno */}
-        <View style={styles.drawingTopBar}>
-          {/* Toggle Interno / Esterno */}
-          {opening.style && (
-            <View style={styles.viewSideRow}>
-              <TouchableOpacity
-                style={[styles.viewSideBtn, opening.viewSide !== 'esterno' && styles.viewSideBtnActive]}
-                onPress={() => update({ viewSide: 'interno' })}
-              >
-                <Text style={[styles.viewSideTxt, opening.viewSide !== 'esterno' && styles.viewSideTxtActive]}>
-                  Interno
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.viewSideBtn, opening.viewSide === 'esterno' && styles.viewSideBtnActive]}
-                onPress={() => update({ viewSide: 'esterno' })}
-              >
-                <Text style={[styles.viewSideTxt, opening.viewSide === 'esterno' && styles.viewSideTxtActive]}>
-                  Esterno
-                </Text>
-              </TouchableOpacity>
+      {/* ── ZONA 1: Disegno + Misure (fissa, layout orizzontale compatto) ── */}
+      <View style={styles.zone1}>
+        {isCustom ? (
+          <View style={styles.customBannerCompact}>
+            <Text style={styles.customBannerIcon}>✏️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.customBannerTitle}>Elemento personalizzato</Text>
+              <Text style={styles.customBannerDesc}>Misure e schizzo libero qui sotto</Text>
             </View>
-          )}
-        </View>
-        <LiveDrawing
-          style={opening.style}
-          width={opening.width}
-          height={opening.height}
-          toleranceW={toleranceW}
-          toleranceH={toleranceH}
-          boxHeight={opening.boxHeight}
-          leafCount={opening.leafCount}
-          openingSide={opening.openingSide}
-          displayWidth={DRAWING_W - 16}
-          dimMode={dimMode}
-          hasFascia={opening.hasFascia}
-          hasSoglia={opening.hasSoglia}
-          hasBattente={opening.hasBattente}
-          blindType={opening.blindType}
-          sopraluce={opening.sopraluce}
-          sopraluceHeight={opening.sopraluceHeight}
-          outOfSquare={opening.outOfSquare}
-          heightLeft={opening.heightLeft}
-          heightRight={opening.heightRight}
-        />
-        {!opening.style && (
-          <Text style={styles.drawingPlaceholder}>
-            Seleziona un tipo per vedere il disegno
-          </Text>
-        )}
-      </View>}
+          </View>
+        ) : (
+          <View style={styles.zone1Row}>
+            {/* Disegno a sinistra */}
+            <View style={styles.miniDrawingWrap}>
+              <LiveDrawing
+                style={opening.style}
+                width={opening.width}
+                height={opening.height}
+                toleranceW={toleranceW}
+                toleranceH={toleranceH}
+                boxHeight={opening.boxHeight}
+                leafCount={opening.leafCount}
+                openingSide={opening.openingSide}
+                displayWidth={MINI_DRAWING_W - 16}
+                dimMode={dimMode}
+                hasFascia={opening.hasFascia}
+                hasSoglia={opening.hasSoglia}
+                hasBattente={opening.hasBattente}
+                blindType={opening.blindType}
+                sopraluce={opening.sopraluce}
+                sopraluceHeight={opening.sopraluceHeight}
+                outOfSquare={opening.outOfSquare}
+                heightLeft={opening.heightLeft}
+                heightRight={opening.heightRight}
+              />
+              {!opening.style && (
+                <Text style={styles.drawingPlaceholder}>Seleziona{'\n'}tipo</Text>
+              )}
+            </View>
 
-      {/* ── Nome + Interno/Esterno ── */}
-      <Text style={styles.label}>Nome apertura *</Text>
-      <View style={styles.nameRow}>
-        <TextInput
-          style={[styles.input, { flex: 1, marginTop: 0 }]}
-          placeholder="es. Finestra soggiorno"
-          value={opening.name}
-          onChangeText={t => update({ name: t })}
-        />
-        {!isCustom && opening.style && (
-          <View style={styles.viewSideRowInline}>
-            <TouchableOpacity
-              style={[styles.viewSideBtn, opening.viewSide !== 'esterno' && styles.viewSideBtnActive]}
-              onPress={() => update({ viewSide: 'interno' })}
-            >
-              <Text style={[styles.viewSideTxt, opening.viewSide !== 'esterno' && styles.viewSideTxtActive]}>Int</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.viewSideBtn, opening.viewSide === 'esterno' && styles.viewSideBtnActive]}
-              onPress={() => update({ viewSide: 'esterno' })}
-            >
-              <Text style={[styles.viewSideTxt, opening.viewSide === 'esterno' && styles.viewSideTxtActive]}>Est</Text>
-            </TouchableOpacity>
+            {/* Misure + toggle a destra */}
+            <View style={styles.zone1Right}>
+              {/* Int / Est toggle */}
+              {opening.style && (
+                <View style={[styles.viewSideRow, { marginBottom: 8 }]}>
+                  <TouchableOpacity
+                    style={[styles.viewSideBtn, opening.viewSide !== 'esterno' && styles.viewSideBtnActive]}
+                    onPress={() => update({ viewSide: 'interno' })}
+                  >
+                    <Text style={[styles.viewSideTxt, opening.viewSide !== 'esterno' && styles.viewSideTxtActive]}>Int</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.viewSideBtn, opening.viewSide === 'esterno' && styles.viewSideBtnActive]}
+                    onPress={() => update({ viewSide: 'esterno' })}
+                  >
+                    <Text style={[styles.viewSideTxt, opening.viewSide === 'esterno' && styles.viewSideTxtActive]}>Est</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* LARGHEZZA */}
+              <Text style={styles.metricLabel}>LARGHEZZA</Text>
+              <View style={styles.metricInputRow}>
+                <TextInput
+                  style={styles.metricInput}
+                  placeholder="—"
+                  keyboardType="numeric"
+                  value={opening.width?.toString() ?? ''}
+                  onChangeText={t => update({ width: parseMm(t) })}
+                />
+                <Text style={styles.metricUnit}>mm</Text>
+              </View>
+              <View style={styles.metricTaglioRow}>
+                <Text style={styles.metricTaglioLabel}>TAGLIO</Text>
+                <Text style={styles.metricTaglioValue}>{taglioW ?? '—'}</Text>
+                <Text style={styles.metricUnit}>mm</Text>
+              </View>
+
+              <View style={styles.metricSep} />
+
+              {/* ALTEZZA */}
+              {opening.outOfSquare && canHaveOutOfSquare ? (
+                <>
+                  <Text style={styles.metricLabel}>ALTEZZA (FS)</Text>
+                  <Text style={styles.metricFsHint}>Sx / Dx in basso ↓</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.metricLabel}>ALTEZZA</Text>
+                  <View style={styles.metricInputRow}>
+                    <TextInput
+                      style={styles.metricInput}
+                      placeholder="—"
+                      keyboardType="numeric"
+                      value={opening.height?.toString() ?? ''}
+                      onChangeText={t => update({ height: parseMm(t) })}
+                    />
+                    <Text style={styles.metricUnit}>mm</Text>
+                  </View>
+                  <View style={styles.metricTaglioRow}>
+                    <Text style={styles.metricTaglioLabel}>TAGLIO</Text>
+                    <Text style={styles.metricTaglioValue}>{taglioH ?? '—'}</Text>
+                    <Text style={styles.metricUnit}>mm</Text>
+                  </View>
+                </>
+              )}
+            </View>
           </View>
         )}
       </View>
+
+      {/* ── ZONA 2: Campi secondari (scorrevole) ── */}
+      <ScrollView
+        style={styles.zone2}
+        contentContainerStyle={styles.zone2Content}
+        keyboardShouldPersistTaps="handled"
+      >
+
+      {/* ── Nome ── */}
+      <Text style={styles.label}>Nome apertura *</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="es. Finestra soggiorno"
+        value={opening.name}
+        onChangeText={t => update({ name: t })}
+      />
 
       {/* ── Tipologia ── */}
       <Text style={styles.label}>Tipologia</Text>
@@ -443,41 +494,39 @@ export default function MeasurementScreen() {
         <Text style={styles.styleArrow}>›</Text>
       </TouchableOpacity>
 
-      {/* ── Larghezza ── */}
-      <Text style={styles.label}>Larghezza</Text>
-      <View style={styles.dimCard}>
-        <View style={styles.dimRow}>
-          <View style={styles.dimLabelCol}>
-            <Text style={styles.dimType}>LUCE</Text>
-            <Text style={styles.dimDesc}>misurata sul posto</Text>
-          </View>
-          <View style={styles.dimInputWrap}>
-            <TextInput
-              style={styles.dimField}
-              placeholder="—"
-              keyboardType="numeric"
-              value={opening.width?.toString() ?? ''}
-              onChangeText={t => update({ width: parseMm(t) })}
-            />
-            <Text style={styles.unit}>mm</Text>
-          </View>
-        </View>
-        <View style={styles.dimDivider}/>
-        <View style={styles.dimRow}>
-          <View style={styles.dimLabelCol}>
-            <Text style={[styles.dimType, styles.dimTypeTaglio]}>TAGLIO</Text>
-            <Text style={styles.dimDesc}>luce − {activeTol.w} mm</Text>
-          </View>
-          <View style={styles.dimInputWrap}>
-            <Text style={styles.taglioValue}>{taglioW ?? '—'}</Text>
-            <Text style={styles.unit}>mm</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* ── Altezza (nascosta quando fuori squadra è attivo, ma sempre visibile per stili che non lo supportano) ── */}
-      {(!opening.outOfSquare || !canHaveOutOfSquare) && (
+      {/* ── Misure per custom (senza disegno) ── */}
+      {isCustom && (
         <>
+          <Text style={styles.label}>Larghezza</Text>
+          <View style={styles.dimCard}>
+            <View style={styles.dimRow}>
+              <View style={styles.dimLabelCol}>
+                <Text style={styles.dimType}>LUCE</Text>
+                <Text style={styles.dimDesc}>misurata sul posto</Text>
+              </View>
+              <View style={styles.dimInputWrap}>
+                <TextInput
+                  style={styles.dimField}
+                  placeholder="—"
+                  keyboardType="numeric"
+                  value={opening.width?.toString() ?? ''}
+                  onChangeText={t => update({ width: parseMm(t) })}
+                />
+                <Text style={styles.unit}>mm</Text>
+              </View>
+            </View>
+            <View style={styles.dimDivider}/>
+            <View style={styles.dimRow}>
+              <View style={styles.dimLabelCol}>
+                <Text style={[styles.dimType, styles.dimTypeTaglio]}>TAGLIO</Text>
+                <Text style={styles.dimDesc}>luce − {activeTol.w} mm</Text>
+              </View>
+              <View style={styles.dimInputWrap}>
+                <Text style={styles.taglioValue}>{taglioW ?? '—'}</Text>
+                <Text style={styles.unit}>mm</Text>
+              </View>
+            </View>
+          </View>
           <Text style={styles.label}>Altezza</Text>
           <View style={styles.dimCard}>
             <View style={styles.dimRow}>
@@ -691,6 +740,23 @@ export default function MeasurementScreen() {
         </>
       )}
 
+      {/* ── Fascia centrale (solo porte non scorrevoli) ── */}
+      {showFascia && (
+        <>
+          <Text style={styles.label}>Fascia centrale</Text>
+          <TouchableOpacity
+            style={[styles.toggleBtn, opening.hasFascia === true && styles.toggleBtnActive]}
+            onPress={() => update({ hasFascia: opening.hasFascia === true ? null : true })}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.toggleDot, opening.hasFascia === true && styles.toggleDotActive]}/>
+            <Text style={[styles.toggleText, opening.hasFascia === true && styles.toggleTextActive]}>
+              {opening.hasFascia === true ? 'Presente' : 'Non presente'}
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
+
       {/* ── Soglia ribassata (solo porte non scorrevoli) ── */}
       {showSoglia && (
         <>
@@ -783,7 +849,59 @@ export default function MeasurementScreen() {
         </>
       )}
 
-      {/* Serie catalogo: gestita a livello progetto, non per singola apertura */}
+      {/* ── Serie catalogo ── */}
+      {catalogSeries.length > 0 && (
+        <>
+          <Text style={styles.label}>Serie catalogo</Text>
+          <TouchableOpacity style={styles.seriesPickerBtn} onPress={() => setShowSeriesPicker(true)}>
+            <Text style={styles.seriesPickerText}>
+              {opening.catalogSeriesId
+                ? (catalogSeries.find(s => s.id === opening.catalogSeriesId)?.name ?? 'Serie selezionata')
+                : 'Nessuna serie associata'}
+            </Text>
+            <Text style={styles.styleArrow}>›</Text>
+          </TouchableOpacity>
+          {opening.catalogSeriesId && (
+            <TouchableOpacity onPress={() => update({ catalogSeriesId: null })} style={{ alignSelf: 'flex-start', marginTop: -2, marginBottom: 4 }}>
+              <Text style={{ fontSize: 12, color: '#DC2626', fontWeight: '600' }}>✕ Rimuovi serie</Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
+
+      {/* ── Colore profilo ── */}
+      <Text style={styles.label}>Colore profilo</Text>
+      <View style={styles.glassRow}>
+        {(['Bianco', 'Legno', 'Anodizzato'] as const).map(c => (
+          <TouchableOpacity
+            key={c}
+            style={[styles.glassBtn, opening.color === c && styles.glassBtnActive]}
+            onPress={() => update({ color: opening.color === c ? null : c })}
+          >
+            <Text style={[styles.glassBtnText, opening.color === c && styles.glassBtnTextActive]}>{c}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity
+          style={[styles.glassBtn, (opening.color !== null && !['Bianco', 'Legno', 'Anodizzato'].includes(opening.color)) && styles.glassBtnActive]}
+          onPress={() => {
+            const isRal = opening.color !== null && !['Bianco', 'Legno', 'Anodizzato'].includes(opening.color);
+            update({ color: isRal ? null : '' });
+          }}
+        >
+          <Text style={[styles.glassBtnText, (opening.color !== null && !['Bianco', 'Legno', 'Anodizzato'].includes(opening.color)) && styles.glassBtnTextActive]}>
+            RAL personalizzato
+          </Text>
+        </TouchableOpacity>
+      </View>
+      {opening.color !== null && !['Bianco', 'Legno', 'Anodizzato'].includes(opening.color) && (
+        <TextInput
+          style={[styles.input, { marginTop: 8 }]}
+          placeholder="Es. RAL 9005, Bronzo, Antracite..."
+          placeholderTextColor="#aaa"
+          value={opening.color}
+          onChangeText={t => update({ color: t })}
+        />
+      )}
 
       {/* ── Note ── */}
       <Text style={styles.label}>Note</Text>
@@ -882,6 +1000,54 @@ export default function MeasurementScreen() {
         </Text>
       </TouchableOpacity>
 
+      </ScrollView>
+
+      {/* ── Serie catalogo modal ── */}
+      <Modal visible={showSeriesPicker} transparent animationType="slide" onRequestClose={() => setShowSeriesPicker(false)}>
+        <Pressable style={styles.seriesOverlay} onPress={() => setShowSeriesPicker(false)}>
+          <Pressable style={styles.seriesSheet} onPress={() => {}}>
+            <Text style={styles.seriesSheetTitle}>Serie catalogo</Text>
+            <ScrollView>
+              {(() => {
+                const targetType = seriesTypeForStyle(opening.style);
+                const matched   = targetType ? catalogSeries.filter(s => Array.isArray(s.seriesType) ? s.seriesType.includes(targetType) : s.seriesType === targetType) : catalogSeries;
+                const others    = targetType ? catalogSeries.filter(s => Array.isArray(s.seriesType) ? !s.seriesType.includes(targetType) : s.seriesType !== targetType) : [];
+                const renderRow = (s: CatalogSeries) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={[styles.seriesSheetRow, opening.catalogSeriesId === s.id && styles.seriesSheetRowActive]}
+                    onPress={() => { update({ catalogSeriesId: s.id }); setShowSeriesPicker(false); }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.seriesSheetName}>{s.name}</Text>
+                      <Text style={styles.seriesSheetSub}>{s.variants.length} varianti{s.seriesType ? ` · ${s.seriesType.replace('_', ' ')}` : ''}</Text>
+                    </View>
+                    {opening.catalogSeriesId === s.id && <Text style={{ color: '#1565C0', fontWeight: '800' }}>✓</Text>}
+                  </TouchableOpacity>
+                );
+                return (
+                  <>
+                    {matched.length > 0 && matched.map(renderRow)}
+                    {others.length > 0 && (
+                      <>
+                        <Text style={[styles.seriesSheetSub, { paddingVertical: 8, color: '#aaa', fontWeight: '700', textTransform: 'uppercase' }]}>Altre serie</Text>
+                        {others.map(renderRow)}
+                      </>
+                    )}
+                    {catalogSeries.length === 0 && (
+                      <Text style={[styles.seriesSheetSub, { textAlign: 'center', paddingVertical: 20 }]}>Nessuna serie disponibile</Text>
+                    )}
+                  </>
+                );
+              })()}
+            </ScrollView>
+            <TouchableOpacity style={styles.seriesSheetCancel} onPress={() => setShowSeriesPicker(false)}>
+              <Text style={styles.seriesSheetCancelText}>Chiudi</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* ── Modal salvataggio ── */}
       <Modal visible={showSaveModal} transparent animationType="fade" onRequestClose={() => setShowSaveModal(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowSaveModal(false)}>
@@ -900,18 +1066,67 @@ export default function MeasurementScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  content: { padding: 20, paddingBottom: 48 },
+  rootContainer: { flex: 1, backgroundColor: '#F5F5F5' },
+  zone1: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  zone1Row: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 10,
+  },
+  miniDrawingWrap: {
+    width: MINI_DRAWING_W,
+    backgroundColor: '#F7F9FC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E8EDF2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+    overflow: 'hidden',
+  },
+  zone1Right: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  zone2: { flex: 1 },
+  zone2Content: { padding: 16, paddingBottom: 48 },
+
+  metricLabel: { fontSize: 10, fontWeight: '800', color: '#888', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' },
+  metricInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metricInput: {
+    fontSize: 20, fontWeight: '700', color: '#222',
+    flex: 1, borderBottomWidth: 2, borderBottomColor: '#DDD',
+    paddingVertical: 1, minWidth: 0,
+  },
+  metricUnit: { fontSize: 11, color: '#999', fontWeight: '600' },
+  metricTaglioRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, marginBottom: 4 },
+  metricTaglioLabel: { fontSize: 10, fontWeight: '800', color: '#1565C0', letterSpacing: 0.5 },
+  metricTaglioValue: { fontSize: 16, fontWeight: '800', color: '#1565C0', flex: 1 },
+  metricFsHint: { fontSize: 12, color: '#E53935', fontWeight: '600', marginTop: 4 },
+  metricSep: { height: 1, backgroundColor: '#EEF2F7', marginVertical: 6 },
 
   customBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 12,
     backgroundColor: '#EEF4FF', borderRadius: 14, padding: 16,
     marginBottom: 20, borderWidth: 1.5, borderColor: '#C7D9F5',
+  },
+  customBannerCompact: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#EEF4FF', borderRadius: 10, padding: 10,
+    borderWidth: 1, borderColor: '#C7D9F5',
   },
   photoLocalNote: {
     backgroundColor: '#FFF8E1', borderRadius: 10, padding: 12,

@@ -465,8 +465,8 @@ export interface CatalogPiece {
   divisor:    number;      // legacy – mantenuto per backward compat
   cutAngle1:  45 | 90;    // angolo lato A
   cutAngle2:  45 | 90;    // angolo lato B
-  condition?:     'always' | 'no_soglia' | 'with_soglia'; // default = 'always'
-  pieceCategory?: 'telaio' | 'anta' | 'fermavetro' | 'riporto'; // default = 'anta'
+  condition?:     'always' | 'no_soglia' | 'with_soglia' | 'con_battente' | 'senza_battente'; // default = 'always'
+  pieceCategory?: 'telaio' | 'anta' | 'fermavetro' | 'riporto' | 'fascia_zoccolo' | 'lamella' | 'mezza_lamella' | 'posizionatore'; // default = 'anta'
   divideFirst?:   boolean; // legacy
   // Nuova formula flessibile: apply(apply(base, op1, val1), op2, val2)
   op1?:  PieceOp;  // primo operatore  (default: '+'/'-' da sign(offset))
@@ -481,13 +481,14 @@ export interface CatalogVariant {
   leafCount:    number;       // numero ante: 1, 2, 3, 4, 6, 8...
   pieces:       CatalogPiece[];
   telaiOffset:  number;       // aletta telaio in mm (aggiunta alla misura taglio per traversi e montanti)
-  articleCodes?: Partial<Record<'telaio' | 'anta' | 'fermavetro' | 'riporto', string>>; // codice articolo per profilato
+  articleCodes?: Partial<Record<'telaio' | 'anta' | 'fermavetro' | 'riporto' | 'fascia_zoccolo' | 'lamella' | 'mezza_lamella' | 'posizionatore', string>>; // codice articolo per profilato
 }
 
 export interface CatalogSeries {
-  id:       string;
-  name:     string;
-  variants: CatalogVariant[];
+  id:          string;
+  name:        string;
+  variants:    CatalogVariant[];
+  seriesType?: ('finestra_freddo' | 'finestra_termico' | 'porta_fredda' | 'porta_termica' | 'persiana' | 'zanzariera' | 'controtelaio' | 'personalizzato')[];
 }
 
 export const CATALOG_SERIES_KEY = '@measure_catalog_series';
@@ -567,11 +568,16 @@ export async function getCatalogSeries(): Promise<CatalogSeries[]> {
 }
 
 export async function upsertCatalogSeries(s: CatalogSeries): Promise<void> {
-  // Aggiorna cache ottimisticamente
+  // Aggiorna cache con nuovo array (non mutare in place — React usa shallow compare)
   if (_seriesCache !== null) {
     const idx = _seriesCache.findIndex(x => x.id === s.id);
-    if (idx >= 0) _seriesCache[idx] = s;
-    else _seriesCache.push(s);
+    if (idx >= 0) {
+      const next = [..._seriesCache];
+      next[idx] = s;
+      _seriesCache = next;
+    } else {
+      _seriesCache = [..._seriesCache, s];
+    }
   }
 
   const ids = await getCurrentIds();

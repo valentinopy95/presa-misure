@@ -12,6 +12,8 @@ import {
   supabase, fetchProfile, fetchCompany, Company,
   inviteToCompany, listPendingInvites, revokeInvite, CompanyInvite,
   checkAndAcceptInvite, listInvitesForMe, MyInvite, uploadCompanyLogo,
+  listCompanyMembers, updateMemberRole, removeMember, deleteCompany,
+  CompanyMember, MemberRole,
 } from '../lib/supabase';
 import { clearDbCache } from '../storage/database';
 import { RootStackParamList } from '../types';
@@ -25,12 +27,14 @@ export default function AccountScreen() {
   const subscription = useSubscription();
   const [user,        setUser]        = useState<User | null>(null);
   const [company,     setCompany]     = useState<Company | null>(null);
+  const [myRole,      setMyRole]      = useState<MemberRole>('member');
+  const [members,     setMembers]     = useState<CompanyMember[]>([]);
   const [invites,     setInvites]     = useState<CompanyInvite[]>([]);
   const [myInvites,   setMyInvites]   = useState<MyInvite[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
   const [sending,     setSending]     = useState(false);
-  const [accepting,   setAccepting]   = useState<string | null>(null); // invite id being accepted
+  const [accepting,   setAccepting]   = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => {
@@ -46,12 +50,19 @@ export default function AccountScreen() {
       if (profile?.company_id) {
         const c = await fetchCompany(profile.company_id);
         setCompany(c);
+        // Determina ruolo: se è owner_id → owner, altrimenti usa profile.role
+        const role = c?.owner_id === user.id ? 'owner' : (profile.role ?? 'member');
+        setMyRole(role);
         if (c) {
-          const list = await listPendingInvites(c.id);
+          const [list, memberList] = await Promise.all([
+            listPendingInvites(c.id),
+            listCompanyMembers(c.id),
+          ]);
           setInvites(list);
+          // Aggiungi email utente corrente al proprio record
+          setMembers(memberList.map(m => m.id === user.id ? { ...m, email: user.email ?? null } : m));
         }
       } else {
-        // Nessuna azienda: carica inviti ricevuti
         const mine = await listInvitesForMe();
         setMyInvites(mine);
       }
@@ -171,6 +182,61 @@ export default function AccountScreen() {
     } finally {
       setLogoUploading(false);
     }
+  };
+
+  const handleChangeRole = (member: CompanyMember) => {
+    if (member.role === 'owner') return;
+    const nextRole: MemberRole = member.role === 'admin' ? 'member' : 'admin';
+    const label = nextRole === 'admin' ? 'Admin' : 'Membro';
+    AppAlert.show(
+      'Cambia ruolo',
+      `Vuoi impostare ${member.full_name ?? member.email ?? 'questo utente'} come ${label}?`,
+      [
+        { text: 'Annulla', style: 'cancel' },
+        { text: 'Conferma', onPress: async () => {
+            await updateMemberRole(member.id, nextRole);
+            setMembers(prev => prev.map(m => m.id === member.id ? { ...m, role: nextRole } : m));
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRemoveMember = (member: CompanyMember) => {
+    AppAlert.show(
+      'Rimuovi membro',
+      `Rimuovere ${member.full_name ?? member.email ?? 'questo utente'} dall'azienda?`,
+      [
+        { text: 'Annulla', style: 'cancel' },
+        { text: 'Rimuovi', style: 'destructive', onPress: async () => {
+            await removeMember(member.id);
+            setMembers(prev => prev.filter(m => m.id !== member.id));
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteCompany = () => {
+    AppAlert.show(
+      'Elimina azienda',
+      'Tutti i membri verranno scollegati. I dati (progetti, rilievi) rimarranno sui singoli account ma non saranno più condivisi. Sei sicuro?',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        { text: 'Elimina', style: 'destructive', onPress: async () => {
+            if (!company || !user) return;
+            const ok = await deleteCompany(company.id, user.id);
+            if (ok) {
+              clearDbCache();
+              await supabase.auth.refreshSession();
+              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Home' }] }));
+            } else {
+              AppAlert.show('Errore', 'Impossibile eliminare l\'azienda. Riprova.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleLeaveCompany = () => {
@@ -309,6 +375,57 @@ export default function AccountScreen() {
               </View>
             </View>
 
+            {/* Membri */}
+            {members.length > 0 && (
+              <View style={s.section}>
+                <Text style={s.sectionTitle}>Membri</Text>
+                <View style={s.card}>
+                  {members.map((m, idx) => (
+                    <View key={m.id} style={[s.row, idx > 0 && s.rowBorder, { gap: 10 }]}>
+                      <View style={s.memberAvatar}>
+                        <Text style={s.memberAvatarText}>
+                          {(m.full_name ?? m.email ?? '?')[0].toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.rowValue} numberOfLines={1}>
+                          {m.full_name ?? m.email ?? 'Utente'}
+                        </Text>
+                        {m.email && m.full_name && (
+                          <Text style={s.rowHint} numberOfLines={1}>{m.email}</Text>
+                        )}
+                      </View>
+                      <View style={[s.roleBadge, {
+                        backgroundColor:
+                          m.role === 'owner' ? '#E3F2FD' :
+                          m.role === 'admin' ? '#F3E5F5' : '#F0F4F8',
+                      }]}>
+                        <Text style={[s.roleBadgeText, {
+                          color:
+                            m.role === 'owner' ? '#1565C0' :
+                            m.role === 'admin' ? '#6A1B9A' : '#666',
+                        }]}>
+                          {m.role === 'owner' ? 'Owner' : m.role === 'admin' ? 'Admin' : 'Membro'}
+                        </Text>
+                      </View>
+                      {myRole === 'owner' && m.role !== 'owner' && m.id !== user?.id && (
+                        <View style={{ gap: 6 }}>
+                          <TouchableOpacity onPress={() => handleChangeRole(m)} style={s.memberActionBtn}>
+                            <Text style={s.memberActionText}>
+                              {m.role === 'admin' ? '↓ Membro' : '↑ Admin'}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleRemoveMember(m)} style={[s.memberActionBtn, { backgroundColor: '#FFF0F0' }]}>
+                            <Text style={[s.memberActionText, { color: '#DC2626' }]}>Rimuovi</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
             {/* Invita collaboratore */}
             <View style={s.section}>
               <Text style={s.sectionTitle}>Invita collaboratore</Text>
@@ -414,10 +531,16 @@ export default function AccountScreen() {
         <View style={s.section}>
           <Text style={s.sectionTitle}>Account</Text>
           <View style={s.card}>
-            {company && (
+            {company && myRole !== 'owner' && (
               <TouchableOpacity style={s.actionRow} onPress={handleLeaveCompany}>
                 <Text style={s.actionLabel}>Lascia l'azienda</Text>
                 <Text style={s.actionArrow}>›</Text>
+              </TouchableOpacity>
+            )}
+            {company && myRole === 'owner' && (
+              <TouchableOpacity style={[s.actionRow, { borderBottomWidth: 1, borderBottomColor: '#F0F4F8' }]} onPress={handleDeleteCompany}>
+                <Text style={[s.actionLabel, s.actionDanger]}>Elimina azienda</Text>
+                <Text style={[s.actionArrow, s.actionDanger]}>›</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -484,6 +607,13 @@ const s = StyleSheet.create({
   pastDueBadgeText: { fontSize: 11, fontWeight: '700', color: '#E65100' },
   upgradePillBtn: { backgroundColor: '#0c2d75', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   upgradePillText:{ color: '#fff', fontWeight: '800', fontSize: 13 },
+
+  memberAvatar:     { width: 36, height: 36, borderRadius: 18, backgroundColor: '#0c2d75', alignItems: 'center', justifyContent: 'center' },
+  memberAvatarText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  roleBadge:        { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
+  roleBadgeText:    { fontSize: 11, fontWeight: '800' },
+  memberActionBtn:  { backgroundColor: '#F0F4F8', borderRadius: 7, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center' },
+  memberActionText: { fontSize: 11, fontWeight: '700', color: '#0c2d75' },
 
   logoPreview:        { width: 64, height: 64, borderRadius: 10, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC' },
   logoPlaceholder:    { width: 64, height: 64, borderRadius: 10, borderWidth: 1, borderColor: '#DDE3ED', backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
